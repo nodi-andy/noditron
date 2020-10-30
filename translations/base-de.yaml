@@ -76,7 +76,7 @@ demoBanners:
     intro: Kauf die Vollversion für alle Features!
 mainMenu:
     play: Spielen
-    continue: Fortsetzen
+    continue: NODITRON
     newGame: Neues Spiel
     changelog: Änderungsprotokoll
     subreddit: Reddit
@@ -387,9 +387,9 @@ shopUpgrades:
         description: Geschw. x<currentMult> → x<newMult>
 buildings:
     hub:
-        deliver: Liefere
+        deliver: Ziel
         toUnlock: "und schalte frei:"
-        levelShortcut: LVL
+        levelShortcut: Runde
         endOfDemo: Ende der Demo
     belt:
         default:
