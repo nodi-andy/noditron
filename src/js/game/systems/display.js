@@ -7,6 +7,7 @@ import { GameSystemWithFilter } from "../game_system_with_filter";
 import { isTrueItem } from "../items/boolean_item";
 import { ColorItem, COLOR_ITEM_SINGLETONS } from "../items/color_item";
 import { MapChunkView } from "../map_chunk_view";
+import { formatBigNumber, lerp } from "../../core/utils";
 
 export class DisplaySystem extends GameSystemWithFilter {
     constructor(root) {
@@ -74,6 +75,7 @@ export class DisplaySystem extends GameSystemWithFilter {
                 if (!value) {
                     continue;
                 }
+                
 
                 const origin = entity.components.StaticMapEntity.origin;
                 if (value.getItemType() === "color") {
@@ -90,6 +92,28 @@ export class DisplaySystem extends GameSystemWithFilter {
                         parameters,
                         30
                     );
+                }
+
+                const dispComp = entity.components.Display;
+                const staticComp = entity.components.StaticMapEntity;
+                
+                const contents = this.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y+1, "regular");
+                if (contents) {
+                  const dispCompNB = contents.components.Display;
+                  if (dispCompNB) {
+                    dispCompNB.storedCount = dispComp.storedCount+5;
+                  }
+                }
+
+                const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
+                const context = parameters.context;
+                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20)) {
+                    context.font = "bold 10px GameFont";
+                    context.textAlign = "center";
+                    context.fillStyle = "#64666e";
+                    context.fillText(formatBigNumber(dispComp.storedCount), center.x, center.y);
+                    context.fillText(formatBigNumber(dispComp.storedType), center.x, center.y+10);
+                    context.textAlign = "left";
                 }
             }
         }

@@ -25,20 +25,20 @@ export class HubSystem extends GameSystemWithFilter {
      * @param {DrawParameters} parameters
      */
     draw(parameters) {
-        for (let i = 0; i < this.allEntities.length; ++i) {
+       /* for (let i = 0; i < this.allEntities.length; ++i) {
             this.drawEntity(parameters, this.allEntities[i]);
-        }
+        }*/
     }
 
     update() {
-        for (let i = 0; i < this.allEntities.length; ++i) {
+       /* for (let i = 0; i < this.allEntities.length; ++i) {
             // Set hub goal
             const entity = this.allEntities[i];
             const pinsComp = entity.components.WiredPins;
             pinsComp.slots[0].value = this.root.shapeDefinitionMgr.getShapeItemFromDefinition(
                 this.root.hubGoals.currentGoal.definition
             );
-        }
+        }*/
     }
     /**
      *
@@ -50,7 +50,7 @@ export class HubSystem extends GameSystemWithFilter {
      */
     redrawHubBaseTexture(canvas, context, w, h, dpi) {
         // This method is quite ugly, please ignore it!
-
+/*
         context.scale(dpi, dpi);
 
         const parameters = new DrawParameters({
@@ -154,7 +154,7 @@ export class HubSystem extends GameSystemWithFilter {
         }
         context.fillText(T.buildings.hub.toUnlock.toUpperCase(), HUB_SIZE_PIXELS / 2, 92);
 
-        context.textAlign = "left";
+        context.textAlign = "left";*/
     }
 
     /**
@@ -162,7 +162,7 @@ export class HubSystem extends GameSystemWithFilter {
      * @param {Entity} entity
      */
     drawEntity(parameters, entity) {
-        const staticComp = entity.components.StaticMapEntity;
+       /* const staticComp = entity.components.StaticMapEntity;
         if (!staticComp.shouldBeDrawn(parameters)) {
             return;
         }
@@ -191,6 +191,6 @@ export class HubSystem extends GameSystemWithFilter {
             h: HUB_SIZE_PIXELS + 2 * extrude,
             originalW: HUB_SIZE_PIXELS * dpi,
             originalH: HUB_SIZE_PIXELS * dpi,
-        });
+        });*/
     }
 }

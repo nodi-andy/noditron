@@ -1,4 +1,5 @@
 import { MetaBeltBuilding } from "../../buildings/belt";
+import { MetaCondBuilding } from "../../buildings/cond";
 import { MetaCutterBuilding } from "../../buildings/cutter";
 import { MetaDisplayBuilding } from "../../buildings/display";
 import { MetaFilterBuilding } from "../../buildings/filter";
@@ -22,6 +23,7 @@ export class HUDBuildingsToolbar extends HUDBaseToolbar {
         super(root, {
             primaryBuildings: [
                 MetaBeltBuilding,
+                MetaCondBuilding,
                 MetaBalancerBuilding,
                 MetaUndergroundBeltBuilding,
                 MetaMinerBuilding,

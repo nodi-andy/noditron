@@ -13,9 +13,11 @@ export class MetaLeverBuilding extends MetaBuilding {
 
     getSilhouetteColor() {
         // @todo: Render differently based on if its activated or not
-        return "#1a678b";
+        return "#ff678b";
     }
-
+    getStayInPlacementMode() {
+        return true;
+    }
     /**
      * @param {GameRoot} root
      */

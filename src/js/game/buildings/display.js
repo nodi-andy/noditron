@@ -29,7 +29,9 @@ export class MetaDisplayBuilding extends MetaBuilding {
     getShowWiresLayerPreview() {
         return true;
     }
-
+    getStayInPlacementMode() {
+        return true;
+    }
     /**
      * Creates the entity at the given location
      * @param {Entity} entity

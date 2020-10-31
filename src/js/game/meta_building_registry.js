@@ -4,6 +4,7 @@ import { T } from "../translations";
 import { MetaAnalyzerBuilding } from "./buildings/analyzer";
 import { enumBalancerVariants, MetaBalancerBuilding } from "./buildings/balancer";
 import { MetaBeltBuilding } from "./buildings/belt";
+import { MetaCondBuilding } from "./buildings/cond";
 import { MetaComparatorBuilding } from "./buildings/comparator";
 import { MetaConstantSignalBuilding } from "./buildings/constant_signal";
 import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
@@ -44,6 +45,7 @@ export function initMetaBuildingRegistry() {
     gMetaBuildingRegistry.register(MetaTrashBuilding);
     gMetaBuildingRegistry.register(MetaStorageBuilding);
     gMetaBuildingRegistry.register(MetaBeltBuilding);
+    gMetaBuildingRegistry.register(MetaCondBuilding);
     gMetaBuildingRegistry.register(MetaUndergroundBeltBuilding);
     gMetaBuildingRegistry.register(MetaHubBuilding);
     gMetaBuildingRegistry.register(MetaWireBuilding);
@@ -59,6 +61,9 @@ export function initMetaBuildingRegistry() {
     gMetaBuildingRegistry.register(MetaAnalyzerBuilding);
     gMetaBuildingRegistry.register(MetaComparatorBuilding);
     gMetaBuildingRegistry.register(MetaItemProducerBuilding);
+
+    // Cond
+    registerBuildingVariant(101, MetaCondBuilding, defaultBuildingVariant);
 
     // Belt
     registerBuildingVariant(1, MetaBeltBuilding, defaultBuildingVariant, 0);

@@ -506,6 +506,9 @@ shopUpgrades:
     belt:
         name: Belts, Distributor & Tunnels
         description: Speed x<currentMult> → x<newMult>
+    cond:
+        name: Belts, Distributor & Tunnels
+        description: Speed x<currentMult> → x<newMult>
     miner:
         name: Extraction
         description: Speed x<currentMult> → x<newMult>
@@ -528,7 +531,10 @@ buildings:
         default:
             name: &belt Conveyor Belt
             description: Transports items, hold and drag to place multiple.
-
+    cond:
+        default:
+            name: &cond Conductor 
+            description: Transports data
     # Internal name for the Extractor
     miner:
         default:
@@ -1115,6 +1121,7 @@ keybindings:
 
         # --- Do not translate the values in this section
         belt: *belt
+        cond: *belt
         balancer: *balancer
         underground_belt: *underground_belt
         miner: *miner

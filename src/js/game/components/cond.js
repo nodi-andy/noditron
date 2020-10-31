@@ -35,9 +35,9 @@ export const FAKE_BELT_EJECTOR_SLOT_BY_DIRECTION = {
     },
 };
 
-export class CondTopComponent extends Component {
+export class CondComponent extends Component {
     static getId() {
-        return "CondTop";
+        return "Cond";
     }
 
     /**

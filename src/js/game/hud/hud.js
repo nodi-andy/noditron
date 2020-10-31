@@ -42,6 +42,7 @@ import { HUDSandboxController } from "./parts/sandbox_controller";
 import { HUDWiresToolbar } from "./parts/wires_toolbar";
 import { HUDWireInfo } from "./parts/wire_info";
 import { HUDLeverToggle } from "./parts/lever_toggle";
+import { HUDDisplayToggle } from "./parts/display_toggle";
 import { HUDLayerPreview } from "./parts/layer_preview";
 import { HUDMinerHighlight } from "./parts/miner_highlight";
 import { HUDBetaOverlay } from "./parts/beta_overlay";
@@ -86,6 +87,7 @@ export class GameHUD {
             waypoints: new HUDWaypoints(this.root),
             wireInfo: new HUDWireInfo(this.root),
             leverToggle: new HUDLeverToggle(this.root),
+            displayToggle: new HUDDisplayToggle(this.root),
 
             // Must always exist
             pinnedShapes: new HUDPinnedShapes(this.root),

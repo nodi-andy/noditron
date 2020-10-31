@@ -115,7 +115,7 @@ export class MapChunk {
         // Each patch consists of multiple circles
         const numCircles = patchSize;
 
-        for (let i = 0; i <= numCircles; ++i) {
+       /* for (let i = 0; i <= numCircles; ++i) {
             // Determine circle parameters
             const circleRadius = Math.min(1 + i, patchSize);
             const circleRadiusSquare = circleRadius * circleRadius;
@@ -154,7 +154,7 @@ export class MapChunk {
             pos: avgPos.divideScalar(patchesDrawn),
             item,
             size: patchSize,
-        });
+        });*/
     }
 
     /**

@@ -77,6 +77,11 @@ export class BooleanItem extends BaseItem {
             sprite = Loader.getSprite("sprites/wires/boolean_false.png");
         }
         sprite.drawCentered(context, size / 2, size / 2, size);
+        context.font = "bold 10px GameFont";
+        context.textAlign = "center";
+        context.fillStyle = "#64666e";
+        context.fillText("ABC", 0, 0);
+        context.textAlign = "left";
     }
 }
 

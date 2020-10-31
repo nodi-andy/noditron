@@ -17,9 +17,9 @@ export const beltOverlayMatrices = {
     [enumDirection.right]: generateMatrixRotations([0, 0, 0, 0, 1, 1, 0, 1, 0]),
 };
 
-export class MetaCondTopBuilding extends MetaBuilding {
+export class MetaCondBuilding extends MetaBuilding {
     constructor() {
-        super("belt");
+        super("cond");
     }
 
     getSilhouetteColor() {
@@ -38,7 +38,7 @@ export class MetaCondTopBuilding extends MetaBuilding {
     }
 
     getRotateAutomaticallyWhilePlacing() {
-        return true;
+        return false;
     }
 
     getSprite() {
@@ -65,10 +65,10 @@ export class MetaCondTopBuilding extends MetaBuilding {
                 return Loader.getSprite("sprites/buildings/belt_top.png");
             }
             case enumDirection.left: {
-                return Loader.getSprite("sprites/buildings/belt_right.png");
+                return Loader.getSprite("sprites/buildings/belt_left.png");
             }
             case enumDirection.right: {
-                return Loader.getSprite("sprites/buildings/belt_left.png");
+                return Loader.getSprite("sprites/buildings/belt_right.png");
             }
             default: {
                 assertAlways(false, "Invalid belt rotation variant");
