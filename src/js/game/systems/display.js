@@ -96,12 +96,13 @@ export class DisplaySystem extends GameSystemWithFilter {
 
                 const dispComp = entity.components.Display;
                 const staticComp = entity.components.StaticMapEntity;
-                
-                const contents = this.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y+1, "regular");
+
+                const contents = this.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y, "regular");
                 if (contents) {
                   const dispCompNB = contents.components.Display;
-                  if (dispCompNB) {
-                    dispCompNB.storedCount = dispComp.storedCount+5;
+                  if (dispCompNB && pinsComp.slots[0].nodiType == 10) {
+                    contents.components.WiredPins.slots[0].nodiType = 10;
+                    pinsComp.slots[0].nodiType = 2;
                   }
                 }
 
@@ -111,8 +112,7 @@ export class DisplaySystem extends GameSystemWithFilter {
                     context.font = "bold 10px GameFont";
                     context.textAlign = "center";
                     context.fillStyle = "#64666e";
-                    context.fillText(formatBigNumber(dispComp.storedCount), center.x, center.y);
-                    context.fillText(formatBigNumber(dispComp.storedType), center.x, center.y+10);
+                    context.fillText(formatBigNumber(pinsComp.slots[0].nodiType), center.x, center.y);
                     context.textAlign = "left";
                 }
             }

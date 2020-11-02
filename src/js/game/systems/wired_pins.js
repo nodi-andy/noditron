@@ -8,6 +8,7 @@ import { enumPinSlotType, WiredPinsComponent } from "../components/wired_pins";
 import { Entity } from "../entity";
 import { GameSystemWithFilter } from "../game_system_with_filter";
 import { MapChunkView } from "../map_chunk_view";
+import { formatBigNumber, lerp } from "../../core/utils";
 
 /** @type {Object<ItemType, number>} */
 const enumTypeToSize = {
@@ -189,7 +190,7 @@ export class WiredPinsSystem extends GameSystemWithFilter {
                 );
 
                 if (staticComp.getMetaBuilding().getRenderPins()) {
-                    drawRotatedSprite({
+                    /*drawRotatedSprite({
                         parameters,
                         sprite: this.pinSprites[slot.type],
                         x: worldPos.x,
@@ -198,7 +199,10 @@ export class WiredPinsSystem extends GameSystemWithFilter {
                         size: globalConfig.tileSize + 2,
                         offsetX: 0,
                         offsetY: 0,
-                    });
+                    });*/
+                    const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
+                    parameters.context.fillText(formatBigNumber(slot.nodiVal), center.x-5, center.y+14);
+                    parameters.context.fillText(formatBigNumber(slot.nodiType), center.x-5, center.y);
                 }
 
                 // Draw contained item to visualize whats emitted

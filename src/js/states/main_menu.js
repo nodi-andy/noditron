@@ -59,7 +59,6 @@ export class MainMenuState extends GameState {
 
             <div class="logo">
                 <img src="${cachebust("res/logo.png")}" alt="shapez.io Logo">
-                <span class="updateLabel">Wires update!</span>
             </div>
 
             <div class="mainWrapper ${showDemoBadges ? "demo" : "noDemo"}">
@@ -78,28 +77,7 @@ export class MainMenuState extends GameState {
             </div>
 
             <div class="footer">
-                <a class="githubLink boxLink" target="_blank">
-                    ${T.mainMenu.openSourceHint}
-                    <span class="thirdpartyLogo githubLogo"></span>
-                </a>
-
-                <a class="discordLink boxLink" target="_blank">
-                    ${T.mainMenu.discordLink}
-                    <span class="thirdpartyLogo  discordLogo"></span>
-                </a>
-
-                <div class="sidelinks">
-                    <a class="redditLink">${T.mainMenu.subreddit}</a>
-
-                    <a class="changelog">${T.changelog.title}</a>
-
-                    <a class="helpTranslate">${T.mainMenu.helpTranslate}</a>
-                </div>
-
-                <div class="author">${T.mainMenu.madeBy.replace(
-                    "<author-link>",
-                    '<a class="producerLink" target="_blank">Tobias Springer</a>'
-                )}</div>
+                
             </div>
         `;
     }
@@ -208,10 +186,7 @@ export class MainMenuState extends GameState {
         });
 
         this.trackClicks(qs(".settingsButton"), this.onSettingsButtonClicked);
-        this.trackClicks(qs(".changelog"), this.onChangelogClicked);
-        this.trackClicks(qs(".redditLink"), this.onRedditClicked);
         this.trackClicks(qs(".languageChoose"), this.onLanguageChooseClicked);
-        this.trackClicks(qs(".helpTranslate"), this.onTranslationHelpLinkClicked);
 
         if (G_IS_STANDALONE) {
             this.trackClicks(qs(".exitAppButton"), this.onExitAppButtonClicked);
@@ -225,26 +200,6 @@ export class MainMenuState extends GameState {
             this.trackClicks(steamLink, () => this.onSteamLinkClicked(), { preventClick: true });
         }
 
-        const discordLink = this.htmlElement.querySelector(".discordLink");
-        this.trackClicks(
-            discordLink,
-            () => this.app.platformWrapper.openExternalLink(THIRDPARTY_URLS.discord),
-            { preventClick: true }
-        );
-
-        const githubLink = this.htmlElement.querySelector(".githubLink");
-        this.trackClicks(
-            githubLink,
-            () => this.app.platformWrapper.openExternalLink(THIRDPARTY_URLS.github),
-            { preventClick: true }
-        );
-
-        const producerLink = this.htmlElement.querySelector(".producerLink");
-        this.trackClicks(
-            producerLink,
-            () => this.app.platformWrapper.openExternalLink("https://tobspr.com"),
-            { preventClick: true }
-        );
     }
 
     renderMainMenu() {
@@ -298,11 +253,6 @@ export class MainMenuState extends GameState {
 
     onChangelogClicked() {
         this.moveToState("ChangelogState");
-    }
-
-    onRedditClicked() {
-        this.app.analytics.trackUiClick("main_menu_reddit_link");
-        this.app.platformWrapper.openExternalLink(THIRDPARTY_URLS.reddit);
     }
 
     onLanguageChooseClicked() {
@@ -522,13 +472,6 @@ export class MainMenuState extends GameState {
 
     onSettingsButtonClicked() {
         this.moveToState("SettingsState");
-    }
-
-    onTranslationHelpLinkClicked() {
-        this.app.analytics.trackUiClick("translation_help_link");
-        this.app.platformWrapper.openExternalLink(
-            "https://github.com/tobspr/shapez.io/blob/master/translations"
-        );
     }
 
     onPlayButtonClicked() {

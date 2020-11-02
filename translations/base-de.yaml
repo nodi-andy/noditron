@@ -76,7 +76,7 @@ demoBanners:
     intro: Kauf die Vollversion für alle Features!
 mainMenu:
     play: Spielen
-    continue: NODITRON
+    continue: Weiter
     newGame: Neues Spiel
     changelog: Änderungsprotokoll
     subreddit: Reddit
