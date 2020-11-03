@@ -402,12 +402,6 @@ canvas {
         }
     }
 
-    @include InlineAnimation(1.5s ease-in-out infinite) {
-        50% {
-            transform: scale(1.2) rotate(160deg);
-        }
-    }
-
     @include DarkThemeOverride {
         color: #fff;
     }
@@ -475,11 +469,7 @@ canvas {
         display: flex;
         flex-grow: 1;
 
-        @include InlineAnimation(1.5s ease-in-out infinite) {
-            50% {
-                transform: scale(1.2) rotate(160deg);
-            }
-        }
+
 
         & {
             /* @load-async */
