@@ -201,8 +201,7 @@ export class WiredPinsSystem extends GameSystemWithFilter {
                         offsetY: 0,
                     });*/
                     const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
-                    parameters.context.fillText(formatBigNumber(slot.nodiVal), center.x-5, center.y+14);
-                    parameters.context.fillText(formatBigNumber(slot.nodiType), center.x-5, center.y);
+                    parameters.context.fillText(formatBigNumber(slot.nodiType), center.x-10, center.y+10);
                 }
 
                 // Draw contained item to visualize whats emitted

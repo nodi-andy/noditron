@@ -78,12 +78,15 @@ export class DisplaySystem extends GameSystemWithFilter {
                 
 
                 const origin = entity.components.StaticMapEntity.origin;
+                let size = globalConfig.tileSize;
+                if (pinsComp.slots[0].nodiType==10) size*=0.75;
+                
                 if (value.getItemType() === "color") {
                     this.displaySprites[/** @type {ColorItem} */ (value).color].drawCachedCentered(
                         parameters,
                         (origin.x + 0.5) * globalConfig.tileSize,
                         (origin.y + 0.5) * globalConfig.tileSize,
-                        globalConfig.tileSize
+                        size
                     );
                 } else if (value.getItemType() === "shape") {
                     value.drawItemCenteredClipped(
@@ -108,11 +111,11 @@ export class DisplaySystem extends GameSystemWithFilter {
 
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
                 const context = parameters.context;
-                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20)) {
+                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20) && pinsComp.slots[0].nodiType==10) {
                     context.font = "bold 10px GameFont";
                     context.textAlign = "center";
                     context.fillStyle = "#64666e";
-                    context.fillText(formatBigNumber(pinsComp.slots[0].nodiType), center.x, center.y);
+                    context.fillText(formatBigNumber(pinsComp.slots[0].nodiVal), center.x, center.y);
                     context.textAlign = "left";
                 }
             }

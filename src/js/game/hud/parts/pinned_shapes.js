@@ -153,7 +153,7 @@ export class HUDPinnedShapes extends BaseHUDPart {
      * Rerenders the whole component
      */
     rerenderFull() {
-        const currentGoal = this.root.hubGoals.currentGoal;
+        /*const currentGoal = this.root.hubGoals.currentGoal;
         const currentKey = currentGoal.definition.getHash();
 
         // First, remove all old shapes
@@ -193,7 +193,7 @@ export class HUDPinnedShapes extends BaseHUDPart {
             if (key !== currentKey) {
                 this.internalPinShape({ key });
             }
-        }
+        }*/
     }
 
     /**
