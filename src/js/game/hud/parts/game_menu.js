@@ -11,14 +11,14 @@ export class HUDGameMenu extends BaseHUDPart {
     createElements(parent) {
         this.element = makeDiv(parent, "ingame_HUD_GameMenu");
 
-        const buttons = [
+       /* const buttons = [
             {
                 id: "shop",
                 label: "Upgrades",
                 handler: () => this.root.hud.parts.shop.show(),
                 keybinding: KEYMAPPINGS.ingame.menuOpenShop,
                 badge: () => this.root.hubGoals.getAvailableUpgradeCount(),
-                notification: /** @type {[string, enumNotificationType]} */ ([
+                notification:  ([
                     T.ingame.notifications.newUpgrade,
                     enumNotificationType.upgrade,
                 ]),
@@ -33,7 +33,7 @@ export class HUDGameMenu extends BaseHUDPart {
                 visible: () =>
                     !this.root.app.settings.getAllSettings().offerHints || this.root.hubGoals.level >= 3,
             },
-        ];
+        ];*/
 
         /** @type {Array<{
          * badge: function,
@@ -52,7 +52,7 @@ export class HUDGameMenu extends BaseHUDPart {
          * }>} */
         this.visibilityToUpdate = [];
 
-        buttons.forEach(({ id, label, handler, keybinding, badge, notification, visible }) => {
+        /*buttons.forEach(({ id, label, handler, keybinding, badge, notification, visible }) => {
             const button = document.createElement("button");
             button.classList.add(id);
             this.element.appendChild(button);
@@ -82,7 +82,7 @@ export class HUDGameMenu extends BaseHUDPart {
                     condition: visible,
                 });
             }
-        });
+        });*/
 
         this.saveButton = makeDiv(this.element, null, ["button", "save", "animEven"]);
         this.settingsButton = makeDiv(this.element, null, ["button", "settings"]);

@@ -66,45 +66,26 @@ export class DisplaySystem extends GameSystemWithFilter {
                 const pinsComp = entity.components.WiredPins;
                 const network = pinsComp.slots[0].linkedNetwork;
 
-                if (!network || !network.hasValue()) {
-                    continue;
-                }
-
-                const value = this.getDisplayItem(network.currentValue);
-
-                if (!value) {
-                    continue;
-                }
-                
-
                 const origin = entity.components.StaticMapEntity.origin;
                 let size = globalConfig.tileSize;
                 if (pinsComp.slots[0].nodiType==10) size*=0.75;
                 
-                if (value.getItemType() === "color") {
-                    this.displaySprites[/** @type {ColorItem} */ (value).color].drawCachedCentered(
+                    this.displaySprites[enumColors.white].drawCachedCentered(
                         parameters,
                         (origin.x + 0.5) * globalConfig.tileSize,
                         (origin.y + 0.5) * globalConfig.tileSize,
                         size
                     );
-                } else if (value.getItemType() === "shape") {
-                    value.drawItemCenteredClipped(
-                        (origin.x + 0.5) * globalConfig.tileSize,
-                        (origin.y + 0.5) * globalConfig.tileSize,
-                        parameters,
-                        30
-                    );
-                }
 
                 const dispComp = entity.components.Display;
                 const staticComp = entity.components.StaticMapEntity;
 
-                const contents = this.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y, "regular");
-                if (contents) {
-                  const dispCompNB = contents.components.Display;
+                const contentsNB = this.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y, "regular");
+                if (contentsNB) {
+                  const dispCompNB = contentsNB.components.Display;
                   if (dispCompNB && pinsComp.slots[0].nodiType == 10) {
-                    contents.components.WiredPins.slots[0].nodiType = 10;
+                    contentsNB.components.WiredPins.slots[0].nodiType = 10;
+                    contentsNB.components.WiredPins.slots[0].nodiVal = pinsComp.slots[0].nodiVal;
                     pinsComp.slots[0].nodiType = 2;
                   }
                 }
