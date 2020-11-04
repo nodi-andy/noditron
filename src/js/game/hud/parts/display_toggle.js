@@ -88,7 +88,7 @@ export class HUDDisplayToggle extends BaseHUDPart {
                         "DIALOG " + signalValueInput.getValue() ,  enumNotificationType.upgrade  );
 
 
-                         contents.components.WiredPins.slots[0].nodiVal= signalValueInput.getValue();
+                         contents.components.WiredPins.slots[0].nodiVal= Number.parseInt(signalValueInput.getValue());
                          contents.components.WiredPins.slots[0].nodiType = 10;
                     };
 
