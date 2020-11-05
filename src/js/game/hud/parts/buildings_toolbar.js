@@ -2,6 +2,7 @@ import { MetaBeltBuilding } from "../../buildings/belt";
 import { MetaCondBuilding } from "../../buildings/cond";
 import { MetaCutterBuilding } from "../../buildings/cutter";
 import { MetaDisplayBuilding } from "../../buildings/display";
+import { MetaDisplayRedBuilding } from "../../buildings/display_red";
 import { MetaFilterBuilding } from "../../buildings/filter";
 import { MetaLeverBuilding } from "../../buildings/lever";
 import { MetaMinerBuilding } from "../../buildings/miner";
@@ -22,9 +23,8 @@ export class HUDBuildingsToolbar extends HUDBaseToolbar {
     constructor(root) {
         super(root, {
             primaryBuildings: [
-                MetaBeltBuilding,
-                MetaCondBuilding,
-                MetaBalancerBuilding,
+                MetaDisplayBuilding,
+                MetaDisplayRedBuilding,
                 MetaUndergroundBeltBuilding,
                 MetaMinerBuilding,
                 MetaCutterBuilding,
@@ -40,7 +40,6 @@ export class HUDBuildingsToolbar extends HUDBaseToolbar {
                 MetaReaderBuilding,
                 MetaLeverBuilding,
                 MetaFilterBuilding,
-                MetaDisplayBuilding,
             ],
             visibilityCondition: () =>
                 !this.root.camera.getIsMapOverlayActive() && this.root.currentLayer === "regular",

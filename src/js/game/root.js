@@ -13,6 +13,7 @@ import { MapView } from "./map_view";
 import { Camera } from "./camera";
 import { InGameState } from "../states/ingame";
 import { AutomaticSave } from "./automatic_save";
+import { NodiSolver } from "./nodisolver";
 import { Application } from "../application";
 import { SoundProxy } from "./sound_proxy";
 import { Savegame } from "../savegame/savegame";
@@ -115,6 +116,9 @@ export class GameRoot {
 
         /** @type {AutomaticSave} */
         this.automaticSave = null;
+
+        /** @type {NodiSolver} */
+        this.nodiSolver = null;
 
         /** @type {SoundProxy} */
         this.soundProxy = null;

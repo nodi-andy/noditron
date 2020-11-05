@@ -3,16 +3,16 @@ import { enumPinSlotType, WiredPinsComponent } from "../components/wired_pins";
 import { Entity } from "../entity";
 import { MetaBuilding } from "../meta_building";
 import { GameRoot } from "../root";
-import { DisplayComponent } from "../components/display";
+import { DisplayRedComponent } from "../components/display_red";
 import { enumHubGoalRewards } from "../tutorial_goals";
 
-export class MetaDisplayBuilding extends MetaBuilding {
+export class MetaDisplayRedBuilding extends MetaBuilding {
     constructor() {
-        super("display");
+        super("display_red");
     }
 
     getSilhouetteColor() {
-        return "#0088ff";
+        return "#ff5500";
     }
 
     /**
@@ -56,6 +56,6 @@ export class MetaDisplayBuilding extends MetaBuilding {
                 ],
             })
         );
-        entity.addComponent(new DisplayComponent());
+        entity.addComponent(new DisplayRedComponent());
     }
 }

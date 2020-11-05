@@ -8,6 +8,7 @@ import { KeyActionMapper } from "../game/key_action_mapper";
 import { Savegame } from "../savegame/savegame";
 import { GameCore } from "../game/core";
 import { MUSIC } from "../platform/sound";
+import { enumNotificationType } from "../game/hud/parts/notifications";
 
 const logger = createLogger("state/ingame");
 
@@ -451,4 +452,42 @@ export class InGameState extends GameState {
 
         return this.currentSavePromise;
     }
+
+    /**
+     * nodi step
+     */
+
+    doNodiStep() {
+        this.core.root.entityMgr.entities;
+        for (let i = 0; i < this.core.root.entityMgr.entities.length; ++i) {
+            const entity = this.core.root.entityMgr.entities[i];
+            const displayComp = entity.components.Display;
+            if(displayComp && displayComp.storedType == 10)
+            {
+                const staticComp = entity.components.StaticMapEntity;
+                const entityNB = this.core.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y, "regular");
+                if(entityNB)
+                { 
+                  const dispCompNB = entityNB.components.Display;
+                  if (dispCompNB) {
+                //  this.core.root.hud.signals.notification.dispatch("NODI STEP :" + displayComp.storedCount  + "/" + displayComp.storedType,  enumNotificationType.upgrade  );
+                    dispCompNB.storedTypeNext = 10;
+                    dispCompNB.storedCountNext = displayComp.storedCount;
+                    displayComp.storedTypeNext = 2;
+                    displayComp.storedCountNext = 0;
+                  }
+                }                
+            }
+        }
+        for (let i = 0; i < this.core.root.entityMgr.entities.length; ++i) {
+            const entity = this.core.root.entityMgr.entities[i];
+            const displayComp = entity.components.Display;
+            if(displayComp)
+            {
+                displayComp.storedType = displayComp.storedTypeNext;
+                displayComp.storedCount = displayComp.storedCountNext;
+            }
+        }
+    }
+
 }

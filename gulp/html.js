@@ -224,7 +224,7 @@ function gulptasksHTML($, gulp, buildFolder) {
                 <div id="ll_fp">_</div>
                 <div id="ll_p">
                     <span></span>
-                    <div>${hasLocalFiles ? "Loading" : "Downloading"} Game Files</div >
+                    <div>${hasLocalFiles ? "Loading" : "Downloading"} noditron </div >
                 </div >
                 `;
 

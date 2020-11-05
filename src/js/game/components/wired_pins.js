@@ -69,8 +69,8 @@ export class WiredPinsComponent extends Component {
                 pos: slotData.pos,
                 type: slotData.type,
                 direction: slotData.direction,
-                nodiType : 33,
-                nodiVal : 22,
+                nodiType : 2,
+                nodiVal : 123,
                 value: null,
                 linkedNetwork: null,
             });

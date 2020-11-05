@@ -1,9 +1,9 @@
 import { types } from "../../savegame/serialization";
 import { Component } from "../component";
 
-export class DisplayComponent extends Component {
+export class DisplayRedComponent extends Component {
     static getId() {
-        return "Display";
+        return "DisplayRed";
     }
     static getSchema() {
         return {
@@ -13,7 +13,7 @@ export class DisplayComponent extends Component {
     }
 
     /**
-     * 
+
      */
     constructor() {
         super();

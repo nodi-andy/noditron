@@ -20,6 +20,7 @@ import { Vector } from "../core/vector";
 import { Savegame } from "../savegame/savegame";
 import { SavegameSerializer } from "../savegame/savegame_serializer";
 import { AutomaticSave } from "./automatic_save";
+import { NodiSolver } from "./nodisolver";
 import { MetaHubBuilding } from "./buildings/hub";
 import { Camera } from "./camera";
 import { DynamicTickrate } from "./dynamic_tickrate";
@@ -112,6 +113,7 @@ export class GameCore {
         root.hud = new GameHUD(root);
         root.time = new GameTime(root);
         root.automaticSave = new AutomaticSave(root);
+        root.nodiSolver = new NodiSolver(root);
         root.soundProxy = new SoundProxy(root);
 
         // Init managers
@@ -164,7 +166,7 @@ export class GameCore {
         this.root.map.seed = randomInt(0, 100000);
 
         // Place the hub
-        const hub = gMetaBuildingRegistry.findByClass(MetaHubBuilding).createEntity({
+        /*const hub = gMetaBuildingRegistry.findByClass(MetaHubBuilding).createEntity({
             root: this.root,
             origin: new Vector(-2, -2),
             rotation: 0,
@@ -173,7 +175,7 @@ export class GameCore {
             variant: defaultBuildingVariant,
         });
         this.root.map.placeStaticEntity(hub);
-        this.root.entityMgr.registerEntity(hub);
+        this.root.entityMgr.registerEntity(hub);*/
     }
 
     /**
@@ -278,6 +280,7 @@ export class GameCore {
 
         // Update automatic save after everything finished
         root.automaticSave.update();
+        root.nodiSolver.update();
 
         return true;
     }

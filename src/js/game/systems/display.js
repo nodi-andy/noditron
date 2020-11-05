@@ -70,16 +70,16 @@ export class DisplaySystem extends GameSystemWithFilter {
                 let size = globalConfig.tileSize;
                 if (pinsComp.slots[0].nodiType==10) size*=0.75;
                 
-                    this.displaySprites[enumColors.white].drawCachedCentered(
+                    /*this.displaySprites[enumColors.white].drawCachedCentered(
                         parameters,
                         (origin.x + 0.5) * globalConfig.tileSize,
                         (origin.y + 0.5) * globalConfig.tileSize,
                         size
-                    );
+                    );*/
 
                 const dispComp = entity.components.Display;
                 const staticComp = entity.components.StaticMapEntity;
-
+/*
                 const contentsNB = this.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y, "regular");
                 if (contentsNB) {
                   const dispCompNB = contentsNB.components.Display;
@@ -88,15 +88,15 @@ export class DisplaySystem extends GameSystemWithFilter {
                     contentsNB.components.WiredPins.slots[0].nodiVal = pinsComp.slots[0].nodiVal;
                     pinsComp.slots[0].nodiType = 2;
                   }
-                }
+                }*/
 
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
                 const context = parameters.context;
-                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20) && pinsComp.slots[0].nodiType==10) {
-                    context.font = "bold 10px GameFont";
+                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20) && dispComp.storedType==10) {
+                    context.font = "bold 14px GameFont";
                     context.textAlign = "center";
                     context.fillStyle = "#64666e";
-                    context.fillText(formatBigNumber(pinsComp.slots[0].nodiVal), center.x, center.y);
+                    context.fillText(formatBigNumber(dispComp.storedCount), center.x, center.y+5);
                     context.textAlign = "left";
                 }
             }

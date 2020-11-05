@@ -690,6 +690,11 @@ buildings:
             name: &display Display
             description: Connect a signal to show it on the display - It can be a shape, color or boolean.
 
+    display_red:
+        default:
+            name: &display_red Display_red
+            description: Connect a signal to show it on the display - It can be a shape, color or boolean.
+
     reader:
         default:
             name: &reader Belt Reader
@@ -1139,6 +1144,7 @@ keybindings:
         filter: *filter
         wire_tunnel: *wire_tunnel
         display: *display
+        display_red: *display
         reader: *reader
         virtual_processor: *virtual_processor
         transistor: *transistor
