@@ -40,8 +40,7 @@ export class NodiSolver {
             return;
         }
 
-        const saveInterval = 100;//this.root.app.settings.getAutosaveIntervalSeconds();
-        if (!saveInterval) {
+        if (this.root.tickrate == 0) {
             // Disabled
             return;
         }
@@ -50,10 +49,10 @@ export class NodiSolver {
 
         const secondsSinceLastSave = performance.now()- this.lastSaveTime;
 
-        let shouldSave = secondsSinceLastSave > saveInterval;
+        let shouldSave = secondsSinceLastSave > this.root.tickrate;
 
         if (shouldSave) {
-            logger.log("Saving automatically");
+            //logger.log("Saving automatically");
             this.lastSaveTime =  performance.now();
             this.doSave();
         }

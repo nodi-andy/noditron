@@ -61,6 +61,7 @@ export class GameRoot {
         // Store game dimensions
         this.gameWidth = 500;
         this.gameHeight = 500;
+        this.tickrate = 100;
 
         // Stores whether the current session is a fresh game (true), or was continued (false)
         /** @type {boolean} */
@@ -189,6 +190,7 @@ export class GameRoot {
         this.queue = {
             requireRedraw: false,
         };
+
     }
 
     /**

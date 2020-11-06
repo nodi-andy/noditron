@@ -245,6 +245,8 @@ ingame:
             itemsPerSecond: <x> Items / s
             itemsPerSecondDouble: (x2)
             tiles: <x> Felder
+    controller:
+        run: Laufen
     levelCompleteNotification:
         levelTitle: Level <level>
         completed: Abgeschlossen

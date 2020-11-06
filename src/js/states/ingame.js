@@ -488,6 +488,18 @@ export class InGameState extends GameState {
                 displayComp.storedCount = displayComp.storedCountNext;
             }
         }
+        const entityResult = this.core.root.map.getLayerContentXY(8, 2, "regular");
+        if(entityResult)
+        { 
+            const dispCompResult = entityResult.components.Display;
+            if (dispCompResult) {
+                if(dispCompResult.storedCount == 77)
+                {
+                  this.core.root.hud.signals.notification.dispatch("YOU WON" ,  enumNotificationType.upgrade  );
+                  this.core.root.hubGoals.onGoalCompleted();
+                }
+            }
+        }     
     }
 
 }

@@ -90,6 +90,10 @@ export const KEYMAPPINGS = {
         copyWireValue: { keyCode: key("Z") },
     },
 
+    controller: {
+        run: { keyCode: key("H") },
+    },
+
     massSelect: {
         massSelectStart: { keyCode: 17 }, // CTRL
         massSelectSelectMultiple: { keyCode: 16 }, // SHIFT

@@ -212,6 +212,12 @@ export class HUDKeybindingOverlay extends BaseHUDPart {
                 keys: [k.placement.switchDirectionLockSide],
                 condition: () => this.beltPlannerActive,
             },
+            {
+                // [BELT PLANNER] Flip Side
+                label: T.ingame.keybindingsOverlay.plannerSwitchSide,
+                keys: [k.controller.run],
+                condition: () => this.beltPlannerActive,
+            },
 
             {
                 // Place last blueprint

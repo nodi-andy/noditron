@@ -12,7 +12,7 @@ export class MetaHubBuilding extends MetaBuilding {
     }
 
     getDimensions() {
-        return new Vector(4, 4);
+        return new Vector(1, 4);
     }
 
     getSilhouetteColor() {

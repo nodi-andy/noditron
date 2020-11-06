@@ -39,6 +39,7 @@ import { HUDWiresOverlay } from "./parts/wires_overlay";
 import { HUDChangesDebugger } from "./parts/debug_changes";
 import { queryParamOptions } from "../../core/query_parameters";
 import { HUDSandboxController } from "./parts/sandbox_controller";
+import { HUDTimeController } from "./parts/time_controller";
 import { HUDWiresToolbar } from "./parts/wires_toolbar";
 import { HUDWireInfo } from "./parts/wire_info";
 import { HUDLeverToggle } from "./parts/lever_toggle";
@@ -141,6 +142,7 @@ export class GameHUD {
         if (this.root.app.settings.getAllSettings().enableColorBlindHelper) {
             this.parts.colorBlindHelper = new HUDColorBlindHelper(this.root);
         }
+        this.parts.timeController = new HUDTimeController(this.root);
 
         if (queryParamOptions.sandboxMode || G_IS_DEV) {
             this.parts.sandboxController = new HUDSandboxController(this.root);
@@ -249,6 +251,7 @@ export class GameHUD {
         const partsOrder = [
             "massSelector",
             "buildingPlacer",
+            "controlBar",
             "blueprintPlacer",
             "colorBlindHelper",
             "changesDebugger",
