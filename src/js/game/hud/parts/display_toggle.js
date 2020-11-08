@@ -30,7 +30,10 @@ export class HUDDisplayToggle extends BaseHUDPart {
         const tile = this.root.camera.screenToWorld(pos).toTileSpace();
         const contents = this.root.map.getLayerContentXY(tile.x, tile.y, "regular");
         if (contents) {
-            const dispComp = contents.components.Display;
+            let dispComp = undefined;
+            if(dispComp == undefined) dispComp = contents.components.Display;
+            if(dispComp == undefined) dispComp = contents.components.DisplayRed;
+            if(dispComp == undefined) dispComp = contents.components.NodiData;
             if (dispComp) {
                 if (button === enumMouseButton.left) {
                    // contents.components.WiredPins.slots[0].nodiType = parseInt(window.prompt("Enter the memory value.", dispComp.storedCount));

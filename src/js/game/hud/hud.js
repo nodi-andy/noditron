@@ -99,6 +99,8 @@ export class GameHUD {
             screenshotExporter: new HUDScreenshotExporter(this.root),
             shapeViewer: new HUDShapeViewer(this.root),
 
+            timeController: new HUDTimeController(this.root),
+
             wiresOverlay: new HUDWiresOverlay(this.root),
             layerPreview: new HUDLayerPreview(this.root),
 

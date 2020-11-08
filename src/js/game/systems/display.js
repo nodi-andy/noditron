@@ -62,7 +62,12 @@ export class DisplaySystem extends GameSystemWithFilter {
         const contents = chunk.containedEntitiesByLayer.regular;
         for (let i = 0; i < contents.length; ++i) {
             const entity = contents[i];
-            if (entity && entity.components.Display) {
+            if(entity == undefined) continue;
+            let dispComp = undefined;
+            if(dispComp == undefined) dispComp = entity.components.Display;
+            if(dispComp == undefined) dispComp = entity.components.DisplayRed;
+            if(dispComp == undefined) dispComp = entity.components.NodiData;
+            if (dispComp) {
                 const pinsComp = entity.components.WiredPins;
                 const network = pinsComp.slots[0].linkedNetwork;
 
@@ -77,7 +82,6 @@ export class DisplaySystem extends GameSystemWithFilter {
                         size
                     );*/
 
-                const dispComp = entity.components.Display;
                 const staticComp = entity.components.StaticMapEntity;
 /*
                 const contentsNB = this.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y, "regular");
@@ -92,7 +96,7 @@ export class DisplaySystem extends GameSystemWithFilter {
 
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
                 const context = parameters.context;
-                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20) && dispComp.storedType==10) {
+                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20) && ( dispComp.storedType==10 || entity.components.NodiData)) {
                     context.font = "bold 14px GameFont";
                     context.textAlign = "center";
                     context.fillStyle = "#64666e";

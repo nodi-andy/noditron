@@ -695,6 +695,11 @@ buildings:
             name: &display_red Display_red
             description: Connect a signal to show it on the display - It can be a shape, color or boolean.
 
+    nodi_data:
+        default:
+            name: &nodi_data Nodi_data
+            description: memory block
+
     reader:
         default:
             name: &reader Belt Reader
@@ -1145,6 +1150,7 @@ keybindings:
         wire_tunnel: *wire_tunnel
         display: *display
         display_red: *display
+        nodi_data: *nodi_data
         reader: *reader
         virtual_processor: *virtual_processor
         transistor: *transistor

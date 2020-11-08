@@ -1,16 +1,15 @@
 import { types } from "../../savegame/serialization";
 import { NodiComponent } from "../nodi_component";
 
-export class DisplayComponent extends NodiComponent {
-    static getId() {
-        return "Display";
-    }
+export class NodiDataComponent extends NodiComponent {
 
+    static getId() {
+        return "NodiData";
+    }
     /**
-     * 
+
      */
     constructor() {
         super();
     }
-
 }

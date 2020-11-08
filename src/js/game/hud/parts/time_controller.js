@@ -14,13 +14,12 @@ export class HUDTimeController extends BaseHUDPart {
 
             <div class="buttons">
                 <div class="levelToggle plusMinus">
-                    <label></label>
-                    <button class="styledButton play"> > </button>
+                    <button class="styledButton play">|></button>
                     <button class="styledButton stop">||</button>
+                    <button class="styledButton restart"><|</button>
                 </div>
-                <div class="levelToggle additionalOptions">
-                    <label>Speed: </label> <input class="rangeInput" type="range" value="1" min="0" max="2000" step="1">
-                </div>
+                <label>Tick: </label> <label class="tickLabel">0</label><br>
+                <label>Speed: </label> <input class="rangeInput" type="range" value="1" min="0" max="2000" step="1">
             </div>
         `
         );
@@ -29,6 +28,7 @@ export class HUDTimeController extends BaseHUDPart {
 
         bind(".levelToggle .play", () => this.modifyLevel(-1));
         bind(".levelToggle .stop", () => this.modifyLevel(0));
+        bind(".levelToggle .restart", () => this.restartNodiTick());
 
         this.getRangeInputElement().addEventListener("input", () => {this.modifyLevel(-1); });
     }
@@ -54,6 +54,11 @@ export class HUDTimeController extends BaseHUDPart {
         this.modifyUpgrade("processors", 100);
         this.modifyUpgrade("painting", 100);
     }
+    
+    showNodiTick(tickCount)
+    {
+      this.element.querySelector("label.tickLabel").innerHTML = tickCount;
+    }
 
     modifyUpgrade(id, amount) {
         const upgradeTiers = this.root.gameMode.getUpgrades()[id];
@@ -77,9 +82,21 @@ export class HUDTimeController extends BaseHUDPart {
         );
     }
 
+    restartNodiTick() {
+        this.root.tickrate = 0;
+        this.root.nodiSolver.noditick = 0;
+        this.showNodiTick(this.root.nodiSolver.noditick);
+    }
+
     modifyLevel(amount) {
         if(amount == -1)
-          this.root.tickrate = Number(this.getRangeInputElement().value);
+        {
+            let slider= Number(this.getRangeInputElement().value);
+            if(slider == 0) 
+               this.root.tickrate = 0;
+            else
+              this.root.tickrate = 2001 - Number(this.getRangeInputElement().value);
+        }
         else
           this.root.tickrate = amount;
     }

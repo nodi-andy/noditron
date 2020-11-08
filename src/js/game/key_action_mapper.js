@@ -67,6 +67,7 @@ export const KEYMAPPINGS = {
         filter: { keyCode: key("O") },
         display: { keyCode: key("P") },
         display_red: { keyCode: key("J") },
+        nodi_data: { keyCode: key("B") },
 
         // Wires toolbar
         wire: { keyCode: key("1") },

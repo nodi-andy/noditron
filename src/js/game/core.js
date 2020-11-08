@@ -165,7 +165,7 @@ export class GameCore {
         logger.log("Initializing new game");
         this.root.gameIsFresh = true;
         this.root.map.seed = randomInt(0, 100000);
-
+/*
         // Place the hub
         const hub = gMetaBuildingRegistry.findByClass(MetaHubBuilding).createEntity({
             root: this.root,
@@ -200,7 +200,7 @@ export class GameCore {
             variant: defaultBuildingVariant,
         });
         this.root.map.placeStaticEntity(hub3);
-        this.root.entityMgr.registerEntity(hub3);
+        this.root.entityMgr.registerEntity(hub3);*/
     }
 
     /**
