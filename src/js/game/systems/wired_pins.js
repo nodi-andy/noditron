@@ -189,6 +189,16 @@ export class WiredPinsSystem extends GameSystemWithFilter {
                     staticComp.rotation + enumDirectionToAngle[slot.direction]
                 );
 
+                let dispComp = undefined;
+                if(dispComp == undefined) dispComp = entity.components.Display;
+                if(dispComp == undefined) dispComp = entity.components.DisplayRed;
+                if(dispComp == undefined) dispComp = entity.components.NodiData;
+
+                if(dispComp){
+                    const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
+                    parameters.context.fillText(formatBigNumber(dispComp.storedType), center.x-10, center.y+10);
+                }
+
                 if (staticComp.getMetaBuilding().getRenderPins()) {
                     /*drawRotatedSprite({
                         parameters,
@@ -199,9 +209,8 @@ export class WiredPinsSystem extends GameSystemWithFilter {
                         size: globalConfig.tileSize + 2,
                         offsetX: 0,
                         offsetY: 0,
-                    });*/
-                    const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
-                    parameters.context.fillText(formatBigNumber(slot.nodiType), center.x-10, center.y+10);
+                    });
+*/
                 }
 
                 // Draw contained item to visualize whats emitted

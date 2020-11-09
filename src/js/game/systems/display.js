@@ -96,7 +96,7 @@ export class DisplaySystem extends GameSystemWithFilter {
 
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
                 const context = parameters.context;
-                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20) && ( dispComp.storedType==10 || entity.components.NodiData)) {
+                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20) /* && ( dispComp.storedType == 10 || entity.components.NodiData)*/) {
                     context.font = "bold 14px GameFont";
                     context.textAlign = "center";
                     context.fillStyle = "#64666e";

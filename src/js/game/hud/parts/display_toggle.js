@@ -16,6 +16,7 @@ import { BOOL_FALSE_SINGLETON, BOOL_TRUE_SINGLETON } from "../../items/boolean_i
 import { COLOR_ITEM_SINGLETONS } from "../../items/color_item";
 import { ShapeDefinition } from "../../shape_definition";
 import { enumNotificationType } from "./notifications";
+import { enumNodiBits } from "../../nodisolver";
 
 export class HUDDisplayToggle extends BaseHUDPart {
     initialize() {
@@ -90,10 +91,8 @@ export class HUDDisplayToggle extends BaseHUDPart {
                         this.root.hud.signals.notification.dispatch(
                         "DIALOG " + signalValueInput.getValue() ,  enumNotificationType.upgrade  );
 
-                        contents.components.WiredPins.slots[0].nodiVal= Number.parseInt(signalValueInput.getValue());
-                        contents.components.WiredPins.slots[0].nodiType = 10;
                         dispComp.storedCount = Number.parseInt(signalValueInput.getValue());
-                        dispComp.storedType = 10;
+                        dispComp.setTypeBit(enumNodiBits.TRAN);
                     };
 
                     dialog.buttonSignals.ok.add(closeHandler);

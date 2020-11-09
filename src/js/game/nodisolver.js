@@ -3,24 +3,33 @@ import { createLogger } from "../core/logging";
 import { GameRoot } from "./root";
 import { enumNotificationType } from "../game/hud/parts/notifications";
 
+
+// How important it is that a savegame is created
+/**
+ * @enum {number}
+ */
+export const enumNodiBits = {
+    LAYER: 0,
+    COND: 1,
+    PROC: 2,
+    TRAN: 3,
+    PUSH: 4
+};
+
 /****************************************
 * DEFINES
 */
-var LAYER = 0; // bit 0 layer
-var COND  = 1; // bit 1 conductor
-var PROC  = 2; // bit 2 processor
-var TRAN  = 3; // bit 3 state processing
-var PUSH  = 4; // bit 4 process end
 
-var SPACE        = 0;                         // 0 Nothing, do nothing
-var SUPRACOND    = 1;                         // 1 ping all neighbouring conductors
-var COND_1 = COND << 1;                       // 2 ping only blue conductor and blue discus
-var COND_2 = (COND << 1) + 1;                 // 3 ping only red conductor and red discus
-var DATA = PROC << 1;                         // 4 I can keep the cell value and make basic calculation
-var LINK = (PROC << 1) + 1;                   // 5 Process unit. I get getrigged by a discus and have my custom function, see LINKTYPE
-var DISCUS = (COND << 1) + (PROC << 1);       // 6 A blue discus executes a function call in blue layer
-var DISCUS_2 = (COND << 1) + (PROC << 1) + 1;  // 7 A red discus executes a function call in red layer
-
+export const enumNodiTypes = {
+    SPACE       : 0,                         // 0 Nothing, do nothing
+    SUPRACOND   : 1,                         // 1 ping all neighbouring conductors
+    COND_1      : enumNodiBits.COND << 1,                       // 2 ping only blue conductor and blue discus
+    COND_2      : (enumNodiBits.COND << 1) + 1,                 // 3 ping only red conductor and red discus
+    DATA        : enumNodiBits.PROC << 1,                         // 4 I can keep the cell value and make basic calculation
+    LINK        : (enumNodiBits.PROC << 1) + 1,                   // 5 Process unit. I get getrigged by a discus and have my custom function, see LINKTYPE
+    DISCUS      : (enumNodiBits.COND << 1) + (enumNodiBits.PROC << 1),       // 6 A blue discus executes a function call in blue layer
+    DISCUS_2    : (enumNodiBits.COND << 1) + (enumNodiBits.PROC << 1) + 1,  // 7 A red discus executes a function call in red layer
+}
 // How important it is that a savegame is created
 /**
  * @enum {number}
@@ -46,31 +55,9 @@ export class NodiSolver {
 
         this.noditick = 0;
     }
-    // a cell at (xf, yf) pings another cell at (xt, yt) and
-    // conducts the value v if the second cell has one of the types from "types"
-    ping(xf, yf, xt, yt, types, v) {
-        if (v == undefined)
-        {
-            const entity = this.root.map.getLayerContentXY(xf, yf, "regular");
-            if(entity)
-            { 
-                const displayCompent = entity.components.Display;
-                if(displayCompent) v = displayCompent.storedCount;
-            }
-        }
-        var t = this.getType(xt, yt);
-        if (types.includes(t)) {
-            this.setNewtypeBit(xt, yt, TRAN);
-            this.clearNewtypeBit(xt, yt, PUSH);
-            this.setValue(xt, yt, v);
-        }
-    }
 
-    // Set and clean a bit (COND, PROC etc.) on the new-matrix
-    setNewtypeBit(x, y, b) {
-        let newType = this.getNewType(x,y) | 1 << b;
-        this.setNewType(x,y,newType);
-    }
+
+
 
     clearNewtypeBit(x, y, b) {
         let newType = this.getNewType(x,y) & ~(1 << b);
@@ -137,43 +124,39 @@ export class NodiSolver {
 
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
-            const displayComp = entity.components.Display;
-            if(displayComp && displayComp.storedType == 10)
+            let displayComp = undefined;
+            if(displayComp == undefined) displayComp = entity.components.Display;
+            if(displayComp == undefined) displayComp = entity.components.DisplayRed;
+            if(displayComp == undefined) displayComp = entity.components.NodiData;
+            if(displayComp && displayComp.hasTypeBit(enumNodiBits.TRAN))
             {
-                const staticComp = entity.components.StaticMapEntity;
-                let xc = staticComp.origin.x;
-                let yc = staticComp.origin.y;
-                let xt = xc + 1;
-                let yt = yc;
-                this.ping(xc, yc, xt, yt, [COND_1, DISCUS], displayComp.storedCount);
+                displayComp.nodiProc(this.root.map);
+            }
+        }
 
-                this.clearNewtypeBit(xc, yc, TRAN);
-                this.setNewtypeBit(xc, yc, PUSH);
-                displayComp.storedCount = 0;
-                /*const entityNB = this.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y, "regular");
-                if(entityNB)
-                { 
-                    const dispCompNB = entityNB.components.Display;
-                    if (dispCompNB) {
-                        
-                    //  this.core.root.hud.signals.notification.dispatch("NODI STEP :" + displayComp.storedCount  + "/" + displayComp.storedType,  enumNotificationType.upgrade  );
-                        dispCompNB.storedTypeNext = 10;
-                        dispCompNB.storedCountNext = displayComp.storedCount;
-                        displayComp.storedTypeNext = 2;
-                        displayComp.storedCountNext = 0;
-                  }
-                }  */              
+        // clean PUSH's
+        for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
+            const entity = this.root.entityMgr.entities[i];
+           let displayComp = undefined;
+            if(displayComp == undefined) displayComp = entity.components.Display;
+            if(displayComp == undefined) displayComp = entity.components.DisplayRed;
+            if(displayComp == undefined) displayComp = entity.components.NodiData;
+            if(displayComp && displayComp.hasTypeBit(enumNodiBits.PUSH))
+            {
+                displayComp.clearNewtypeBit(enumNodiBits.PUSH);
             }
         }
 
         // copy new matrix onto current
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
-            const displayComp = entity.components.Display;
+           let displayComp = undefined;
+            if(displayComp == undefined) displayComp = entity.components.Display;
+            if(displayComp == undefined) displayComp = entity.components.DisplayRed;
+            if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp)
             {
                 displayComp.storedType = displayComp.storedTypeNext;
-                displayComp.storedCount = displayComp.storedCountNext;
             }
         }
         
@@ -207,9 +190,10 @@ export class NodiSolver {
 
         // Check when the last save was, but make sure that if it fails, we don't spam
 
-        const secondsSinceLastSave = performance.now()- this.lastSaveTime;
+        const secondsSinceLastSave = performance.now() - this.lastSaveTime;
 
         let shouldSave = secondsSinceLastSave > this.root.tickrate;
+        if(this.root.nodistate == 0) shouldSave = false;
 
         if (shouldSave) {
             //logger.log("Saving automatically");

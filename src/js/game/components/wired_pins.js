@@ -14,16 +14,12 @@ export const enumPinSlotType = {
  *   pos: Vector,
  *   type: enumPinSlotType,
  *   direction: enumDirection
- *   nodiType: number,
- *   nodiVal: number
  * }} WirePinSlotDefinition */
 
 /** @typedef {{
  *   pos: Vector,
  *   type: enumPinSlotType,
  *   direction: enumDirection,
- *   nodiType: number,
- *   nodiVal: number,
  *   value: BaseItem,
  *   linkedNetwork: import("../systems/wire").WireNetwork
  * }} WirePinSlot */
@@ -37,9 +33,7 @@ export class WiredPinsComponent extends Component {
         return {
             slots: types.fixedSizeArray(
                 types.structured({
-                    value: types.nullable(typeItemSingleton),
-                    nodiType: types.int,
-                    nodiVal: types.int
+                    value: types.nullable(typeItemSingleton)
                 })
             ),
         };
@@ -69,10 +63,8 @@ export class WiredPinsComponent extends Component {
                 pos: slotData.pos,
                 type: slotData.type,
                 direction: slotData.direction,
-                nodiType : 2,
-                nodiVal : 123,
                 value: null,
-                linkedNetwork: null,
+                linkedNetwork: null
             });
         }
     }

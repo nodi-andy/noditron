@@ -13,24 +13,22 @@ export class HUDTimeController extends BaseHUDPart {
             <label>Debugger (F7)</label>
 
             <div class="buttons">
-                <div class="levelToggle plusMinus">
-                    <button class="styledButton play">|></button>
-                    <button class="styledButton stop">||</button>
-                    <button class="styledButton restart"><|</button>
-                </div>
+                <button class="styledButton restart"> << </button>
+                <button class="styledButton playstop"> >> </button>
+            </div>
+            <div>
                 <label>Tick: </label> <label class="tickLabel">0</label><br>
-                <label>Speed: </label> <input class="rangeInput" type="range" value="1" min="0" max="2000" step="1">
+                <label>Speed: </label> <input class="rangeInput" type="range" value="1500" min="0" max="2000" step="1">
             </div>
         `
         );
 
         const bind = (selector, handler) => this.trackClicks(this.element.querySelector(selector), handler);
 
-        bind(".levelToggle .play", () => this.modifyLevel(-1));
-        bind(".levelToggle .stop", () => this.modifyLevel(0));
-        bind(".levelToggle .restart", () => this.restartNodiTick());
+        bind(".playstop", () => this.modifyLevel(-1));
+        bind(".restart", () => this.restartNodiTick());
 
-        this.getRangeInputElement().addEventListener("input", () => {this.modifyLevel(-1); });
+        this.getRangeInputElement().addEventListener("input", () => {this.setSpeed(); });
     }
 
     /**
@@ -83,22 +81,32 @@ export class HUDTimeController extends BaseHUDPart {
     }
 
     restartNodiTick() {
-        this.root.tickrate = 0;
+        this.root.nodistate = 0;
         this.root.nodiSolver.noditick = 0;
+        this.element.querySelector("button.playstop").innerHTML = ">>";
         this.showNodiTick(this.root.nodiSolver.noditick);
     }
 
+    setSpeed() {
+        let slider= Number(this.getRangeInputElement().value);
+        if(slider == 0) 
+            this.root.tickrate = 0;
+        else
+            this.root.tickrate = 2001 - Number(this.getRangeInputElement().value);
+    }
+
+
     modifyLevel(amount) {
-        if(amount == -1)
+        if(this.root.nodistate == 0)
         {
-            let slider= Number(this.getRangeInputElement().value);
-            if(slider == 0) 
-               this.root.tickrate = 0;
-            else
-              this.root.tickrate = 2001 - Number(this.getRangeInputElement().value);
+          this.root.nodistate = 1;
+          this.element.querySelector("button.playstop").innerHTML = "||";
         }
         else
-          this.root.tickrate = amount;
+        {
+          this.root.nodistate = 0;
+          this.element.querySelector("button.playstop").innerHTML = ">>";
+        }
     }
 
     initialize() {

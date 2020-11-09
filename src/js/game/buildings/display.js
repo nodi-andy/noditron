@@ -44,12 +44,10 @@ export class MetaDisplayBuilding extends MetaBuilding {
                         pos: new Vector(0, 0),
                         direction: enumDirection.bottom,
                         type: enumPinSlotType.logicalAcceptor,
-                        nodiType: 1,
-                        nodiVal : 2,
                     },
                 ],
             })
         );
-        entity.addComponent(new DisplayComponent());
+        entity.addComponent(new DisplayComponent(entity));
     }
 }

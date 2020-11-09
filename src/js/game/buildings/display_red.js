@@ -49,13 +49,11 @@ export class MetaDisplayRedBuilding extends MetaBuilding {
                     {
                         pos: new Vector(0, 0),
                         direction: enumDirection.bottom,
-                        type: enumPinSlotType.logicalAcceptor,
-                        nodiType: 1,
-                        nodiVal : 2,
+                        type: enumPinSlotType.logicalAcceptor
                     },
                 ],
             })
         );
-        entity.addComponent(new DisplayRedComponent());
+        entity.addComponent(new DisplayRedComponent(entity));
     }
 }
