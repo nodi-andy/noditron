@@ -55,7 +55,7 @@ export class NodiComponent extends Component {
             if(pingedComp == undefined) pingedComp = pingedEntity.components.Display;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.DisplayRed;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiData;
-
+            if(pingedComp == undefined) return;
 
             if (types.includes(pingedComp.storedType)) {
                 pingedComp.setNewtypeBit(enumNodiBits.TRAN);

@@ -2,6 +2,7 @@ import { globalConfig } from "../core/config";
 import { createLogger } from "../core/logging";
 import { GameRoot } from "./root";
 import { enumNotificationType } from "../game/hud/parts/notifications";
+import { MinerComponent } from "./components/miner";
 
 
 // How important it is that a savegame is created
@@ -111,13 +112,18 @@ export class NodiSolver {
     doSave() {
         if(this.noditick == 0)
         {
-            const entityNB = this.root.map.getLayerContentXY(-5, 0, "regular");
-            if(entityNB)
-            { 
-                const dispCompNB = entityNB.components.Display;
-                if (dispCompNB) {
-                    dispCompNB.storedType = 10;
-                    dispCompNB.storedCount = 77;
+            for (let i = 0; i < this.root.entityMgr.getAllWithComponent(MinerComponent).length ; ++i) {
+                let minerEntity = this.root.entityMgr.getAllWithComponent(MinerComponent)[i];
+                let x = minerEntity.components.StaticMapEntity.origin.x;
+                let y = minerEntity.components.StaticMapEntity.origin.y;
+                const entityNB = this.root.map.getLayerContentXY(x, y-1, "regular");
+                if(entityNB)
+                { 
+                    const dispCompNB = entityNB.components.Display;
+                    if (dispCompNB) {
+                        dispCompNB.setTypeBit(enumNodiBits.TRAN);
+                        dispCompNB.storedCount = 77;
+                    }
                 }
             }
         }

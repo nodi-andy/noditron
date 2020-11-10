@@ -1,7 +1,7 @@
 import { BaseHUDPart } from "../base_hud_part";
 import { makeDiv } from "../../../core/utils";
 import { GameRoot } from "../../root";
-import { MinerComponent } from "../../components/miner";
+import { DisplayComponent } from "../../components/display";
 import { DynamicDomAttach } from "../dynamic_dom_attach";
 import { TrackedState } from "../../../core/tracked_state";
 import { cachebust } from "../../../core/cachebust";
@@ -19,7 +19,7 @@ const tutorialsByLevel = [
         {
             id: "1_1_extractor",
             condition: /** @param {GameRoot} root */ root =>
-                root.entityMgr.getAllWithComponent(MinerComponent).length === 0,
+                root.entityMgr.getAllWithComponent(DisplayComponent).length === 0,
         },
         // 1.2. connect to hub
         {

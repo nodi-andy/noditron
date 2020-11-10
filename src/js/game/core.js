@@ -22,6 +22,7 @@ import { SavegameSerializer } from "../savegame/savegame_serializer";
 import { AutomaticSave } from "./automatic_save";
 import { NodiSolver } from "./nodisolver";
 import { MetaHubBuilding } from "./buildings/hub";
+import { MetaMinerBuilding } from "./buildings/miner";
 import { Camera } from "./camera";
 import { DynamicTickrate } from "./dynamic_tickrate";
 import { EntityManager } from "./entity_manager";
@@ -38,7 +39,6 @@ import { GameRoot } from "./root";
 import { ShapeDefinitionManager } from "./shape_definition_manager";
 import { SoundProxy } from "./sound_proxy";
 import { GameTime } from "./time/game_time";
-import { MetaDisplayBuilding } from "./buildings/display";
 
 const logger = createLogger("ingame/core");
 
@@ -165,6 +165,8 @@ export class GameCore {
         logger.log("Initializing new game");
         this.root.gameIsFresh = true;
         this.root.map.seed = randomInt(0, 100000);
+
+
 /*
         // Place the hub
         const hub = gMetaBuildingRegistry.findByClass(MetaHubBuilding).createEntity({
@@ -190,17 +192,7 @@ export class GameCore {
         this.root.map.placeStaticEntity(hub2);
         this.root.entityMgr.registerEntity(hub2);
 
-                        // Place the hub
-        const hub3 = gMetaBuildingRegistry.findByClass(MetaDisplayBuilding).createEntity({
-            root: this.root,
-            origin: new Vector(6, -2),
-            rotation: 0,
-            originalRotation: 0,
-            rotationVariant: 0,
-            variant: defaultBuildingVariant,
-        });
-        this.root.map.placeStaticEntity(hub3);
-        this.root.entityMgr.registerEntity(hub3);*/
+        */
     }
 
     /**

@@ -6,7 +6,11 @@ export class NodiDataComponent extends NodiComponent {
     static getId() {
         return "NodiData";
     }
-    /**
+ 
+     getSilhouetteColor() {
+        return "#11ff11";
+    }
+       /**
 
      */
     constructor() {

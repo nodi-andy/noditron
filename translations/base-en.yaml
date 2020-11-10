@@ -415,7 +415,7 @@ ingame:
     interactiveTutorial:
         title: Tutorial
         hints:
-            1_1_extractor: Place an <strong>extractor</strong> on top of a <strong>circle shape</strong> to extract it!
+            1_1_extractor: Connect the <strong>input and output</strong> using <strong>blue conductors</strong> and run the grid!
             1_2_conveyor: >-
                 Connect the extractor with a <strong>conveyor belt</strong> to your hub!<br><br>Tip: <strong>Click and drag</strong> the belt with your mouse!
 
@@ -693,6 +693,11 @@ buildings:
     display_red:
         default:
             name: &display_red Display_red
+            description: Connect a signal to show it on the display - It can be a shape, color or boolean.
+
+    oper:
+        default:
+            name: &oper operation
             description: Connect a signal to show it on the display - It can be a shape, color or boolean.
 
     nodi_data:
@@ -1150,6 +1155,7 @@ keybindings:
         wire_tunnel: *wire_tunnel
         display: *display
         display_red: *display
+        oper: *display
         nodi_data: *nodi_data
         reader: *reader
         virtual_processor: *virtual_processor
@@ -1208,58 +1214,38 @@ demo:
     settingNotAvailable: Not available in the demo.
 
 tips:
-    - The hub will accept any input, not just the current shape!
-    - Make sure your factories are modular - it will pay out!
-    - Don't build too close to the hub, or it will be a mess!
-    - If stacking does not work, try switching the inputs.
-    - You can toggle the belt planner direction by pressing <b>R</b>.
-    - Holding <b>CTRL</b> allows dragging of belts without auto-orientation.
-    - Ratios stay the same, as long as all upgrades are on the same Tier.
-    - Serial execution is more efficient than parallel.
-    - You will unlock more variants of buildings later in the game!
-    - You can use <b>T</b> to switch between different variants.
-    - Symmetry is key!
-    - You can weave different tiers of tunnels.
+    - The conductors can also forward the data in diagonals
+    - If you don't know what it is a <b>turing machine</b>, then go and learn now!
+    - You can use the debugger if the things get complicated.
+    - You have an infinite map. Don't cramp your factory, expand!
     - Try to build compact factories - it will pay out!
+    - Press F4 to show your FPS and Tick Rate.
+    - Press F4 twice to show the tile of your mouse and camera.
+    - You will unlock more cell variants later in the game!
+    - Serial execution is more efficient than parallel.
+    - Holding <b>SHIFT</b> lets you place multiple buildings in one click.
+    - You can use <b>T</b> to switch between different variants.
+    - This game has a lot of useful keybindings! Be sure to check out the settings page.
+    - This game has a lot of settings, be sure to check them out!
+    - Your hub marker has a small compass that shows which direction it is in!
+    - You can run your design on any hardware (e.g. arduino) with real electronical components
+    - Blip Blup .....
     - The painter has a mirrored variant which you can select with <b>T</b>
-    - Having the right building ratios will maximize efficiency.
-    - At maximum level, 5 extractors will fill a single belt.
-    - Don't forget about tunnels!
     - You don't need to divide up items evenly for full efficiency.
     - Holding <b>SHIFT</b> will activate the belt planner, letting you place long lines of belts easily.
-    - Cutters always cut vertically, regardless of their orientation.
-    - The storage buffer prioritises the left output.
-    - Invest time to build repeatable designs - it's worth it!
-    - Holding <b>SHIFT</b> lets you place multiple buildings in one click.
     - You can hold <b>ALT</b> to invert the direction of placed belts.
-    - Efficiency is key!
     - Shape patches that are further away from the hub are more complex.
-    - Machines have a limited speed, divide them up for maximum efficiency.
     - Use balancers to maximize your efficiency.
-    - Organization is important. Try not to cross conveyors too much.
     - Plan in advance, or it will be a mess!
-    - Don't remove your old factories! You'll need them to unlock upgrades.
     - Try beating level 20 or 26 on your own before seeking for help!
     - Don't complicate things, try to stay simple and you'll go far.
-    - You may need to reuse factories later in the game. Build your factories to be reusable.
-    - Sometimes, you can find a needed shape in the map without creating it with stackers.
-    - Full windmills/pinwheels can never spawn naturally.
-    - Color your shapes before cutting for maximum efficiency.
-    - With modules, space is merely a perception; a concern for mortal men.
     - Make a separate blueprint factory. They're important for modules.
     - Have a closer look at the color mixer, and your questions will be answered.
     - Use <b>CTRL</b> + Click to select an area.
     - Building too close to the hub can get in the way of later projects.
     - The pin icon next to each shape in the upgrade list pins it to the screen.
-    - Mix all three primary colors to make white!
-    - You have an infinite map. Don't cramp your factory, expand!
     - Also try Factorio! It's my favorite game.
     - The quad cutter cuts clockwise, starting from the top right.
     - You can download your savegames in the main menu!
-    - This game has a lot of useful keybindings! Be sure to check out the settings page.
-    - This game has a lot of settings, be sure to check them out!
-    - Your hub marker has a small compass that shows which direction it is in!
     - To clear belts, cut the area and then paste it at the same location.
-    - Press F4 to show your FPS and Tick Rate.
-    - Press F4 twice to show the tile of your mouse and camera.
     - You can click a pinned shape on the left side to unpin it.

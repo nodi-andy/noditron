@@ -25,6 +25,9 @@ export class MetaMinerBuilding extends MetaBuilding {
         return "#b37dcd";
     }
 
+    getIsRemovable() {
+        return false;
+    }
     /**
      * @param {GameRoot} root
      * @param {string} variant

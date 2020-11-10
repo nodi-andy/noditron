@@ -3,6 +3,7 @@ import { MetaCondBuilding } from "../../buildings/cond";
 import { MetaCutterBuilding } from "../../buildings/cutter";
 import { MetaDisplayBuilding } from "../../buildings/display";
 import { MetaDisplayRedBuilding } from "../../buildings/display_red";
+import { MetaOperBuilding } from "../../buildings/oper";
 import { MetaNodiDataBuilding } from "../../buildings/nodi_data";
 import { MetaFilterBuilding } from "../../buildings/filter";
 import { MetaLeverBuilding } from "../../buildings/lever";
@@ -27,6 +28,7 @@ export class HUDBuildingsToolbar extends HUDBaseToolbar {
                 MetaDisplayBuilding,
                 MetaDisplayRedBuilding,
                 MetaNodiDataBuilding,
+                MetaOperBuilding,
 //                MetaUndergroundBeltBuilding,
 //                MetaMinerBuilding,
 //                MetaCutterBuilding,

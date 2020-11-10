@@ -18,6 +18,7 @@ import { LeverComponent } from "./components/lever";
 import { WireTunnelComponent } from "./components/wire_tunnel";
 import { DisplayComponent } from "./components/display";
 import { DisplayRedComponent } from "./components/display_red";
+import { OperComponent } from "./components/oper";
 import { NodiDataComponent } from "./components/nodi_data";
 import { BeltReaderComponent } from "./components/belt_reader";
 import { FilterComponent } from "./components/filter";
@@ -88,6 +89,9 @@ export class EntityComponentStorage {
 
         /** @type {DisplayRedComponent} */
         this.DisplayRed;
+
+        /** @type {OperComponent} */
+        this.Oper;
 
           /** @type {NodiDataComponent} */
         this.NodiData;      

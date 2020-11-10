@@ -68,6 +68,7 @@ export const KEYMAPPINGS = {
         display: { keyCode: key("P") },
         display_red: { keyCode: key("J") },
         nodi_data: { keyCode: key("B") },
+        oper: { keyCode: key("H") },
 
         // Wires toolbar
         wire: { keyCode: key("1") },

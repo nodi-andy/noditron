@@ -1,13 +1,14 @@
 import { makeDiv } from "../../../core/utils";
 import { BaseHUDPart } from "../base_hud_part";
 import { DynamicDomAttach } from "../dynamic_dom_attach";
+import { enumHubGoalRewards } from "../../tutorial_goals";
 import { enumNotificationType } from "./notifications";
 
 export class HUDTimeController extends BaseHUDPart {
     createElements(parent) {
         this.element = makeDiv(
             parent,
-            "ingame_HUD_SandboxController",
+            "ingame_HUD_DebuggerController",
             [],
             `
             <label>Debugger (F7)</label>
@@ -17,7 +18,7 @@ export class HUDTimeController extends BaseHUDPart {
                 <button class="styledButton playstop"> >> </button>
             </div>
             <div>
-                <label>Tick: </label> <label class="tickLabel">0</label><br>
+                <label>Cycles: </label> <label class="tickLabel">0</label><br>
                 <label>Speed: </label> <input class="rangeInput" type="range" value="1500" min="0" max="2000" step="1">
             </div>
         `
@@ -53,8 +54,7 @@ export class HUDTimeController extends BaseHUDPart {
         this.modifyUpgrade("painting", 100);
     }
     
-    showNodiTick(tickCount)
-    {
+    showNodiTick(tickCount)  {
       this.element.querySelector("label.tickLabel").innerHTML = tickCount;
     }
 
@@ -112,13 +112,13 @@ export class HUDTimeController extends BaseHUDPart {
     initialize() {
         // Allow toggling the controller overlay
         this.root.gameState.inputReciever.keydown.add(key => {
-            if (key.keyCode === 118) {
+            if (key.keyCode === 118 /*&& this.root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers)*/) {
                 // F7
                 this.toggle();
             }
         });
 
-        this.visible = true;
+        this.visible = true; //this.root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers);
         this.domAttach = new DynamicDomAttach(this.root, this.element);
     }
 
