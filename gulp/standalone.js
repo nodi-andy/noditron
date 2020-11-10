@@ -72,7 +72,7 @@ function gulptasksStandalone($, gulp) {
 
     gulp.task("standalone.killRunningInstances", cb => {
         try {
-            execSync("taskkill /F /IM shapezio.exe");
+            execSync("taskkill /F /IM noditron.exe");
         } catch (ex) {
             console.warn("Failed to kill running instances, maybe none are up.");
         }
@@ -103,18 +103,18 @@ function gulptasksStandalone($, gulp) {
 
         packager({
             dir: tempDestBuildDir,
-            appCopyright: "Tobias Springer",
+            appCopyright: "noditron",
             appVersion: getVersion(),
             buildVersion: "1.0.0",
             arch,
             platform,
             asar: true,
-            executableName: "shapezio",
+            executableName: "noditron",
             icon: path.join(electronBaseDir, "favicon"),
-            name: "shapez.io-standalone",
+            name: "noditron-standalone",
             out: tempDestDir,
             overwrite: true,
-            appBundleId: "io.shapez.standalone",
+            appBundleId: "com.noditron.standalone",
             appCategoryType: "public.app-category.games",
             ...(isRelease &&
                 platform === "darwin" && {
