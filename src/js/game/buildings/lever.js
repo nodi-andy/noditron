@@ -9,6 +9,7 @@ import { enumHubGoalRewards } from "../tutorial_goals";
 export class MetaLeverBuilding extends MetaBuilding {
     constructor() {
         super("lever");
+        this.isRemovable = false;
     }
 
     getSilhouetteColor() {
@@ -17,6 +18,9 @@ export class MetaLeverBuilding extends MetaBuilding {
     }
     getStayInPlacementMode() {
         return true;
+    }
+    getIsRemovable() {
+        return this.isRemovable;
     }
     /**
      * @param {GameRoot} root
@@ -54,6 +58,6 @@ export class MetaLeverBuilding extends MetaBuilding {
             })
         );
 
-        entity.addComponent(new LeverComponent({}));
+        entity.addComponent(new LeverComponent({entity}));
     }
 }

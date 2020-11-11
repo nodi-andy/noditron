@@ -62,7 +62,7 @@ export class GameRoot {
         this.gameWidth = 500;
         this.gameHeight = 500;
         this.tickrate = 500;
-        this.nodistate = 0;
+        this.nodistate = 1;
 
         // Stores whether the current session is a fresh game (true), or was continued (false)
         /** @type {boolean} */

@@ -13,6 +13,7 @@ import { MetaMinerBuilding } from "./buildings/miner";
 import { Vector } from "../core/vector";
 import { defaultBuildingVariant } from "./meta_building";
 import { MetaOperBuilding } from "./buildings/oper";
+import { MetaLeverBuilding } from "./buildings/lever";
 
 export class HubGoals extends BasicSerializableObject {
     static getId() {
@@ -242,9 +243,9 @@ export class HubGoals extends BasicSerializableObject {
 
         if(this.level == 1)
         {
-            const hub = gMetaBuildingRegistry.findByClass(MetaOperBuilding).createEntity({
+            const hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
                 root: this.root,
-                origin: new Vector(-6, -2),
+                origin: new Vector(-4, -2),
                 rotation: 0,
                 originalRotation: 0,
                 rotationVariant: 0,
@@ -253,9 +254,9 @@ export class HubGoals extends BasicSerializableObject {
             this.root.map.placeStaticEntity(hub);
             this.root.entityMgr.registerEntity(hub);
 
-            const hub2 = gMetaBuildingRegistry.findByClass(MetaOperBuilding).createEntity({
+            const hub2 = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
                 root: this.root,
-                origin: new Vector(6, 2),
+                origin: new Vector(4, 2),
                 rotation: 0,
                 originalRotation: 0,
                 rotationVariant: 0,
@@ -266,7 +267,7 @@ export class HubGoals extends BasicSerializableObject {
         }
         else if(this.level == 2)
         {
-            const hub = gMetaBuildingRegistry.findByClass(MetaOperBuilding).createEntity({
+            const hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
                 root: this.root,
                 origin: new Vector(-4, 0),
                 rotation: 0,
@@ -277,7 +278,7 @@ export class HubGoals extends BasicSerializableObject {
             this.root.map.placeStaticEntity(hub);
             this.root.entityMgr.registerEntity(hub);
 
-            const hub2 = gMetaBuildingRegistry.findByClass(MetaOperBuilding).createEntity({
+            const hub2 = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
                 root: this.root,
                 origin: new Vector(4, 2),
                 rotation: 0,
@@ -288,7 +289,7 @@ export class HubGoals extends BasicSerializableObject {
             this.root.map.placeStaticEntity(hub2);
             this.root.entityMgr.registerEntity(hub2);
 
-            const hub3 = gMetaBuildingRegistry.findByClass(MetaOperBuilding).createEntity({
+            const hub3 = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
                 root: this.root,
                 origin: new Vector(4, -2),
                 rotation: 0,

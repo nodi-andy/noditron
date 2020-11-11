@@ -13,6 +13,9 @@ export class DisplaySystem extends GameSystemWithFilter {
     constructor(root) {
         super(root, [DisplayComponent]);
 
+
+        this.buttonSprite = Loader.getSprite("sprites/buildings/lever.png");
+        
         /** @type {Object<string, import("../../core/draw_utils").AtlasSprite>} */
         this.displaySprites = {};
 
@@ -75,24 +78,16 @@ export class DisplaySystem extends GameSystemWithFilter {
                 const origin = entity.components.StaticMapEntity.origin;
                 let size = globalConfig.tileSize;
                 
-                    /*this.displaySprites[enumColors.white].drawCachedCentered(
+
+                const staticComp = entity.components.StaticMapEntity;
+
+               /* this.buttonSprite.drawCachedCentered(
                         parameters,
                         (origin.x + 0.5) * globalConfig.tileSize,
                         (origin.y + 0.5) * globalConfig.tileSize,
                         size
-                    );*/
+                );*/
 
-                const staticComp = entity.components.StaticMapEntity;
-/*
-                const contentsNB = this.root.map.getLayerContentXY(staticComp.origin.x+1, staticComp.origin.y, "regular");
-                if (contentsNB) {
-                  const dispCompNB = contentsNB.components.Display;
-                  if (dispCompNB && pinsComp.slots[0].nodiType == 10) {
-                    contentsNB.components.WiredPins.slots[0].nodiType = 10;
-                    contentsNB.components.WiredPins.slots[0].nodiVal = pinsComp.slots[0].nodiVal;
-                    pinsComp.slots[0].nodiType = 2;
-                  }
-                }*/
 
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
                 const context = parameters.context;

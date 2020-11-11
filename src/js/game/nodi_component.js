@@ -14,6 +14,11 @@ export class NodiComponent extends Component {
         };
     }
 
+    setValue(val)
+    {
+        this.storedCount = val;
+    }
+
     /**
 
      */
@@ -53,6 +58,7 @@ export class NodiComponent extends Component {
         {
             let pingedComp = undefined;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.Display;
+            if(pingedComp == undefined) pingedComp = pingedEntity.components.Lever;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.DisplayRed;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiData;
             if(pingedComp == undefined) return;
@@ -60,7 +66,7 @@ export class NodiComponent extends Component {
             if (types.includes(pingedComp.storedType)) {
                 pingedComp.setNewtypeBit(enumNodiBits.TRAN);
                 pingedComp.clearNewtypeBit(enumNodiBits.PUSH);
-                pingedComp.storedCount = v;
+                pingedComp.setValue(v);
             }
         }
     }

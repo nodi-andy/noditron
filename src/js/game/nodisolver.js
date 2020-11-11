@@ -132,6 +132,7 @@ export class NodiSolver {
             const entity = this.root.entityMgr.entities[i];
             let displayComp = undefined;
             if(displayComp == undefined) displayComp = entity.components.Display;
+            if(displayComp == undefined) displayComp = entity.components.Lever;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp && displayComp.hasTypeBit(enumNodiBits.TRAN))
@@ -145,6 +146,7 @@ export class NodiSolver {
             const entity = this.root.entityMgr.entities[i];
            let displayComp = undefined;
             if(displayComp == undefined) displayComp = entity.components.Display;
+            if(displayComp == undefined) displayComp = entity.components.Lever;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp && displayComp.hasTypeBit(enumNodiBits.PUSH))
@@ -158,6 +160,7 @@ export class NodiSolver {
             const entity = this.root.entityMgr.entities[i];
            let displayComp = undefined;
             if(displayComp == undefined) displayComp = entity.components.Display;
+            if(displayComp == undefined) displayComp = entity.components.Lever;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp)

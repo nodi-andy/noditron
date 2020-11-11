@@ -19,7 +19,11 @@ export class DisplayComponent extends NodiComponent {
         this.storedCount = 0;
         this.entity = entityFromSystem;
     }
-
+    // Derived from NodiComponent
+    setValue(val)
+    {
+        this.storedCount = val;
+    }
     nodiProc(map){
         const staticComp = this.entity.components.StaticMapEntity;
         for (var i = 0; i < 8; i++) {
