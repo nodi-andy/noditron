@@ -14,8 +14,8 @@ export class DisplayComponent extends NodiComponent {
      */
     constructor(entityFromSystem) {
         super();
-        this.storedType = 2;
-        this.storedTypeNext = 2;
+        this.storedType = enumNodiTypes.COND_1;
+        this.storedTypeNext = enumNodiTypes.COND_1;
         this.storedCount = 0;
         this.entity = entityFromSystem;
     }

@@ -4,6 +4,7 @@ import { MetaConstantSignalBuilding } from "./buildings/constant_signal";
 import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
 import { MetaDisplayBuilding } from "./buildings/display";
 import { MetaDisplayRedBuilding } from "./buildings/display_red";
+import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 import { MetaFilterBuilding } from "./buildings/filter";
 import { MetaLogicGateBuilding } from "./buildings/logic_gate";
 import { enumMinerVariants, MetaMinerBuilding } from "./buildings/miner";

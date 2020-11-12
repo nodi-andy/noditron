@@ -694,7 +694,17 @@ buildings:
         default:
             name: &display_red Display_red
             description: Connect a signal to show it on the display - It can be a shape, color or boolean.
+    
+    nodi_led:
+        default:
+            name: &nodi_led Nodi_LED
+            description: Connect a signal to show it on the display - It can be a shape, color or boolean.
 
+    nodi_discus:
+        default:
+            name: &nodi_discus Nodi_Discus
+            description: Connect a signal to show it on the display - It can be a shape, color or boolean.
+    
     oper:
         default:
             name: &oper operation
@@ -1155,6 +1165,8 @@ keybindings:
         wire_tunnel: *wire_tunnel
         display: *display
         display_red: *display
+        nodi_led: *display
+        nodi_discus: *display
         oper: *display
         nodi_data: *nodi_data
         reader: *reader

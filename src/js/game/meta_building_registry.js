@@ -10,6 +10,8 @@ import { MetaConstantSignalBuilding } from "./buildings/constant_signal";
 import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
 import { MetaDisplayBuilding } from "./buildings/display";
 import { MetaDisplayRedBuilding } from "./buildings/display_red";
+import { MetaNodiLedBuilding } from "./buildings/nodi_led";
+import { MetaNodiDiscusBuilding } from "./buildings/nodi_discus";
 import { MetaOperBuilding } from "./buildings/oper";
 import { MetaNodiDataBuilding } from "./buildings/nodi_data";
 import { MetaFilterBuilding } from "./buildings/filter";
@@ -58,6 +60,8 @@ export function initMetaBuildingRegistry() {
     gMetaBuildingRegistry.register(MetaFilterBuilding);
     gMetaBuildingRegistry.register(MetaWireTunnelBuilding);
     gMetaBuildingRegistry.register(MetaDisplayBuilding);
+    gMetaBuildingRegistry.register(MetaNodiLedBuilding);
+    gMetaBuildingRegistry.register(MetaNodiDiscusBuilding);
     gMetaBuildingRegistry.register(MetaDisplayRedBuilding);
     gMetaBuildingRegistry.register(MetaOperBuilding);
     gMetaBuildingRegistry.register(MetaNodiDataBuilding);
@@ -161,6 +165,8 @@ export function initMetaBuildingRegistry() {
     registerBuildingVariant(102, MetaDisplayRedBuilding);
     registerBuildingVariant(103, MetaNodiDataBuilding);
     registerBuildingVariant(104, MetaOperBuilding);
+    registerBuildingVariant(105, MetaNodiLedBuilding);
+    registerBuildingVariant(106, MetaNodiDiscusBuilding);
 
     // Virtual Processor
     registerBuildingVariant(42, MetaVirtualProcessorBuilding);

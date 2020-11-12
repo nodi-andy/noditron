@@ -9,11 +9,10 @@ import { GameRoot } from "./root";
 import { enumSubShape, ShapeDefinition } from "./shape_definition";
 import { enumHubGoalRewards } from "./tutorial_goals";
 import { gMetaBuildingRegistry } from "../core/global_registries";
-import { MetaMinerBuilding } from "./buildings/miner";
 import { Vector } from "../core/vector";
 import { defaultBuildingVariant } from "./meta_building";
-import { MetaOperBuilding } from "./buildings/oper";
 import { MetaLeverBuilding } from "./buildings/lever";
+import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 
 export class HubGoals extends BasicSerializableObject {
     static getId() {
@@ -254,7 +253,7 @@ export class HubGoals extends BasicSerializableObject {
             this.root.map.placeStaticEntity(hub);
             this.root.entityMgr.registerEntity(hub);
 
-            const hub2 = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
+            const hub2 = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
                 root: this.root,
                 origin: new Vector(4, 2),
                 rotation: 0,
@@ -289,7 +288,7 @@ export class HubGoals extends BasicSerializableObject {
             this.root.map.placeStaticEntity(hub2);
             this.root.entityMgr.registerEntity(hub2);
 
-            const hub3 = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
+            const hub3 = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
                 root: this.root,
                 origin: new Vector(4, -2),
                 rotation: 0,

@@ -67,6 +67,8 @@ export const KEYMAPPINGS = {
         filter: { keyCode: key("O") },
         display: { keyCode: key("P") },
         display_red: { keyCode: key("J") },
+        nodi_led: { keyCode: key("K") },
+        nodi_discus: { keyCode: key("=") },
         nodi_data: { keyCode: key("B") },
         oper: { keyCode: key("H") },
 

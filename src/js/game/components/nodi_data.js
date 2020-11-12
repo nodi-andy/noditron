@@ -13,9 +13,10 @@ export class NodiDataComponent extends NodiComponent {
        /**
 
      */
-    constructor() {
+    constructor(entityFromSystem) {
         super();
         this.storedType = 4;
+        this.entity = entityFromSystem;
     }
     
     nodiProc(){

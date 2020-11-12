@@ -58,9 +58,10 @@ export class NodiComponent extends Component {
         {
             let pingedComp = undefined;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.Display;
-            if(pingedComp == undefined) pingedComp = pingedEntity.components.Lever;
+            if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiLed;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.DisplayRed;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiData;
+            if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiDiscus;
             if(pingedComp == undefined) return;
 
             if (types.includes(pingedComp.storedType)) {

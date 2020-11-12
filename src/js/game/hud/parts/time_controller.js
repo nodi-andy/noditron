@@ -19,7 +19,7 @@ export class HUDTimeController extends BaseHUDPart {
             </div>
             <div>
                 <label>Cycles: </label> <label class="tickLabel">0</label><br>
-                <label>Speed: </label> <input class="rangeInput" type="range" value="1500" min="0" max="2000" step="1">
+                <label>Speed: </label> <input class="rangeInput" type="range" value="1900" min="0" max="2000" step="1">
             </div>
         `
         );
@@ -81,7 +81,6 @@ export class HUDTimeController extends BaseHUDPart {
     }
 
     restartNodiTick() {
-        this.root.nodistate = 0;
         this.root.nodiSolver.noditick = 0;
         this.element.querySelector("button.playstop").innerHTML = ">>";
         this.showNodiTick(this.root.nodiSolver.noditick);
@@ -118,7 +117,7 @@ export class HUDTimeController extends BaseHUDPart {
             }
         });
 
-        this.visible = true; //this.root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers);
+        this.visible = false; //this.root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers);
         this.domAttach = new DynamicDomAttach(this.root, this.element);
     }
 

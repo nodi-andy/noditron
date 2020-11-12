@@ -19,7 +19,7 @@ const tutorialsByLevel = [
         {
             id: "1_1_extractor",
             condition: /** @param {GameRoot} root */ root =>
-                root.entityMgr.getAllWithComponent(DisplayComponent).length === 0,
+                root.entityMgr.getAllWithComponent(DisplayComponent).length <= 6,
         },
         // 1.2. connect to hub
         {
@@ -71,7 +71,7 @@ const tutorialsByLevel = [
             condition: /** @param {GameRoot} root */ root =>
                 // 4 miners placed above rectangles and 10 delivered
                 root.hubGoals.getCurrentGoalDelivered() < 10 ||
-                root.entityMgr.getAllWithComponent(MinerComponent).filter(entity => {
+                root.entityMgr.getAllWithComponent(DisplayComponent).filter(entity => {
                     const tile = entity.components.StaticMapEntity.origin;
                     const below = root.map.getLowerLayerContentXY(tile.x, tile.y);
                     if (below && below.getItemType() === "shape") {

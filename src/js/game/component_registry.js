@@ -18,6 +18,8 @@ import { LeverComponent } from "./components/lever";
 import { WireTunnelComponent } from "./components/wire_tunnel";
 import { DisplayComponent } from "./components/display";
 import { DisplayRedComponent } from "./components/display_red";
+import { NodiLedComponent } from "./components/nodi_led";
+import { NodiDiscusComponent } from "./components/nodi_discus";
 import { OperComponent } from "./components/oper";
 import { NodiDataComponent } from "./components/nodi_data";
 import { NodiComponent } from "./nodi_component";
@@ -45,6 +47,8 @@ export function initComponentRegistry() {
     gComponentRegistry.register(WireTunnelComponent);
     gComponentRegistry.register(DisplayComponent);
     gComponentRegistry.register(DisplayRedComponent);
+    gComponentRegistry.register(NodiLedComponent);
+    gComponentRegistry.register(NodiDiscusComponent);
     gComponentRegistry.register(OperComponent);
     gComponentRegistry.register(NodiDataComponent);
     gComponentRegistry.register(BeltReaderComponent);

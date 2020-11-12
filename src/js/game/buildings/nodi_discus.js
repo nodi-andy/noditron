@@ -3,23 +3,23 @@ import { enumPinSlotType, WiredPinsComponent } from "../components/wired_pins";
 import { Entity } from "../entity";
 import { MetaBuilding } from "../meta_building";
 import { GameRoot } from "../root";
-import { NodiDataComponent } from "../components/nodi_data";
+import { NodiDiscusComponent } from "../components/nodi_discus";
 import { enumHubGoalRewards } from "../tutorial_goals";
 
-export class MetaNodiDataBuilding extends MetaBuilding {
+export class MetaNodiDiscusBuilding extends MetaBuilding {
     constructor() {
-        super("nodi_data");
+        super("nodi_discus");
     }
 
     getSilhouetteColor() {
-        return "#ff5500";
+        return "#4C8BF5";
     }
 
     /**
      * @param {GameRoot} root
      */
     getIsUnlocked(root) {
-        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_rotater);
+        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_cutter_and_trash);
     }
     /**
      *
@@ -54,6 +54,6 @@ export class MetaNodiDataBuilding extends MetaBuilding {
                 ],
             })
         );
-        entity.addComponent(new NodiDataComponent(entity));
+        entity.addComponent(new NodiDiscusComponent(entity));
     }
 }

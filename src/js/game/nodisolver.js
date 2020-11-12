@@ -55,6 +55,8 @@ export class NodiSolver {
         this.lastSaveTime = 0;
 
         this.noditick = 0;
+
+        this.goalStep = 0;
     }
 
 
@@ -135,6 +137,7 @@ export class NodiSolver {
             if(displayComp == undefined) displayComp = entity.components.Lever;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
+            if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
             if(displayComp && displayComp.hasTypeBit(enumNodiBits.TRAN))
             {
                 displayComp.nodiProc(this.root.map);
@@ -149,6 +152,7 @@ export class NodiSolver {
             if(displayComp == undefined) displayComp = entity.components.Lever;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
+            if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
             if(displayComp && displayComp.hasTypeBit(enumNodiBits.PUSH))
             {
                 displayComp.clearNewtypeBit(enumNodiBits.PUSH);
@@ -163,6 +167,7 @@ export class NodiSolver {
             if(displayComp == undefined) displayComp = entity.components.Lever;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
+            if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
             if(displayComp)
             {
                 displayComp.storedType = displayComp.storedTypeNext;
@@ -172,13 +177,18 @@ export class NodiSolver {
         this.root.nodiSolver.noditick++;
         this.root.hud.parts.timeController.showNodiTick(this.root.nodiSolver.noditick);
 
-        const entityResult = this.root.map.getLayerContentXY(8, 2, "regular");
+        const entityResult = this.root.map.getLayerContentXY(4, 2, "regular");
         if(entityResult)
         { 
-            const dispCompResult = entityResult.components.Display;
+            const dispCompResult = entityResult.components.NodiLed;
             if (dispCompResult) {
-                if(dispCompResult.storedCount == 77)
+                if(dispCompResult.toggled == true && this.goalStep == 0)
                 {
+                  this.goalStep++;
+                }
+                if(dispCompResult.toggled == false && this.goalStep == 1)
+                {
+                  this.goalStep++;
                   this.root.hud.signals.notification.dispatch("YOU WON" ,  enumNotificationType.upgrade  );
                   this.root.hubGoals.onGoalCompleted();
                 }

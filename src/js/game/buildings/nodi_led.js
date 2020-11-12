@@ -3,41 +3,44 @@ import { enumPinSlotType, WiredPinsComponent } from "../components/wired_pins";
 import { Entity } from "../entity";
 import { MetaBuilding } from "../meta_building";
 import { GameRoot } from "../root";
-import { NodiDataComponent } from "../components/nodi_data";
+import { NodiLedComponent } from "../components/nodi_led";
 import { enumHubGoalRewards } from "../tutorial_goals";
 
-export class MetaNodiDataBuilding extends MetaBuilding {
+export class MetaNodiLedBuilding extends MetaBuilding {
     constructor() {
-        super("nodi_data");
+        super("nodi_led");
+        this.isRemovable = false;
     }
 
     getSilhouetteColor() {
-        return "#ff5500";
+        // @todo: Render differently based on if its activated or not
+        return "#ff678b";
     }
-
+    getStayInPlacementMode() {
+        return true;
+    }
+    getIsRemovable() {
+        return this.isRemovable;
+    }
     /**
      * @param {GameRoot} root
      */
     getIsUnlocked(root) {
-        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_rotater);
+        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.no_reward_freeplay);
     }
-    /**
-     *
-     * @param {GameRoot} root
-     */
-    getAvailableVariants(root) {
-        return super.getAvailableVariants(root);
-    }
+
     getDimensions() {
         return new Vector(1, 1);
+    }
+
+    getSprite() {
+        return null;
     }
 
     getShowWiresLayerPreview() {
         return true;
     }
-    getStayInPlacementMode() {
-        return true;
-    }
+
     /**
      * Creates the entity at the given location
      * @param {Entity} entity
@@ -48,12 +51,13 @@ export class MetaNodiDataBuilding extends MetaBuilding {
                 slots: [
                     {
                         pos: new Vector(0, 0),
-                        direction: enumDirection.bottom,
-                        type: enumPinSlotType.logicalAcceptor,
+                        direction: enumDirection.top,
+                        type: enumPinSlotType.logicalEjector,
                     },
                 ],
             })
         );
-        entity.addComponent(new NodiDataComponent(entity));
+
+        entity.addComponent(new NodiLedComponent({entity}));
     }
 }
