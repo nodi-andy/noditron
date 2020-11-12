@@ -26,16 +26,25 @@ export class NodiLedComponent extends DisplayComponent {
     constructor({ entity, toggled = false }) {
         super(entity);
         this.toggled = toggled;
+        this.allowedValue = 1;
     }
 
     // Derived from DisplayComponent
     setValue(val)
     {
-        this.storedCount = val;
-        this.toggled = val;
+        if(val == this.allowedValue)
+        {
+          this.storedCount = val;
+          this.toggled = true;
+        }
+        if(val == 0)
+        {
+          this.storedCount = val;
+          this.toggled = false;
+        }
     }
 
-    toggleSignal(map)
+   /* toggleSignal(map)
     {
         if(this.toggled)
           this.storedCount = 1;
@@ -43,5 +52,5 @@ export class NodiLedComponent extends DisplayComponent {
           this.storedCount = 0;
         this.setTypeBit(enumNodiBits.PUSH);
         this.nodiProc(map);
-    }
+    }*/
 }

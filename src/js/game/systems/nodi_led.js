@@ -4,6 +4,7 @@ import { MapChunkView } from "../map_chunk_view";
 import { globalConfig } from "../../core/config";
 import { Loader } from "../../core/loader";
 import { NodiLedComponent } from "../components/nodi_led";
+import { formatBigNumber } from "../../core/utils";
 
 export class NodiLedSystem extends GameSystemWithFilter {
     constructor(root) {
@@ -38,6 +39,18 @@ export class NodiLedSystem extends GameSystemWithFilter {
             if (leverComp) {
                 const sprite = leverComp.toggled ? this.spriteOn : this.spriteOff;
                 entity.components.StaticMapEntity.drawSpriteOnBoundsClipped(parameters, sprite);
+                
+                const staticComp = entity.components.StaticMapEntity;
+
+                const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
+                const context = parameters.context;
+                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20)) {
+                    context.font = "bold 14px GameFont";
+                    context.textAlign = "center";
+                    context.fillStyle = "#64666e";
+                    context.fillText(formatBigNumber(leverComp.allowedValue), center.x, center.y);
+                    context.textAlign = "left";
+                }
             }
         }
     }

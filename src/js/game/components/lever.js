@@ -37,11 +37,11 @@ export class LeverComponent extends DisplayComponent {
 
     toggleSignal(map)
     {
-        if(this.toggled)
-          this.storedCount = 1;
-        else
+        let tempVal = this.storedCount;
+        if(this.toggled == false)
           this.storedCount = 0;
         this.setTypeBit(enumNodiBits.PUSH);
         this.nodiProc(map);
+        this.storedCount = tempVal;
     }
 }

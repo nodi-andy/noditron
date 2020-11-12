@@ -759,8 +759,8 @@ buildings:
 storyRewards:
     # Those are the rewards gained from completing the store
     reward_cutter_and_trash:
-        title: Cutting Shapes
-        desc: You just unlocked the <strong>cutter</strong>, which cuts shapes in half from top to bottom <strong>regardless of its orientation</strong>!<br><br>Be sure to get rid of the waste, or otherwise <strong>it will clog and stall</strong> - For this purpose I have given you the <strong>trash</strong>, which destroys everything you put into it!
+        title: Different buttons
+        desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
 
     reward_rotater:
         title: Rotating

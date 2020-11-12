@@ -4,6 +4,7 @@ import { BOOL_TRUE_SINGLETON, BOOL_FALSE_SINGLETON } from "../items/boolean_item
 import { MapChunkView } from "../map_chunk_view";
 import { globalConfig } from "../../core/config";
 import { Loader } from "../../core/loader";
+import { formatBigNumber } from "../../core/utils";
 
 export class LeverSystem extends GameSystemWithFilter {
     constructor(root) {
@@ -38,6 +39,17 @@ export class LeverSystem extends GameSystemWithFilter {
             if (leverComp) {
                 const sprite = leverComp.toggled ? this.spriteOn : this.spriteOff;
                 entity.components.StaticMapEntity.drawSpriteOnBoundsClipped(parameters, sprite);
+                const staticComp = entity.components.StaticMapEntity;
+
+                const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
+                const context = parameters.context;
+                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20)) {
+                    context.font = "bold 14px GameFont";
+                    context.textAlign = "center";
+                    context.fillStyle = "#64666e";
+                    context.fillText(formatBigNumber(leverComp.storedCount), center.x, center.y);
+                    context.textAlign = "left";
+                }
             }
         }
     }
