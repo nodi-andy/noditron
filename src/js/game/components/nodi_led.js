@@ -9,7 +9,6 @@ export class NodiLedComponent extends DisplayComponent {
         return "NodiLed";
     }
 
-
     /**
      * Copy the current state to another component
      * @param {NodiLedComponent} otherComponent

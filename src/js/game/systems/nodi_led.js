@@ -48,7 +48,7 @@ export class NodiLedSystem extends GameSystemWithFilter {
                     context.font = "bold 14px GameFont";
                     context.textAlign = "center";
                     context.fillStyle = "#64666e";
-                    context.fillText(formatBigNumber(leverComp.allowedValue), center.x, center.y);
+                    context.fillText(formatBigNumber(leverComp.allowedValue), center.x, center.y+3);
                     context.textAlign = "left";
                 }
             }

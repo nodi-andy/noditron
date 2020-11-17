@@ -21,7 +21,21 @@ export class NodiDiscusComponent extends NodiComponent {
 
     nodiProc(map){
         const staticComp = this.entity.components.StaticMapEntity;
-
+        for (var i = 0; i < 8; i++) {
+            var NB = this.getNB(i);
+            let xt = staticComp.origin.x + NB[0];
+            let yt = staticComp.origin.y + NB[1];
+            let pingedEntity = map.getLayerContentXY(xt, yt, "regular");
+            if(pingedEntity && pingedEntity.components) 
+            {
+                let pingedNodiData = undefined;
+                if(pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiLed;
+                if (pingedNodiData !== undefined){
+                    pingedNodiData.nodiProc(map, this, i);
+                }
+            }
+        }
+        // fCond
         for (var i = 0; i < 8; i++) {
             var NB = this.getNB(i);
             let xt = staticComp.origin.x + NB[0];

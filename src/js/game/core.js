@@ -20,7 +20,6 @@ import { Vector } from "../core/vector";
 import { Savegame } from "../savegame/savegame";
 import { SavegameSerializer } from "../savegame/savegame_serializer";
 import { AutomaticSave } from "./automatic_save";
-import { NodiSolver } from "./nodisolver";
 import { MetaHubBuilding } from "./buildings/hub";
 import { MetaMinerBuilding } from "./buildings/miner";
 import { Camera } from "./camera";
@@ -39,6 +38,7 @@ import { GameRoot } from "./root";
 import { ShapeDefinitionManager } from "./shape_definition_manager";
 import { SoundProxy } from "./sound_proxy";
 import { GameTime } from "./time/game_time";
+import { NodiSolver } from "./nodisolver";
 
 const logger = createLogger("ingame/core");
 

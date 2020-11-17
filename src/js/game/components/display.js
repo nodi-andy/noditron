@@ -24,18 +24,25 @@ export class DisplayComponent extends NodiComponent {
     {
         this.storedCount = val;
     }
-    nodiProc(map){
-        const staticComp = this.entity.components.StaticMapEntity;
-        for (var i = 0; i < 8; i++) {
-            var NB = this.getNB(i);
-            let xt = staticComp.origin.x + NB[0];
-            let yt = staticComp.origin.y + NB[1];
-            this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS]);
+
+    nodiProc(map, caller, f){
+        if(f == undefined){
+            const staticComp = this.entity.components.StaticMapEntity;
+            for (var i = 0; i < 8; i++) {
+                var NB = this.getNB(i);
+                let xt = staticComp.origin.x + NB[0];
+                let yt = staticComp.origin.y + NB[1];
+                this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS]);
+            }
         }
+
+        // read
+        if (f == 2) { caller.storedCount = this.storedCount; }
+        // add
+        if (f == 3) { caller.storedCount += this.storedCount; }
 
         this.clearNewtypeBit(enumNodiBits.TRAN);
         this.setNewtypeBit(enumNodiBits.PUSH);
-        this.storedCount = 0;
     }
 
 }

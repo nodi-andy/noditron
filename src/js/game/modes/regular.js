@@ -232,7 +232,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "----CuCu", //
             required: 40,
-            reward: enumHubGoalRewards.no_reward,
+            reward: enumHubGoalRewards.reward_nodi_discus,
         },
 
         // 3

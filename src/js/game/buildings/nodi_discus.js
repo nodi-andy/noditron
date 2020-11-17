@@ -1,3 +1,4 @@
+import { generateMatrixRotations } from "../../core/utils";
 import { enumDirection, Vector } from "../../core/vector";
 import { enumPinSlotType, WiredPinsComponent } from "../components/wired_pins";
 import { Entity } from "../entity";
@@ -5,6 +6,8 @@ import { MetaBuilding } from "../meta_building";
 import { GameRoot } from "../root";
 import { NodiDiscusComponent } from "../components/nodi_discus";
 import { enumHubGoalRewards } from "../tutorial_goals";
+
+const overlayMatrix = generateMatrixRotations([1, 1, 1, 1, 0, 1, 1, 1, 1]);
 
 export class MetaNodiDiscusBuilding extends MetaBuilding {
     constructor() {
@@ -14,12 +17,14 @@ export class MetaNodiDiscusBuilding extends MetaBuilding {
     getSilhouetteColor() {
         return "#4C8BF5";
     }
-
+    getSpecialOverlayRenderMatrix(rotation) {
+        return overlayMatrix[rotation];
+    }
     /**
      * @param {GameRoot} root
      */
     getIsUnlocked(root) {
-        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_cutter_and_trash);
+        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_nodi_discus);
     }
     /**
      *

@@ -401,7 +401,7 @@ ingame:
     # Map markers
     waypoints:
         waypoints: Markers
-        hub: HUB
+        hub: ORIGIN
         description: Left-click a marker to jump to it, right-click to delete it.<br><br>Press <keybinding> to create a marker from the current view, or <strong>right-click</strong> to create a marker at the selected location.
         creationSuccessNotification: Marker has been created.
 
@@ -413,30 +413,20 @@ ingame:
 
     # Interactive tutorial
     interactiveTutorial:
-        title: Tutorial
+        title: 
+            1: Tutorial
+            2: Task
         hints:
-            1_1_extractor: Connect the <strong>input and output</strong> using <strong>blue conductors</strong> and run the grid!
+            1_1_extractor: Connect the <strong>button</strong> to the <strong>LED</strong> using <strong>copper conductors</strong>!
             1_2_conveyor: >-
-                Connect the extractor with a <strong>conveyor belt</strong> to your hub!<br><br>Tip: <strong>Click and drag</strong> the belt with your mouse!
-
-            1_3_expand: >-
-                This is <strong>NOT</strong> an idle game! Build more extractors and belts to finish the goal quicker.<br><br>Tip: Hold <strong>SHIFT</strong> to place multiple extractors, and use <strong>R</strong> to rotate them.
+                Click on the button to turn on the LED and click again to turn off.
 
             2_1_place_cutter: >-
-                Now place a <strong>Cutter</strong> to cut the circles in two halves!<br><br>
-                PS: The cutter always cuts from <strong>top to bottom</strong> regardless of its orientation.
-
-            2_2_place_trash: >-
-                The cutter can <strong>clog and stall</strong>!<br><br>
-                Use a <strong>trash</strong> to get rid of the currently (!) not needed waste.
-
-            2_3_more_cutters: >-
-                Good job! Now place <strong>2 more cutters</strong> to speed up this slow process!<br><br>
-                PS: Use the <strong>0-9 hotkeys</strong> to access buildings faster!
+                Turn both lights on
 
             3_1_rectangles: >-
-                Now let's extract some rectangles! <strong>Build 4 extractors</strong> and connect them to the hub.<br><br>
-                PS: Hold <strong>SHIFT</strong> while dragging a belt to activate the belt planner!
+                Turn the second light on using the blue discus<br><br>
+                Pay attention that copper conductor do not touch the light bulp
 
             21_1_place_quad_painter: >-
                 Place the <strong>quad painter</strong> and get some <strong>circles</strong>, <strong>white</strong> and <strong>red</strong> color!
@@ -761,6 +751,10 @@ storyRewards:
     reward_cutter_and_trash:
         title: Different buttons
         desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
+
+    reward_nodi_discus:
+        title: Different buttons
+        desc: You just unlocked a new nodi, the <strong>blue discus</strong>. The blue discus can read the content of a light, if you place the discus above the light.
 
     reward_rotater:
         title: Rotating
@@ -1242,23 +1236,8 @@ tips:
     - Your hub marker has a small compass that shows which direction it is in!
     - You can run your design on any hardware (e.g. arduino) with real electronical components
     - Speed of light (299 792 458 m/s) is the fastest way to transmit any data in the universe
-    - Blip Blup .....
-    - The painter has a mirrored variant which you can select with <b>T</b>
-    - You don't need to divide up items evenly for full efficiency.
-    - Holding <b>SHIFT</b> will activate the belt planner, letting you place long lines of belts easily.
-    - You can hold <b>ALT</b> to invert the direction of placed belts.
-    - Shape patches that are further away from the hub are more complex.
-    - Use balancers to maximize your efficiency.
     - Plan in advance, or it will be a mess!
-    - Try beating level 20 or 26 on your own before seeking for help!
     - Don't complicate things, try to stay simple and you'll go far.
-    - Make a separate blueprint factory. They're important for modules.
-    - Have a closer look at the color mixer, and your questions will be answered.
     - Use <b>CTRL</b> + Click to select an area.
-    - Building too close to the hub can get in the way of later projects.
-    - The pin icon next to each shape in the upgrade list pins it to the screen.
     - Also try Factorio! It's my favorite game.
-    - The quad cutter cuts clockwise, starting from the top right.
     - You can download your savegames in the main menu!
-    - To clear belts, cut the area and then paste it at the same location.
-    - You can click a pinned shape on the left side to unpin it.

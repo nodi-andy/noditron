@@ -135,7 +135,7 @@ export class HUDUnlockNotification extends BaseHUDPart {
                 return;
             }
 
-            if (this.root.hubGoals.level === 3) {
+            /*if (this.root.hubGoals.level === 3) {
                 const { showUpgrades } = this.root.hud.parts.dialogs.showInfo(
                     T.dialogs.upgradesIntroduction.title,
                     T.dialogs.upgradesIntroduction.desc,
@@ -143,7 +143,7 @@ export class HUDUnlockNotification extends BaseHUDPart {
                 );
                 showUpgrades.add(() => this.root.hud.parts.shop.show());
             }
-
+            */
             if (this.root.hubGoals.level === 5) {
                 const { showKeybindings } = this.root.hud.parts.dialogs.showInfo(
                     T.dialogs.keybindingsIntroduction.title,

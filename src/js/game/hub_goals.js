@@ -13,6 +13,7 @@ import { Vector } from "../core/vector";
 import { defaultBuildingVariant } from "./meta_building";
 import { MetaLeverBuilding } from "./buildings/lever";
 import { MetaNodiLedBuilding } from "./buildings/nodi_led";
+import { NodiLedComponent } from "./components/nodi_led";
 
 export class HubGoals extends BasicSerializableObject {
     static getId() {
@@ -66,7 +67,7 @@ export class HubGoals extends BasicSerializableObject {
         }
 
         // Compute current goal
-        this.computeNextGoal();
+        this.computeNextGoal(false);
     }
 
     /**
@@ -79,6 +80,7 @@ export class HubGoals extends BasicSerializableObject {
 
         this.level = 1;
 
+        this.goalStep = 0;
         /**
          * Which story rewards we already gained
          * @type {Object.<string, number>}
@@ -172,7 +174,7 @@ export class HubGoals extends BasicSerializableObject {
      * Returns how much of the current goal was already delivered
      */
     getCurrentGoalDelivered() {
-        if (this.currentGoal.throughputOnly) {
+       /* if (this.currentGoal.throughputOnly) {
             return (
                 this.root.productionAnalytics.getCurrentShapeRate(
                     enumAnalyticsDataSource.delivered,
@@ -181,7 +183,32 @@ export class HubGoals extends BasicSerializableObject {
             );
         }
 
-        return this.getShapesStored(this.currentGoal.definition);
+        return this.getShapesStored(this.currentGoal.definition);*/
+        if(this.root.hubGoals.level === 1){
+            const entityResult = this.root.map.getLayerContentXY(4, 2, "regular");
+            if(entityResult)
+            { 
+                const dispCompResult = entityResult.components.NodiLed;
+                if (dispCompResult) {
+                    if(dispCompResult.toggled == true && this.goalStep == 0)
+                    {
+                      this.goalStep++;
+                    }
+                    if(dispCompResult.toggled == false && this.goalStep == 1)
+                    {
+                      this.goalStep++;
+                      this.root.hubGoals.onGoalCompleted();
+                    }
+                }
+            }     
+        }
+        if(this.root.hubGoals.level === 2 || this.root.hubGoals.level === 3)
+        {
+            if(this.root.entityMgr.getAllWithComponent(NodiLedComponent).filter(e => e.components.NodiLed.toggled === true).length ===  2){
+                this.root.hubGoals.onGoalCompleted();
+            }
+        }
+        return 0;
     }
 
     /**
@@ -228,7 +255,7 @@ export class HubGoals extends BasicSerializableObject {
     /**
      * Creates the next goal
      */
-    computeNextGoal() {
+    computeNextGoal(initPuzzle = true) {
 
         for (let i = 0; i < this.root.entityMgr.entities.length ; ++i) {
             let entity = this.root.entityMgr.entities[i];
@@ -240,131 +267,124 @@ export class HubGoals extends BasicSerializableObject {
         if(this.root.hud.parts && this.root.hud.parts.timeController)
             this.root.hud.parts.timeController.restartNodiTick();
 
-        if(this.level == 1)
-        {
-            const hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(-4, -2),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub.components.Lever.storedCount = 1;
-            this.root.map.placeStaticEntity(hub);
-            this.root.entityMgr.registerEntity(hub);
+        if(initPuzzle){
+            if(this.level == 1)
+            {
+                const hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
+                    root: this.root,
+                    origin: new Vector(-4, -2),
+                    rotation: 0,
+                    originalRotation: 0,
+                    rotationVariant: 0,
+                    variant: defaultBuildingVariant,
+                });
+                hub.components.Lever.storedCount = 1;
+                this.root.map.placeStaticEntity(hub);
+                this.root.entityMgr.registerEntity(hub);
 
-            const hub2 = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(4, 2),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub2.components.NodiLed.allowedValue = 1;
-            this.root.map.placeStaticEntity(hub2);
-            this.root.entityMgr.registerEntity(hub2);
-        }
-        else if(this.level == 2)
-        {
-            const hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(-4, 0),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub.components.Lever.storedCount = 12;
-            this.root.map.placeStaticEntity(hub);
-            this.root.entityMgr.registerEntity(hub);
+                const hub2 = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
+                    root: this.root,
+                    origin: new Vector(4, 2),
+                    rotation: 0,
+                    originalRotation: 0,
+                    rotationVariant: 0,
+                    variant: defaultBuildingVariant,
+                });
+                hub2.components.NodiLed.allowedValue = 1;
+                this.root.map.placeStaticEntity(hub2);
+                this.root.entityMgr.registerEntity(hub2);
+            }
+            else if(this.level == 2)
+            {
+                const hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
+                    root: this.root,
+                    origin: new Vector(-4, 0),
+                    rotation: 0,
+                    originalRotation: 0,
+                    rotationVariant: 0,
+                    variant: defaultBuildingVariant,
+                });
+                hub.components.Lever.storedCount = 12;
+                this.root.map.placeStaticEntity(hub);
+                this.root.entityMgr.registerEntity(hub);
 
-            const hub2 = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(-3, 4),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub2.components.Lever.storedCount = 7;
-            this.root.map.placeStaticEntity(hub2);
-            this.root.entityMgr.registerEntity(hub2);
+                const hub2 = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
+                    root: this.root,
+                    origin: new Vector(-3, 4),
+                    rotation: 0,
+                    originalRotation: 0,
+                    rotationVariant: 0,
+                    variant: defaultBuildingVariant,
+                });
+                hub2.components.Lever.storedCount = 7;
+                this.root.map.placeStaticEntity(hub2);
+                this.root.entityMgr.registerEntity(hub2);
 
-            const hub3 = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(4, -2),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub3.components.NodiLed.allowedValue = 7;
-            this.root.map.placeStaticEntity(hub3);
-            this.root.entityMgr.registerEntity(hub3);
+                const hub3 = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
+                    root: this.root,
+                    origin: new Vector(4, -2),
+                    rotation: 0,
+                    originalRotation: 0,
+                    rotationVariant: 0,
+                    variant: defaultBuildingVariant,
+                });
+                hub3.components.NodiLed.allowedValue = 7;
+                this.root.map.placeStaticEntity(hub3);
+                this.root.entityMgr.registerEntity(hub3);
 
-            const hub4 = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(4, 2),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub4.components.NodiLed.allowedValue = 12;
-            this.root.map.placeStaticEntity(hub4);
-            this.root.entityMgr.registerEntity(hub4);
-        }
-        else if(this.level == 3)
-        {
-            let hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(0, 0),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub.components.Lever.storedCount = 12;
-            this.root.map.placeStaticEntity(hub);
-            this.root.entityMgr.registerEntity(hub);
+                const hub4 = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
+                    root: this.root,
+                    origin: new Vector(4, 2),
+                    rotation: 0,
+                    originalRotation: 0,
+                    rotationVariant: 0,
+                    variant: defaultBuildingVariant,
+                });
+                hub4.components.NodiLed.allowedValue = 12;
+                this.root.map.placeStaticEntity(hub4);
+                this.root.entityMgr.registerEntity(hub4);
+            }
+            else if(this.level == 3)
+            {
+                let hub = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
+                    root: this.root,
+                    origin: new Vector(0, 0),
+                    rotation: 0,
+                    originalRotation: 0,
+                    rotationVariant: 0,
+                    variant: defaultBuildingVariant,
+                });
+                hub.components.NodiLed.allowedValue = 12;
+                hub.components.NodiLed.storedCount = 12;
+                this.root.map.placeStaticEntity(hub);
+                this.root.entityMgr.registerEntity(hub);
 
-            hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(2, 0),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub.components.Lever.storedCount = 42;
-            this.root.map.placeStaticEntity(hub);
-            this.root.entityMgr.registerEntity(hub);
+                hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
+                    root: this.root,
+                    origin: new Vector(12, 0),
+                    rotation: 0,
+                    originalRotation: 0,
+                    rotationVariant: 0,
+                    variant: defaultBuildingVariant,
+                });
+                hub.components.Lever.storedCount = 7;
+                this.root.map.placeStaticEntity(hub);
+                this.root.entityMgr.registerEntity(hub);
 
-            hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(2, 2),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub.components.Lever.storedCount = 13;
-            this.root.map.placeStaticEntity(hub);
-            this.root.entityMgr.registerEntity(hub);
-
-            hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
-                root: this.root,
-                origin: new Vector(0, 2),
-                rotation: 0,
-                originalRotation: 0,
-                rotationVariant: 0,
-                variant: defaultBuildingVariant,
-            });
-            hub.components.Lever.storedCount = 7;
-            this.root.map.placeStaticEntity(hub);
-            this.root.entityMgr.registerEntity(hub);
+                hub = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
+                    root: this.root,
+                    origin: new Vector(2, 2),
+                    rotation: 0,
+                    originalRotation: 0,
+                    rotationVariant: 0,
+                    variant: defaultBuildingVariant,
+                });
+                hub.components.NodiLed.allowedValue = 12;
+                hub.components.NodiLed.storedCount = 12;
+                hub.components.NodiLed.toggled = true;
+                this.root.map.placeStaticEntity(hub);
+                this.root.entityMgr.registerEntity(hub);
+            }
         }
         const storyIndex = this.level - 1;
         const levels = this.root.gameMode.getLevelDefinitions();

@@ -3,9 +3,9 @@ import { createLogger } from "../core/logging";
 import { GameRoot } from "./root";
 import { enumNotificationType } from "../game/hud/parts/notifications";
 import { MinerComponent } from "./components/miner";
+//import { NodiLedComponent } from "./components/nodi_led";
 
 
-// How important it is that a savegame is created
 /**
  * @enum {number}
  */
@@ -56,7 +56,6 @@ export class NodiSolver {
 
         this.noditick = 0;
 
-        this.goalStep = 0;
     }
 
 
@@ -176,25 +175,9 @@ export class NodiSolver {
         
         this.root.nodiSolver.noditick++;
         this.root.hud.parts.timeController.showNodiTick(this.root.nodiSolver.noditick);
+        this.root.hubGoals.getCurrentGoalDelivered();
 
-        const entityResult = this.root.map.getLayerContentXY(4, 2, "regular");
-        if(entityResult)
-        { 
-            const dispCompResult = entityResult.components.NodiLed;
-            if (dispCompResult) {
-                if(dispCompResult.toggled == true && this.goalStep == 0)
-                {
-                  this.goalStep++;
-                }
-                if(dispCompResult.toggled == false && this.goalStep == 1)
-                {
-                  this.goalStep++;
-                  this.root.hud.signals.notification.dispatch("YOU WON" ,  enumNotificationType.upgrade  );
-                  this.root.hubGoals.onGoalCompleted();
-                }
-            }
-        }     
-        }
+    }
 
     update() {
         if (!this.root.gameInitialized) {
