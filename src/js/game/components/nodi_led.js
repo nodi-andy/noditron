@@ -1,10 +1,10 @@
 import { NodiComponent } from "../nodi_component";
 import { types } from "../../savegame/serialization";
 import { enumNodiTypes, enumNodiBits } from "../nodisolver";
-import { DisplayComponent } from "./display";
+import { NodiBlueComponent } from "./nodi_blue";
 import { Entity } from "../entity";
 
-export class NodiLedComponent extends DisplayComponent {
+export class NodiLedComponent extends NodiBlueComponent {
     static getId() {
         return "NodiLed";
     }

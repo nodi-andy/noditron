@@ -2,7 +2,7 @@ import { globalConfig } from "../../core/config";
 import { Loader } from "../../core/loader";
 import { BaseItem } from "../base_item";
 import { enumColors } from "../colors";
-import { DisplayComponent } from "../components/display";
+import { NodiBlueComponent } from "../components/nodi_blue";
 import { GameSystemWithFilter } from "../game_system_with_filter";
 import { isTrueItem } from "../items/boolean_item";
 import { ColorItem, COLOR_ITEM_SINGLETONS } from "../items/color_item";
@@ -11,7 +11,7 @@ import { formatBigNumber, lerp } from "../../core/utils";
 
 export class DisplaySystem extends GameSystemWithFilter {
     constructor(root) {
-        super(root, [DisplayComponent]);
+        super(root, [NodiBlueComponent]);
 
 
         this.buttonSprite = Loader.getSprite("sprites/buildings/lever.png");

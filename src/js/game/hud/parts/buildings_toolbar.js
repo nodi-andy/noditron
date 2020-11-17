@@ -1,7 +1,7 @@
 import { MetaBeltBuilding } from "../../buildings/belt";
 import { MetaCondBuilding } from "../../buildings/cond";
 import { MetaCutterBuilding } from "../../buildings/cutter";
-import { MetaDisplayBuilding } from "../../buildings/display";
+import { MetaDisplayBuilding } from "../../buildings/nodi_blue";
 import { MetaDisplayRedBuilding } from "../../buildings/display_red";
 import { MetaNodiLedBuilding } from "../../buildings/nodi_led";
 import { MetaNodiDiscusBuilding } from "../../buildings/nodi_discus";

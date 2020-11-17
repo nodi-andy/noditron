@@ -8,7 +8,7 @@ import { MetaCondBuilding } from "./buildings/cond";
 import { MetaComparatorBuilding } from "./buildings/comparator";
 import { MetaConstantSignalBuilding } from "./buildings/constant_signal";
 import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
-import { MetaDisplayBuilding } from "./buildings/display";
+import { MetaDisplayBuilding } from "./buildings/nodi_blue";
 import { MetaDisplayRedBuilding } from "./buildings/display_red";
 import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 import { MetaNodiDiscusBuilding } from "./buildings/nodi_discus";

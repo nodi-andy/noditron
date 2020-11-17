@@ -2,7 +2,7 @@ import { T } from "../translations";
 import { enumBalancerVariants, MetaBalancerBuilding } from "./buildings/balancer";
 import { MetaConstantSignalBuilding } from "./buildings/constant_signal";
 import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
-import { MetaDisplayBuilding } from "./buildings/display";
+import { MetaDisplayBuilding } from "./buildings/nodi_blue";
 import { MetaDisplayRedBuilding } from "./buildings/display_red";
 import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 import { MetaFilterBuilding } from "./buildings/filter";

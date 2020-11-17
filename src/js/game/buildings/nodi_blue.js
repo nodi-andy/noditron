@@ -3,7 +3,7 @@ import { enumPinSlotType, WiredPinsComponent } from "../components/wired_pins";
 import { Entity } from "../entity";
 import { MetaBuilding } from "../meta_building";
 import { GameRoot } from "../root";
-import { DisplayComponent } from "../components/display";
+import { NodiBlueComponent } from "../components/nodi_blue";
 import { enumHubGoalRewards } from "../tutorial_goals";
 
 export class MetaDisplayBuilding extends MetaBuilding {
@@ -48,6 +48,6 @@ export class MetaDisplayBuilding extends MetaBuilding {
                 ],
             })
         );
-        entity.addComponent(new DisplayComponent(entity));
+        entity.addComponent(new NodiBlueComponent(entity));
     }
 }

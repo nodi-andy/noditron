@@ -16,7 +16,7 @@ import { ConstantSignalComponent } from "./components/constant_signal";
 import { LogicGateComponent } from "./components/logic_gate";
 import { LeverComponent } from "./components/lever";
 import { WireTunnelComponent } from "./components/wire_tunnel";
-import { DisplayComponent } from "./components/display";
+import { NodiBlueComponent } from "./components/nodi_blue";
 import { DisplayRedComponent } from "./components/display_red";
 import { NodiLedComponent } from "./components/nodi_led";
 import { NodiDiscusComponent } from "./components/nodi_discus";
@@ -86,7 +86,7 @@ export class EntityComponentStorage {
         /** @type {WireTunnelComponent} */
         this.WireTunnel;
 
-        /** @type {DisplayComponent} */
+        /** @type {NodiBlueComponent} */
         this.Display;
 
         /** @type {DisplayRedComponent} */

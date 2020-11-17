@@ -3,7 +3,7 @@ import { NodiComponent } from "../nodi_component";
 import { enumNodiTypes } from "../nodisolver";
 import { enumNodiBits } from "../nodisolver";
 
-export class DisplayComponent extends NodiComponent {
+export class NodiBlueComponent extends NodiComponent {
 
     static getId() {
         return "Display";

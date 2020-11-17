@@ -754,7 +754,7 @@ storyRewards:
 
     reward_nodi_discus:
         title: Different buttons
-        desc: You just unlocked a new nodi, the <strong>blue discus</strong>. The blue discus can read the content of a light, if you place the discus above the light.
+        desc: You just unlocked a new nodi, the <strong>blue discus</strong>. The blue discus can read the content of a light, if you place the discus <strong>above</strong> the light.
 
     reward_rotater:
         title: Rotating

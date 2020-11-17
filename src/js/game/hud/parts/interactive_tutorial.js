@@ -1,7 +1,7 @@
 import { BaseHUDPart } from "../base_hud_part";
 import { makeDiv } from "../../../core/utils";
 import { GameRoot } from "../../root";
-import { DisplayComponent } from "../../components/display";
+import { NodiBlueComponent } from "../../components/nodi_blue";
 import { DynamicDomAttach } from "../dynamic_dom_attach";
 import { TrackedState } from "../../../core/tracked_state";
 import { cachebust } from "../../../core/cachebust";
@@ -21,7 +21,7 @@ const tutorialsByLevel = [
             id: "1_1_extractor",
             title: "1",
             condition: /** @param {GameRoot} root */ root =>
-                root.entityMgr.getAllWithComponent(DisplayComponent).length <= 6,
+                root.entityMgr.getAllWithComponent(NodiBlueComponent).length <= 6,
         },
         // 1.2. connect to hub
         {
@@ -52,7 +52,7 @@ const tutorialsByLevel = [
             condition: /** @param {GameRoot} root */ root =>
                 // 4 miners placed above rectangles and 10 delivered
                 root.hubGoals.getCurrentGoalDelivered() < 10 ||
-                root.entityMgr.getAllWithComponent(DisplayComponent).filter(entity => {
+                root.entityMgr.getAllWithComponent(NodiBlueComponent).filter(entity => {
                     const tile = entity.components.StaticMapEntity.origin;
                     const below = root.map.getLowerLayerContentXY(tile.x, tile.y);
                     if (below && below.getItemType() === "shape") {
