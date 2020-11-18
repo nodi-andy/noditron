@@ -65,7 +65,7 @@ export const KEYMAPPINGS = {
         reader: { keyCode: key("U") },
         lever: { keyCode: key("I") },
         filter: { keyCode: key("O") },
-        display: { keyCode: key("P") },
+        nodi_blue: { keyCode: key("P") },
         display_red: { keyCode: key("J") },
         nodi_led: { keyCode: key("K") },
         nodi_discus: { keyCode: key("=") },

@@ -6,9 +6,9 @@ import { GameRoot } from "../root";
 import { NodiBlueComponent } from "../components/nodi_blue";
 import { enumHubGoalRewards } from "../tutorial_goals";
 
-export class MetaDisplayBuilding extends MetaBuilding {
+export class MetaNodiBlueBuilding extends MetaBuilding {
     constructor() {
-        super("display");
+        super("nodi_blue");
     }
 
     getSilhouetteColor() {

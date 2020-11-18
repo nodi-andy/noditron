@@ -360,12 +360,7 @@ export class HubGoals extends BasicSerializableObject {
                 this.root.entityMgr.registerEntity(hub);
 
                 hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
-                    root: this.root,
-                    origin: new Vector(12, 0),
-                    rotation: 0,
-                    originalRotation: 0,
-                    rotationVariant: 0,
-                    variant: defaultBuildingVariant,
+                    root: this.root, origin: new Vector(12, 0), rotation: 0, originalRotation: 0, rotationVariant: 0, variant: defaultBuildingVariant,
                 });
                 hub.components.Lever.storedCount = 7;
                 this.root.map.placeStaticEntity(hub);
@@ -381,6 +376,32 @@ export class HubGoals extends BasicSerializableObject {
                 });
                 hub.components.NodiLed.allowedValue = 12;
                 hub.components.NodiLed.storedCount = 12;
+                hub.components.NodiLed.toggled = true;
+                this.root.map.placeStaticEntity(hub);
+                this.root.entityMgr.registerEntity(hub);
+            }
+            else if(this.level == 4)
+            {
+                let hub = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
+                    root: this.root, origin: new Vector(3, 3), rotation: 0, originalRotation: 0, rotationVariant: 0, variant: defaultBuildingVariant,
+                });
+                hub.components.NodiLed.allowedValue = 12;
+                hub.components.NodiLed.storedCount = 12;
+                this.root.map.placeStaticEntity(hub);
+                this.root.entityMgr.registerEntity(hub);
+
+                hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
+                    root: this.root, origin: new Vector(-3, 3), rotation: 0, originalRotation: 0, rotationVariant: 0, variant: defaultBuildingVariant,
+                });
+                hub.components.Lever.storedCount = 5;
+                this.root.map.placeStaticEntity(hub);
+                this.root.entityMgr.registerEntity(hub);
+
+                hub = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
+                    root: this.root, origin: new Vector(0, 0), rotation: 0, originalRotation: 0, rotationVariant: 0, variant: defaultBuildingVariant,
+                });
+                hub.components.NodiLed.allowedValue = 7;
+                hub.components.NodiLed.storedCount = 7;
                 hub.components.NodiLed.toggled = true;
                 this.root.map.placeStaticEntity(hub);
                 this.root.entityMgr.registerEntity(hub);

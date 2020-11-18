@@ -2,7 +2,7 @@ import { T } from "../translations";
 import { enumBalancerVariants, MetaBalancerBuilding } from "./buildings/balancer";
 import { MetaConstantSignalBuilding } from "./buildings/constant_signal";
 import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
-import { MetaDisplayBuilding } from "./buildings/nodi_blue";
+import { MetaNodiBlueBuilding } from "./buildings/nodi_blue";
 import { MetaDisplayRedBuilding } from "./buildings/display_red";
 import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 import { MetaFilterBuilding } from "./buildings/filter";
@@ -53,8 +53,8 @@ export const enumHubGoalRewardsToContentUnlocked = {
     [enumHubGoalRewards.reward_storage]: typed([[MetaStorageBuilding, defaultBuildingVariant]]),
 
     [enumHubGoalRewards.reward_belt_reader]: typed([[MetaReaderBuilding, defaultBuildingVariant]]),
-    [enumHubGoalRewards.reward_display]: typed([[MetaDisplayBuilding, defaultBuildingVariant]]),
-    [enumHubGoalRewards.reward_display]: typed([[MetaDisplayBuilding, defaultBuildingVariant]]),
+    [enumHubGoalRewards.reward_display]: typed([[MetaNodiBlueBuilding, defaultBuildingVariant]]),
+    [enumHubGoalRewards.reward_display]: typed([[MetaNodiBlueBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_constant_signal]: typed([
         [MetaConstantSignalBuilding, defaultBuildingVariant],
     ]),

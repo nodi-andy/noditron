@@ -8,7 +8,7 @@ import { MetaCondBuilding } from "./buildings/cond";
 import { MetaComparatorBuilding } from "./buildings/comparator";
 import { MetaConstantSignalBuilding } from "./buildings/constant_signal";
 import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
-import { MetaDisplayBuilding } from "./buildings/nodi_blue";
+import { MetaNodiBlueBuilding } from "./buildings/nodi_blue";
 import { MetaDisplayRedBuilding } from "./buildings/display_red";
 import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 import { MetaNodiDiscusBuilding } from "./buildings/nodi_discus";
@@ -59,7 +59,7 @@ export function initMetaBuildingRegistry() {
     gMetaBuildingRegistry.register(MetaLeverBuilding);
     gMetaBuildingRegistry.register(MetaFilterBuilding);
     gMetaBuildingRegistry.register(MetaWireTunnelBuilding);
-    gMetaBuildingRegistry.register(MetaDisplayBuilding);
+    gMetaBuildingRegistry.register(MetaNodiBlueBuilding);
     gMetaBuildingRegistry.register(MetaNodiLedBuilding);
     gMetaBuildingRegistry.register(MetaNodiDiscusBuilding);
     gMetaBuildingRegistry.register(MetaDisplayRedBuilding);
@@ -161,7 +161,7 @@ export function initMetaBuildingRegistry() {
     registerBuildingVariant(39, MetaWireTunnelBuilding);
 
     // Display
-    registerBuildingVariant(40, MetaDisplayBuilding);
+    registerBuildingVariant(40, MetaNodiBlueBuilding);
     registerBuildingVariant(102, MetaDisplayRedBuilding);
     registerBuildingVariant(103, MetaNodiDataBuilding);
     registerBuildingVariant(104, MetaOperBuilding);
