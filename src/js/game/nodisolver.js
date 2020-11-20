@@ -3,7 +3,7 @@ import { createLogger } from "../core/logging";
 import { GameRoot } from "./root";
 import { enumNotificationType } from "../game/hud/parts/notifications";
 import { MinerComponent } from "./components/miner";
-//import { NodiLedComponent } from "./components/nodi_led";
+import { NodiBlueComponent } from "./components/nodi_blue";
 
 
 /**
@@ -28,7 +28,7 @@ export const enumNodiTypes = {
     COND_2      : (enumNodiBits.COND << 1) + 1,                 // 3 ping only red conductor and red discus
     DATA        : enumNodiBits.PROC << 1,                         // 4 I can keep the cell value and make basic calculation
     LINK        : (enumNodiBits.PROC << 1) + 1,                   // 5 Process unit. I get getrigged by a discus and have my custom function, see LINKTYPE
-    DISCUS      : (enumNodiBits.COND << 1) + (enumNodiBits.PROC << 1),       // 6 A blue discus executes a function call in blue layer
+    DISCUS_1    : (enumNodiBits.COND << 1) + (enumNodiBits.PROC << 1),       // 6 A blue discus executes a function call in blue layer
     DISCUS_2    : (enumNodiBits.COND << 1) + (enumNodiBits.PROC << 1) + 1,  // 7 A red discus executes a function call in red layer
 }
 // How important it is that a savegame is created
@@ -72,7 +72,7 @@ export class NodiSolver {
         const entity = this.root.map.getLayerContentXY(x, y, "regular");
         if(entity)
         { 
-            const displayCompent = entity.components.Display;
+            const displayCompent = entity.components.NodiBlue;
             if(displayCompent) ret = displayCompent.storedType;
         }
         return ret;
@@ -84,7 +84,7 @@ export class NodiSolver {
         const entity = this.root.map.getLayerContentXY(x, y, "regular");
         if(entity)
         { 
-            const displayCompent = entity.components.Display;
+            const displayCompent = entity.components.NodiBlue;
             if(displayCompent) ret = displayCompent.storedTypeNext;
         }
         return ret;
@@ -95,7 +95,7 @@ export class NodiSolver {
         const entity = this.root.map.getLayerContentXY(x, y, "regular");
         if(entity)
         { 
-            const displayCompent = entity.components.Display;
+            const displayCompent = entity.components.NodiBlue;
             if(displayCompent) displayCompent.storedTypeNext = v;
         }
     }
@@ -105,7 +105,7 @@ export class NodiSolver {
         const entity = this.root.map.getLayerContentXY(x, y, "regular");
         if(entity)
         { 
-            const displayCompent = entity.components.Display;
+            const displayCompent = entity.components.NodiBlue;
             if(displayCompent) displayCompent.storedCount = v;
         }
     }
@@ -120,7 +120,7 @@ export class NodiSolver {
                 const entityNB = this.root.map.getLayerContentXY(x, y-1, "regular");
                 if(entityNB)
                 { 
-                    const dispCompNB = entityNB.components.Display;
+                    const dispCompNB = entityNB.components.NodiBlue;
                     if (dispCompNB) {
                         dispCompNB.setTypeBit(enumNodiBits.TRAN);
                         dispCompNB.storedCount = 77;
@@ -132,7 +132,7 @@ export class NodiSolver {
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
             let displayComp = undefined;
-            if(displayComp == undefined) displayComp = entity.components.Display;
+            if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.Lever;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
@@ -147,7 +147,7 @@ export class NodiSolver {
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
            let displayComp = undefined;
-            if(displayComp == undefined) displayComp = entity.components.Display;
+            if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.Lever;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
@@ -162,7 +162,7 @@ export class NodiSolver {
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
            let displayComp = undefined;
-            if(displayComp == undefined) displayComp = entity.components.Display;
+            if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.Lever;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;

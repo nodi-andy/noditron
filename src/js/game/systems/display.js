@@ -67,7 +67,7 @@ export class DisplaySystem extends GameSystemWithFilter {
             const entity = contents[i];
             if(entity == undefined) continue;
             let dispComp = undefined;
-            if(dispComp == undefined) dispComp = entity.components.Display;
+            if(dispComp == undefined) dispComp = entity.components.NodiBlue;
             if(dispComp == undefined) dispComp = entity.components.DisplayRed;
             if(dispComp == undefined) dispComp = entity.components.NodiData;
             if(dispComp == undefined) dispComp = entity.components.Oper;

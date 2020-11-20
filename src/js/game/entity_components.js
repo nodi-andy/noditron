@@ -87,7 +87,7 @@ export class EntityComponentStorage {
         this.WireTunnel;
 
         /** @type {NodiBlueComponent} */
-        this.Display;
+        this.NodiBlue;
 
         /** @type {DisplayRedComponent} */
         this.DisplayRed;

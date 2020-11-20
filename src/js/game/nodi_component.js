@@ -57,7 +57,7 @@ export class NodiComponent extends Component {
         if(pingedEntity && pingedEntity.components) 
         {
             let pingedComp = undefined;
-            if(pingedComp == undefined) pingedComp = pingedEntity.components.Display;
+            if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiBlue;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiLed;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.DisplayRed;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiData;

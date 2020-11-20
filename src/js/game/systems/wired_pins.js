@@ -190,7 +190,7 @@ export class WiredPinsSystem extends GameSystemWithFilter {
                 );
 
                 let dispComp = undefined;
-                if(dispComp == undefined) dispComp = entity.components.Display;
+                if(dispComp == undefined) dispComp = entity.components.NodiBlue;
                 if(dispComp == undefined) dispComp = entity.components.DisplayRed;
                 if(dispComp == undefined) dispComp = entity.components.NodiData;
 
