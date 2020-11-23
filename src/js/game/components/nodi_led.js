@@ -1,10 +1,10 @@
-import { NodiComponent } from "../nodi_component";
 import { types } from "../../savegame/serialization";
 import { enumNodiTypes, enumNodiBits } from "../nodisolver";
 import { NodiDataComponent } from "./nodi_data";
 import { Entity } from "../entity";
+import { Component } from "../component";
 
-export class NodiLedComponent extends NodiDataComponent {
+export class NodiLedComponent extends Component {
     static getId() {
         return "NodiLed";
     }
@@ -26,6 +26,7 @@ export class NodiLedComponent extends NodiDataComponent {
         super(entity);
         this.toggled = toggled;
         this.allowedValue = 1;
+        this.entity = entity;
     }
 
     // Derived from DisplayComponent
@@ -43,34 +44,60 @@ export class NodiLedComponent extends NodiDataComponent {
         }
     }
 
-    nodiProc(map, caller, f){
-        const staticComp = this.entity.components.StaticMapEntity;
-        if(f == undefined){
-            for (var i = 0; i < 8; i++) {
-                var NB = this.getNB(i);
-                let xt = staticComp.origin.x + NB[0];
-                let yt = staticComp.origin.y + NB[1];
-                this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS]);
+    nodiHwProc(map, caller){
+        const staticComponents = this.entity.components;
+        if(caller.entity.components.NodiDiscus)
+        {
+            const staticCompCaller = caller.entity.components.StaticMapEntity;
+            const staticCompThis = this.entity.components.StaticMapEntity;
+            let f = 0;
+            if(staticCompCaller.origin.x == staticCompThis.origin.x - 1 && staticCompCaller.origin.y == staticCompThis.origin.y)
+            {
+              f = 4;
+            }
+            this.nodiProc(map, caller, f);
+        }
+        else
+        {
+            if(staticComponents.NodiData)
+            {
+              this.setValue(caller.storedCount);
             }
         }
+    }
 
-        // read
-        if (f == 2) { caller.storedCount = this.storedCount; }
-        // add
-        if (f == 3) { caller.storedCount += this.storedCount; }
-        // compare
-        if (f == 4) {
-            // equal
-            if (caller.storedCount == this.allowedValue) { this.ping(map, staticComp.origin.x + 1, staticComp.origin.y, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS, enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2]); }
-            // bigger
-            //if (getV(i, j) > getV(i - 1, j)) { ping(i - 1, j, i + 1, j + 1, [COND_1, DISCUS, COND_2, DISCUS_2]); }
-            // smaller
-            //if (getV(i, j) < getV(i - 1, j)) { ping(i - 1, j, i + 1, j - 1, [COND_1, DISCUS, COND_2, DISCUS_2]); }
-            // sub
-            //setValue(x - 1, y, getV(i, j) - getV(x - 1, y));
+    nodiProc(map, caller, f){
+        const staticComponents = this.entity.components;
+        let nodiData = staticComponents.NodiData;
+        if(nodiData) {
+            const staticComp = this.entity.components.StaticMapEntity;
+            if(f == undefined){
+                for (var i = 0; i < 8; i++) {
+                    var NB = nodiData.getNB(i);
+                    let xt = staticComp.origin.x + NB[0];
+                    let yt = staticComp.origin.y + NB[1];
+                    nodiData.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1]);
+                }
+            }
+
+            // read
+            if (f == 2) { caller.storedCount = this.storedCount; }
+            // add
+            if (f == 3) { caller.storedCount += this.storedCount; }
+            // compare
+            if (f == 4) {
+                // equal
+                if (caller.storedCount == this.allowedValue) { nodiData.ping(map, staticComp.origin.x + 1, staticComp.origin.y, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1, enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2], this.allowedValue); }
+                // bigger
+                //if (getV(i, j) > getV(i - 1, j)) { ping(i - 1, j, i + 1, j + 1, [COND_1, DISCUS_1, COND_2, DISCUS_2]); }
+                // smaller
+                //if (getV(i, j) < getV(i - 1, j)) { ping(i - 1, j, i + 1, j - 1, [COND_1, DISCUS_1, COND_2, DISCUS_2]); }
+                // sub
+                //setValue(x - 1, y, getV(i, j) - getV(x - 1, y));
+            }
+            nodiData.clearNewtypeBit(enumNodiBits.TRAN);
+            nodiData.setNewtypeBit(enumNodiBits.PUSH);
         }
-        this.clearNewtypeBit(enumNodiBits.TRAN);
-        this.setNewtypeBit(enumNodiBits.PUSH);
     }
    /* toggleSignal(map)
     {

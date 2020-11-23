@@ -463,6 +463,7 @@ export class HubGoals extends BasicSerializableObject {
                 });
                 hub.components.NodiLed.allowedValue = 1;
                 hub.components.NodiLed.storedCount = 1;
+                hub.components.NodiLed.toggled = true;
                 this.root.map.placeStaticEntity(hub);
                 this.root.entityMgr.registerEntity(hub);
 

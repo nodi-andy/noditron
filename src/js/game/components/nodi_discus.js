@@ -13,8 +13,8 @@ export class NodiDiscusComponent extends NodiComponent {
      */
     constructor(entityFromSystem) {
         super();
-        this.storedType = enumNodiTypes.DISCUS;
-        this.storedTypeNext = enumNodiTypes.DISCUS;
+        this.storedType = enumNodiTypes.DISCUS_1;
+        this.storedTypeNext = enumNodiTypes.DISCUS_1;
         this.storedCount = 0;
         this.entity = entityFromSystem;
     }

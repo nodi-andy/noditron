@@ -4,7 +4,6 @@ import { Entity } from "../entity";
 import { MetaBuilding } from "../meta_building";
 import { GameRoot } from "../root";
 import { NodiBlueComponent } from "../components/nodi_blue";
-import { enumHubGoalRewards } from "../tutorial_goals";
 
 export class MetaNodiBlueBuilding extends MetaBuilding {
     constructor() {

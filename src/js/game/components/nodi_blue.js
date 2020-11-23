@@ -31,7 +31,7 @@ export class NodiBlueComponent extends NodiComponent {
                 var NB = this.getNB(i);
                 let xt = staticComp.origin.x + NB[0];
                 let yt = staticComp.origin.y + NB[1];
-                this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS]);
+                this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1]);
             }
         }
 
@@ -42,11 +42,11 @@ export class NodiBlueComponent extends NodiComponent {
         // compare
         if (f == 4) {
             // equal
-            if (caller.storedCount == this.allowedValue) { this.ping(map, staticComp.origin.x + 1, staticComp.origin.y, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS, enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2]); }
+            //if (caller.storedCount == this.allowedValue) { this.ping(map, staticComp.origin.x + 1, staticComp.origin.y, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1, enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2]); }
             // bigger
-            //if (getV(i, j) > getV(i - 1, j)) { ping(i - 1, j, i + 1, j + 1, [COND_1, DISCUS, COND_2, DISCUS_2]); }
+            //if (getV(i, j) > getV(i - 1, j)) { ping(i - 1, j, i + 1, j + 1, [COND_1, DISCUS_1, COND_2, DISCUS_2]); }
             // smaller
-            //if (getV(i, j) < getV(i - 1, j)) { ping(i - 1, j, i + 1, j - 1, [COND_1, DISCUS, COND_2, DISCUS_2]); }
+            //if (getV(i, j) < getV(i - 1, j)) { ping(i - 1, j, i + 1, j - 1, [COND_1, DISCUS_1, COND_2, DISCUS_2]); }
             // sub
             //setValue(x - 1, y, getV(i, j) - getV(x - 1, y));
         }

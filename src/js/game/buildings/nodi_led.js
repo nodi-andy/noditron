@@ -5,6 +5,7 @@ import { MetaBuilding } from "../meta_building";
 import { GameRoot } from "../root";
 import { NodiLedComponent } from "../components/nodi_led";
 import { enumHubGoalRewards } from "../tutorial_goals";
+import { NodiDataComponent } from "../components/nodi_data";
 
 export class MetaNodiLedBuilding extends MetaBuilding {
     constructor() {
@@ -59,5 +60,6 @@ export class MetaNodiLedBuilding extends MetaBuilding {
         );
 
         entity.addComponent(new NodiLedComponent({entity}));
+        entity.addComponent(new NodiDataComponent({entity}));
     }
 }
