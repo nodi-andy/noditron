@@ -646,6 +646,24 @@ buildings:
         default:
             name: &lever Switch
             description: Can be toggled to emit a boolean signal (1 or 0) on the wires layer, which can then be used to control components, for example an item filter.
+    
+    nodi_oper:
+        default:
+            name: &nodi_oper Operator
+            description: Emits a boolean "1" if both inputs are truthy. (Truthy means shape,
+                color or boolean "1")
+        not:
+            name: NOT Gate
+            description: Emits a boolean "1" if the input is not truthy. (Truthy means
+                shape, color or boolean "1")
+        xor:
+            name: XOR Gate
+            description: Emits a boolean "1" if one of the inputs is truthy, but not both.
+                (Truthy means shape, color or boolean "1")
+        or:
+            name: OR Gate
+            description: Emits a boolean "1" if one of the inputs is truthy. (Truthy means
+                shape, color or boolean "1")
 
     logic_gate:
         default:
@@ -695,11 +713,6 @@ buildings:
             name: &nodi_discus Nodi_Discus
             description: Connect a signal to show it on the display - It can be a shape, color or boolean.
     
-    oper:
-        default:
-            name: &oper operation
-            description: Connect a signal to show it on the display - It can be a shape, color or boolean.
-
     nodi_data:
         default:
             name: &nodi_data Nodi_data
@@ -1161,7 +1174,7 @@ keybindings:
         display_red: *display_red
         nodi_led: *nodi_led
         nodi_discus: *nodi_discus
-        oper: *oper
+        nodi_oper: *nodi_oper
         nodi_data: *nodi_data
         reader: *reader
         virtual_processor: *virtual_processor

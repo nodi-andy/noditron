@@ -3,10 +3,28 @@ import { NodiComponent } from "../nodi_component";
 import { enumNodiTypes } from "../nodisolver";
 import { enumNodiBits } from "../nodisolver";
 
-export class OperComponent extends NodiComponent {
+
+/** @enum {string} */
+export const enumNodiOperType = {
+    and: "and",
+    not: "not",
+    xor: "xor",
+    or: "or",
+    transistor: "transistor",
+
+    analyzer: "analyzer",
+    rotater: "rotater",
+    unstacker: "unstacker",
+    cutter: "cutter",
+    compare: "compare",
+    stacker: "stacker",
+    painter: "painter",
+};
+
+export class NodiOperComponent extends NodiComponent {
 
     static getId() {
-        return "Oper";
+        return "NodiOper";
     }
 
     /**

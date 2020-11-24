@@ -1,9 +1,7 @@
-import { globalConfig } from "../core/config";
 import { createLogger } from "../core/logging";
 import { GameRoot } from "./root";
 import { enumNotificationType } from "../game/hud/parts/notifications";
 import { MinerComponent } from "./components/miner";
-import { NodiBlueComponent } from "./components/nodi_blue";
 
 
 /**
@@ -40,7 +38,6 @@ export const enumSavePriority = {
     asap: 100,
 };
 
-const logger = createLogger("autosave");
 
 export class NodiSolver {
     constructor(root) {

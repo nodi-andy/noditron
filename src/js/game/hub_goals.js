@@ -79,8 +79,6 @@ export class HubGoals extends BasicSerializableObject {
         this.root = root;
 
         this.level = 1;
-
-        this.goalStep = 0;
         /**
          * Which story rewards we already gained
          * @type {Object.<string, number>}
@@ -184,25 +182,8 @@ export class HubGoals extends BasicSerializableObject {
         }
 
         return this.getShapesStored(this.currentGoal.definition);*/
-        if(this.root.hubGoals.level === 1){
-            const entityResult = this.root.map.getLayerContentXY(4, 2, "regular");
-            if(entityResult)
-            { 
-                const dispCompResult = entityResult.components.NodiLed;
-                if (dispCompResult) {
-                    if(dispCompResult.toggled == true && this.goalStep == 0)
-                    {
-                      this.goalStep++;
-                    }
-                    if(dispCompResult.toggled == false && this.goalStep == 1)
-                    {
-                      this.goalStep++;
-                      this.root.hubGoals.onGoalCompleted();
-                    }
-                }
-            }     
-        }
-        if(this.root.hubGoals.level >= 2 && this.root.hubGoals.level < 6)
+
+        if(this.root.hubGoals.level >= 1 && this.root.hubGoals.level < 6)
         {
             let allLeds = this.root.entityMgr.getAllWithComponent(NodiLedComponent);
             if(allLeds.filter(e => e.components.NodiLed.toggled === true).length ===  allLeds.length){
@@ -453,25 +434,25 @@ export class HubGoals extends BasicSerializableObject {
                 let hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
                     root: this.root, origin: new Vector(-6, 0), rotation: 0, originalRotation: 0, rotationVariant: 0, variant: defaultBuildingVariant,
                 });
-                hub.components.Lever.storedCount = 1;
+                hub.components.Lever.storedCount = 5;
                 hub.components.Lever.toggled = true;
-                this.root.map.placeStaticEntity(hub);
-                this.root.entityMgr.registerEntity(hub);
-
-                hub = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
-                    root: this.root, origin: new Vector(-3, 0), rotation: 0, originalRotation: 0, rotationVariant: 0, variant: defaultBuildingVariant,
-                });
-                hub.components.NodiLed.allowedValue = 1;
-                hub.components.NodiLed.storedCount = 1;
-                hub.components.NodiLed.toggled = true;
                 this.root.map.placeStaticEntity(hub);
                 this.root.entityMgr.registerEntity(hub);
 
                 hub = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
                     root: this.root, origin: new Vector(0, 0), rotation: 0, originalRotation: 0, rotationVariant: 0, variant: defaultBuildingVariant,
                 });
-                hub.components.NodiLed.allowedValue = 1;
-                hub.components.NodiLed.storedCount = 1;
+                hub.components.NodiLed.allowedValue = 5;
+                hub.components.NodiLed.storedCount = 5;
+                hub.components.NodiLed.toggled = true;
+                this.root.map.placeStaticEntity(hub);
+                this.root.entityMgr.registerEntity(hub);
+
+                hub = gMetaBuildingRegistry.findByClass(MetaNodiLedBuilding).createEntity({
+                    root: this.root, origin: new Vector(6, 0), rotation: 0, originalRotation: 0, rotationVariant: 0, variant: defaultBuildingVariant,
+                });
+                hub.components.NodiLed.allowedValue = 5;
+                hub.components.NodiLed.storedCount = 5;
                 this.root.map.placeStaticEntity(hub);
                 this.root.entityMgr.registerEntity(hub);
             }
@@ -507,7 +488,8 @@ export class HubGoals extends BasicSerializableObject {
     onGoalCompleted() {
         const reward = this.currentGoal.reward;
         this.gainedRewards[reward] = (this.gainedRewards[reward] || 0) + 1;
-
+        this.root.nodistate = 0;
+        this.root.nodiSolver.noditick = 0;
         this.root.app.gameAnalytics.handleLevelCompleted(this.level);
         ++this.level;
         this.computeNextGoal();

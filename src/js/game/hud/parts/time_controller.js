@@ -17,8 +17,8 @@ export class HUDTimeController extends BaseHUDPart {
                 <button class="styledButton restart"> << </button>
                 <button class="styledButton playstop"> >> </button>
             </div>
-            <div>
-                <label>Cycles: </label> <label class="tickLabel">0</label><br>
+            <label>Cycles: </label> <label class="tickLabel">0</label><br>
+            <div class = "debugSlider">
                 <label>Speed: </label> <input class="rangeInput" type="range" value="1900" min="0" max="2000" step="1">
             </div>
         `
@@ -117,8 +117,9 @@ export class HUDTimeController extends BaseHUDPart {
             }
         });
 
-        this.visible = false; //this.root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers);
+        this.visible = true; //this.root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers);
         this.domAttach = new DynamicDomAttach(this.root, this.element);
+        this.element.querySelector("div.debugSlider").setAttribute("style", "display:none");
     }
 
     toggle() {

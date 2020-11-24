@@ -70,7 +70,7 @@ export const KEYMAPPINGS = {
         nodi_led: { keyCode: key("K") },
         nodi_discus: { keyCode: key("=") },
         nodi_data: { keyCode: key("B") },
-        oper: { keyCode: key("H") },
+        nodi_oper: { keyCode: key("H") },
 
         // Wires toolbar
         wire: { keyCode: key("1") },

@@ -20,7 +20,7 @@ import { NodiBlueComponent } from "./components/nodi_blue";
 import { DisplayRedComponent } from "./components/display_red";
 import { NodiLedComponent } from "./components/nodi_led";
 import { NodiDiscusComponent } from "./components/nodi_discus";
-import { OperComponent } from "./components/oper";
+import { NodiOperComponent } from "./components/nodi_oper";
 import { NodiDataComponent } from "./components/nodi_data";
 import { NodiComponent } from "./nodi_component";
 import { BeltReaderComponent } from "./components/belt_reader";
@@ -49,7 +49,7 @@ export function initComponentRegistry() {
     gComponentRegistry.register(DisplayRedComponent);
     gComponentRegistry.register(NodiLedComponent);
     gComponentRegistry.register(NodiDiscusComponent);
-    gComponentRegistry.register(OperComponent);
+    gComponentRegistry.register(NodiOperComponent);
     gComponentRegistry.register(NodiDataComponent);
     gComponentRegistry.register(BeltReaderComponent);
     gComponentRegistry.register(FilterComponent);

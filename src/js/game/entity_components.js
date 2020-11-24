@@ -20,7 +20,7 @@ import { NodiBlueComponent } from "./components/nodi_blue";
 import { DisplayRedComponent } from "./components/display_red";
 import { NodiLedComponent } from "./components/nodi_led";
 import { NodiDiscusComponent } from "./components/nodi_discus";
-import { OperComponent } from "./components/oper";
+import { NodiOperComponent } from "./components/nodi_oper";
 import { NodiDataComponent } from "./components/nodi_data";
 import { BeltReaderComponent } from "./components/belt_reader";
 import { FilterComponent } from "./components/filter";
@@ -98,7 +98,7 @@ export class EntityComponentStorage {
         /** @type {NodiDiscusComponent} */
         this.NodiDiscus;
 
-        /** @type {OperComponent} */
+        /** @type {NodiOperComponent} */
         this.Oper;
 
           /** @type {NodiDataComponent} */
