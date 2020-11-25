@@ -250,7 +250,8 @@ export class HubGoals extends BasicSerializableObject {
             this.root.hud.parts.timeController.restartNodiTick();
 
         if(initPuzzle){
-            if(this.level == 1)
+            this.root.levelManager.setupLevel(this.level);
+          /*  if(this.level == 1)
             {
                 const hub = gMetaBuildingRegistry.findByClass(MetaLeverBuilding).createEntity({
                     root: this.root,
@@ -455,7 +456,7 @@ export class HubGoals extends BasicSerializableObject {
                 hub.components.NodiLed.storedCount = 5;
                 this.root.map.placeStaticEntity(hub);
                 this.root.entityMgr.registerEntity(hub);
-            }
+            }*/
         }
         const storyIndex = this.level - 1;
         const levels = this.root.gameMode.getLevelDefinitions();

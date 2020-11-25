@@ -29,6 +29,7 @@ import { DynamicTickrate } from "./dynamic_tickrate";
 import { KeyActionMapper } from "./key_action_mapper";
 import { Vector } from "../core/vector";
 import { GameMode } from "./game_mode";
+import { LevelManager } from "./level_manager";
 /* typehints:end */
 
 const logger = createLogger("game/root");
@@ -112,6 +113,9 @@ export class GameRoot {
 
         /** @type {HubGoals} */
         this.hubGoals = null;
+
+        /** @type {LevelManager} */
+        this.levelManager = null;
 
         /** @type {BufferMaintainer} */
         this.buffers = null;

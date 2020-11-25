@@ -195,11 +195,11 @@ export class MetaBuilding {
      * @param {GameRoot} param0.root
      * @param {Vector} param0.origin Origin tile
      * @param {number=} param0.rotation Rotation
-     * @param {number} param0.originalRotation Original Rotation
-     * @param {number} param0.rotationVariant Rotation variant
-     * @param {string} param0.variant
+     * @param {number=} param0.originalRotation Original Rotation
+     * @param {number=} param0.rotationVariant Rotation variant
+     * @param {string=} param0.variant = defaultBuildingVariant
      */
-    createEntity({ root, origin, rotation, originalRotation, rotationVariant, variant }) {
+    createEntity({ root, origin, rotation = 0, originalRotation = 0, rotationVariant = 0, variant = defaultBuildingVariant }) {
         const entity = new Entity(root);
         entity.layer = this.getLayer();
         entity.addComponent(

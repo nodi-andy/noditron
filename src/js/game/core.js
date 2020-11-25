@@ -27,6 +27,7 @@ import { DynamicTickrate } from "./dynamic_tickrate";
 import { EntityManager } from "./entity_manager";
 import { GameSystemManager } from "./game_system_manager";
 import { HubGoals } from "./hub_goals";
+import { LevelManager } from "./level_manager";
 import { GameHUD } from "./hud/hud";
 import { KeyActionMapper } from "./key_action_mapper";
 import { GameLogic } from "./logic";
@@ -121,6 +122,7 @@ export class GameCore {
         root.entityMgr = new EntityManager(root);
         root.systemMgr = new GameSystemManager(root);
         root.shapeDefinitionMgr = new ShapeDefinitionManager(root);
+        root.levelManager = new LevelManager(root);
         root.hubGoals = new HubGoals(root);
         root.productionAnalytics = new ProductionAnalytics(root);
         root.buffers = new BufferMaintainer(root);
