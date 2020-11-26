@@ -189,7 +189,7 @@ export class WiredPinsSystem extends GameSystemWithFilter {
                     staticComp.rotation + enumDirectionToAngle[slot.direction]
                 );
 
-                let dispComp = undefined;
+                /*let dispComp = undefined;
                 if(dispComp == undefined) dispComp = entity.components.NodiBlue;
                 if(dispComp == undefined) dispComp = entity.components.DisplayRed;
                 if(dispComp == undefined) dispComp = entity.components.NodiData;
@@ -197,7 +197,7 @@ export class WiredPinsSystem extends GameSystemWithFilter {
                 if(dispComp){
                     const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
                     parameters.context.fillText(formatBigNumber(dispComp.storedType), center.x-10, center.y+10);
-                }
+                }*/
 
                 if (staticComp.getMetaBuilding().getRenderPins()) {
                     /*drawRotatedSprite({

@@ -12,9 +12,6 @@ import { formatBigNumber, lerp } from "../../core/utils";
 export class DisplaySystem extends GameSystemWithFilter {
     constructor(root) {
         super(root, [NodiBlueComponent]);
-
-
-        this.buttonSprite = Loader.getSprite("sprites/buildings/lever.png");
         
         /** @type {Object<string, import("../../core/draw_utils").AtlasSprite>} */
         this.displaySprites = {};
@@ -72,22 +69,14 @@ export class DisplaySystem extends GameSystemWithFilter {
             if(dispComp == undefined) dispComp = entity.components.NodiData;
             if(dispComp == undefined) dispComp = entity.components.Oper;
             if (dispComp) {
-                const pinsComp = entity.components.WiredPins;
-                const network = pinsComp.slots[0].linkedNetwork;
+                //const pinsComp = entity.components.WiredPins;
+                //const network = pinsComp.slots[0].linkedNetwork;
 
                 const origin = entity.components.StaticMapEntity.origin;
                 let size = globalConfig.tileSize;
                 
 
                 const staticComp = entity.components.StaticMapEntity;
-
-               /* this.buttonSprite.drawCachedCentered(
-                        parameters,
-                        (origin.x + 0.5) * globalConfig.tileSize,
-                        (origin.y + 0.5) * globalConfig.tileSize,
-                        size
-                );*/
-
 
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
                 const context = parameters.context;

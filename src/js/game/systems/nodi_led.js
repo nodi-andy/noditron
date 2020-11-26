@@ -15,7 +15,7 @@ export class NodiLedSystem extends GameSystemWithFilter {
     }
 
     update() {
-        for (let i = 0; i < this.allEntities.length; ++i) {
+/*        for (let i = 0; i < this.allEntities.length; ++i) {
             const entity = this.allEntities[i];
 
             const leverComp = entity.components.NodiLed;
@@ -23,7 +23,7 @@ export class NodiLedSystem extends GameSystemWithFilter {
 
             // Simply sync the status to the first slot
             pinsComp.slots[0].value = leverComp.toggled ? BOOL_TRUE_SINGLETON : BOOL_FALSE_SINGLETON;
-        }
+        }*/
     }
 
     /**
@@ -44,11 +44,12 @@ export class NodiLedSystem extends GameSystemWithFilter {
 
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
                 const context = parameters.context;
-                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20)) {
-                    context.font = "bold 14px GameFont";
+                if (parameters.visibleRect.containsCircle(center.x, center.y, 20)) {
+                    context.font = "bold 12px GameFont";
                     context.textAlign = "center";
+                    context.textBaseline = "middle";
                     context.fillStyle = "#64666e";
-                    context.fillText(formatBigNumber(leverComp.allowedValue), center.x, center.y+3);
+                    context.fillText(formatBigNumber(leverComp.allowedValue), center.x, center.y);
                     context.textAlign = "left";
                 }
             }

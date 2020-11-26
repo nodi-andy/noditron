@@ -14,10 +14,10 @@ export class HUDTimeController extends BaseHUDPart {
             <label>Debugger (F7)</label>
 
             <div class="buttons">
-                <button class="styledButton restart"> << </button>
-                <button class="styledButton playstop"> >> </button>
+                <button class="styledButton nodiRestart"></button>
+                <button class="styledButton nodiRunStop nodiRun"></button>
             </div>
-            <label>Cycles: </label> <label class="tickLabel">0</label><br>
+            <label class="tickLabel">Cycles: 0</label><br>
             <div class = "debugSlider">
                 <label>Speed: </label> <input class="rangeInput" type="range" value="1900" min="0" max="2000" step="1">
             </div>
@@ -26,8 +26,8 @@ export class HUDTimeController extends BaseHUDPart {
 
         const bind = (selector, handler) => this.trackClicks(this.element.querySelector(selector), handler);
 
-        bind(".playstop", () => this.modifyLevel(-1));
-        bind(".restart", () => this.restartNodiTick());
+        bind(".nodiRunStop", () => this.modifyLevel(-1));
+        bind(".nodiRestart", () => this.restartNodiTick());
 
         this.getRangeInputElement().addEventListener("input", () => {this.setSpeed(); });
     }
@@ -55,7 +55,7 @@ export class HUDTimeController extends BaseHUDPart {
     }
     
     showNodiTick(tickCount)  {
-      this.element.querySelector("label.tickLabel").innerHTML = tickCount;
+      this.element.querySelector("label.tickLabel").innerHTML = "Cycles: " + tickCount;
     }
 
     modifyUpgrade(id, amount) {
@@ -82,7 +82,7 @@ export class HUDTimeController extends BaseHUDPart {
 
     restartNodiTick() {
         this.root.nodiSolver.noditick = 0;
-        this.element.querySelector("button.playstop").innerHTML = ">>";
+        //this.element.querySelector("button.playstop").innerHTML = ">>";
         this.showNodiTick(this.root.nodiSolver.noditick);
     }
 
@@ -96,15 +96,18 @@ export class HUDTimeController extends BaseHUDPart {
 
 
     modifyLevel(amount) {
+        let buttonElement = this.element.querySelector("button.nodiRunStop");
         if(this.root.nodistate == 0)
         {
           this.root.nodistate = 1;
-          this.element.querySelector("button.playstop").innerHTML = "||";
+          buttonElement.classList.remove("nodiRun");
+          buttonElement.classList.add("nodiStop");
         }
         else
         {
           this.root.nodistate = 0;
-          this.element.querySelector("button.playstop").innerHTML = ">>";
+          buttonElement.classList.add("nodiRun");
+          buttonElement.classList.remove("nodiStop");
         }
     }
 

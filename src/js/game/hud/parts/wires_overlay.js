@@ -29,8 +29,8 @@ export class HUDWiresOverlay extends BaseHUDPart {
      */
     switchLayers() {
         if (this.root.currentLayer === "regular") {
-            if (
-                this.root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers) ||
+            if ( true ||
+                //this.root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers) ||
                 (G_IS_DEV && globalConfig.debug.allBuildingsUnlocked)
             ) {
                 this.root.currentLayer = "wires";

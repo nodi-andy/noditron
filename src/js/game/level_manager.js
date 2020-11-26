@@ -6,6 +6,7 @@ import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 import { NodiLedComponent } from "./components/nodi_led";
 import { GameRoot } from "./root";
 import { MetaNodiOperBuilding } from "./buildings/nodi_oper";
+import { MetaNodiDataBuilding } from "./buildings/nodi_data";
 
 export class LevelManager{
     
@@ -92,13 +93,13 @@ export class LevelManager{
         else if(level == 3)
         {
             this.addEntity(MetaNodiLedBuilding  , -2, 0, 12, 12);
-            this.addEntity(MetaLeverBuilding    , 8, 0, 12);
+            this.addEntity(MetaLeverBuilding    , 8, 0, 1);
             this.addEntity(MetaNodiLedBuilding  , 4, 2, 12, 12, true);
         }
         else if(level == 4)
         {
             this.addEntity(MetaNodiLedBuilding  , 3, 3, 12, 12);
-            this.addEntity(MetaLeverBuilding    , -3, 3, 5);
+            this.addEntity(MetaLeverBuilding    , -5, 3, 5);
             this.addEntity(MetaNodiLedBuilding  , 0, 0, 7, 7, true);
         }
         else if(level == 5)
@@ -120,6 +121,13 @@ export class LevelManager{
             this.addWall([0,1], 1);
             this.addWall([0,1], -1);
             this.addWall([-8,-7,-6,-5,-4,-3,-2,-1,0], 2);
+        }
+        else if(level == 7)
+        {
+            this.addEntity(MetaLeverBuilding     , -2, -2, 1, 0, true);
+            this.addEntity(MetaNodiDataBuilding  , 0, 0, 5, 5, true);
+            this.addEntity(MetaNodiDataBuilding  , 2, 0, 5, 5);
+            this.addEntity(MetaNodiDataBuilding  , 4, 0, 5, 5);
         }
     }
 }

@@ -37,11 +37,7 @@ export class LeverComponent extends NodiBlueComponent {
 
     toggleSignal(map)
     {
-        let tempVal = this.storedCount;
-        if(this.toggled == false)
-          this.storedCount = 0;
         this.setTypeBit(enumNodiBits.PUSH);
         this.nodiProc(map);
-        this.storedCount = tempVal;
     }
 }

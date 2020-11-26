@@ -295,5 +295,7 @@ export class MapChunkView extends MapChunk {
         systems.wire.drawChunk(parameters, this);
         systems.staticMapEntities.drawWiresChunk(parameters, this);
         systems.wiredPins.drawChunk(parameters, this);
+        systems.lever.drawChunk(parameters, this);
+        systems.nodi_led.drawChunk(parameters, this);
     }
 }

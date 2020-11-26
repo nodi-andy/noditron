@@ -14,37 +14,62 @@
         text-transform: uppercase;
     }
 
-    .sandboxHint {
-        color: #aaa;
+
+    button.nodiRestart {
+        padding: 0;
+        align-self: center;
+        justify-self: center;
+        @include IncreasedClickArea(0px);
+        background: #44484a center center / 40% no-repeat;
+        & {
+            /* @load-async */
+            background-image: uiResource("icons/replay.png");
+        }
+        @include S(width, 32px);
+        @include S(height, 32px);
     }
 
-    .plusMinus {
-        @include S(margin-top, 4px);
-        display: grid;
-        grid-template-columns: 1fr auto auto;
-        align-items: center;
-        @include S(grid-gap, 4px);
 
-        button {
-            @include PlainText;
-            @include S(padding, 0);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            @include S(width, 15px);
-            @include S(height, 15px);
-            @include IncreasedClickArea(0px);
+    button.nodiRunStop {
+        padding: 0;
+        align-self: center;
+        justify-self: center;
+        @include IncreasedClickArea(0px);
+        background: #44484a center center / 40% no-repeat;
+        & {
+            /* @load-async */
+            background-image: uiResource("icons/play.png");
+        }
+        @include S(width, 32px);
+        @include S(height, 32px);
+    }
+
+    button.nodiRun {
+        & {
+            /* @load-async */
+            background-image: uiResource("icons/play.png");
         }
     }
 
-    .additionalOptions {
-        display: flex;
-        flex-direction: column;
-        @include S(margin-top, 10px);
-        button {
-            @include S(margin-bottom, 2px);
-            @include IncreasedClickArea(0px);
-            @include SuperSmallText;
+    button.nodiStop {
+        & {
+            /* @load-async */
+            background-image: uiResource("icons/pause.png");
         }
     }
+
+    button.nodiPause {
+        padding: 0;
+        align-self: center;
+        justify-self: center;
+        @include IncreasedClickArea(0px);
+        background: #44484a center center / 40% no-repeat;
+        & {
+            /* @load-async */
+            background-image: uiResource("icons/pause.png");
+        }
+        @include S(width, 32px);
+        @include S(height, 32px);
+    }
+
 }

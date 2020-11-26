@@ -32,23 +32,27 @@ export class LeverSystem extends GameSystemWithFilter {
      * @param {MapChunkView} chunk
      */
     drawChunk(parameters, chunk) {
-        const contents = chunk.containedEntitiesByLayer.regular;
+        const contents = chunk.containedEntitiesByLayer.wires;
         for (let i = 0; i < contents.length; ++i) {
             const entity = contents[i];
             const leverComp = entity.components.Lever;
             if (leverComp) {
-                const sprite = leverComp.toggled ? this.spriteOn : this.spriteOff;
-                entity.components.StaticMapEntity.drawSpriteOnBoundsClipped(parameters, sprite);
+                let sprite;
+                if(leverComp.toggled) 
+                    sprite = this.spriteOn; 
+                else
+                    sprite = this.spriteOff;
                 const staticComp = entity.components.StaticMapEntity;
+                staticComp.drawSpriteOnBoundsClipped(parameters, sprite);
 
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
                 const context = parameters.context;
-                if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20)) {
-                    context.font = "bold 14px GameFont";
+                if (parameters.visibleRect.containsCircle(center.x, center.y, 20)) {
+                    context.font = "bold 12px GameFont";
                     context.textAlign = "center";
+                    context.textBaseline = "middle";
                     context.fillStyle = "#64666e";
-                    context.fillText(formatBigNumber(leverComp.storedCount), center.x, center.y+3);
-                    context.textAlign = "left";
+                    context.fillText(formatBigNumber(leverComp.storedCount), center.x, center.y);
                 }
             }
         }
