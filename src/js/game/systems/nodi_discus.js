@@ -4,6 +4,7 @@ import { MapChunkView } from "../map_chunk_view";
 import { globalConfig } from "../../core/config";
 import { Loader } from "../../core/loader";
 import { NodiDiscusComponent } from "../components/nodi_discus";
+import { formatBigNumber } from "../../core/utils";
 
 export class NodiDiscusSystem extends GameSystemWithFilter {
     constructor(root) {
@@ -34,10 +35,19 @@ export class NodiDiscusSystem extends GameSystemWithFilter {
         const contents = chunk.containedEntitiesByLayer.regular;
         for (let i = 0; i < contents.length; ++i) {
             const entity = contents[i];
-            const leverComp = entity.components.NodiLed;
-            if (leverComp) {
-                const sprite = leverComp.toggled ? this.spriteOn : this.spriteOff;
-                entity.components.StaticMapEntity.drawSpriteOnBoundsClipped(parameters, sprite);
+            const comp = entity.components.NodiDiscus;
+            if (comp) {
+                const staticComp = entity.components.StaticMapEntity;
+                const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
+                const context = parameters.context;
+                if (parameters.visibleRect.containsCircle(center.x, center.y, 20)  &&  comp.storedType == 14) {
+                    context.font = "bold 14px GameFont";
+                    context.textAlign = "center";
+                    context.textBaseline = "middle";
+                    context.fillStyle = "#64666e";
+                    context.fillText(formatBigNumber(comp.storedCount), center.x, center.y);
+                    context.textAlign = "left";
+                }
             }
         }
     }

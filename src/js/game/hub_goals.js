@@ -183,7 +183,7 @@ export class HubGoals extends BasicSerializableObject {
 
         return this.getShapesStored(this.currentGoal.definition);*/
 
-        if(this.root.hubGoals.level >= 1 && this.root.hubGoals.level < 6)
+        //if(this.root.hubGoals.level >= 1 && this.root.hubGoals.level < 6)
         {
             let allLeds = this.root.entityMgr.getAllWithComponent(NodiLedComponent);
             if(allLeds.filter(e => e.components.NodiLed.toggled === true).length ===  allLeds.length){
@@ -489,9 +489,10 @@ export class HubGoals extends BasicSerializableObject {
     onGoalCompleted() {
         const reward = this.currentGoal.reward;
         this.gainedRewards[reward] = (this.gainedRewards[reward] || 0) + 1;
-        this.root.nodistate = 0;
+        this.root.nodiSolver.nodistate = 0;
         this.root.nodiSolver.noditick = 0;
         this.root.app.gameAnalytics.handleLevelCompleted(this.level);
+        this.root.hud.parts.timeController.updateRunButton();
         ++this.level;
         this.computeNextGoal();
 

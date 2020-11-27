@@ -1,14 +1,20 @@
-import { types } from "../../savegame/serialization";
 import { enumNodiTypes, enumNodiBits } from "../nodisolver";
-import { NodiDataComponent } from "./nodi_data";
 import { Entity } from "../entity";
-import { Component } from "../component";
+import { NodiComponent } from "../nodi_component";
+import { types } from "../../savegame/serialization";
 
-export class NodiLedComponent extends Component {
+export class NodiLedComponent extends NodiComponent {
     static getId() {
         return "NodiLed";
     }
-
+    static getSchema() {
+        return {
+            storedCount: types.int,
+            storedType: types.int,
+            allowedValue: types.int,
+            toggled: types.bool
+        };
+    }
     /**
      * Copy the current state to another component
      * @param {NodiLedComponent} otherComponent
@@ -23,7 +29,7 @@ export class NodiLedComponent extends Component {
      * @param {boolean=} param0.toggled
      */
     constructor({ entity, toggled = false }) {
-        super(entity);
+        super();
         this.toggled = toggled;
         this.allowedValue = 1;
         this.entity = entity;
@@ -66,12 +72,12 @@ export class NodiLedComponent extends Component {
         }
     }
 
-    nodiProc(map, caller, f){
+    nodiProc(map, caller, f) {
         const staticComponents = this.entity.components;
         let nodiData = staticComponents.NodiData;
         if(nodiData) {
             const staticComp = this.entity.components.StaticMapEntity;
-            if(f == undefined){
+            if(f == undefined) {
                 for (var i = 0; i < 8; i++) {
                     var NB = nodiData.getNB(i);
                     let xt = staticComp.origin.x + NB[0];
@@ -95,6 +101,8 @@ export class NodiLedComponent extends Component {
                 // sub
                 //setValue(x - 1, y, getV(i, j) - getV(x - 1, y));
             }
+            // multiple
+            if (f == 5) { caller.storedCount *= this.storedCount; }
             nodiData.clearNewtypeBit(enumNodiBits.TRAN);
             nodiData.setNewtypeBit(enumNodiBits.PUSH);
         }

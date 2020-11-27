@@ -7,12 +7,7 @@ export class NodiComponent extends Component {
     static getId() {
         return "unknown-component";
     }
-    static getSchema() {
-        return {
-            storedCount: types.uint,
-            storedType: types.uint
-        };
-    }
+
 
     setValue(val)
     {

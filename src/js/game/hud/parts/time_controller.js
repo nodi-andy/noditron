@@ -26,7 +26,7 @@ export class HUDTimeController extends BaseHUDPart {
 
         const bind = (selector, handler) => this.trackClicks(this.element.querySelector(selector), handler);
 
-        bind(".nodiRunStop", () => this.modifyLevel(-1));
+        bind(".nodiRunStop", () => this.runButtonClicked());
         bind(".nodiRestart", () => this.restartNodiTick());
 
         this.getRangeInputElement().addEventListener("input", () => {this.setSpeed(); });
@@ -89,26 +89,42 @@ export class HUDTimeController extends BaseHUDPart {
     setSpeed() {
         let slider= Number(this.getRangeInputElement().value);
         if(slider == 0) 
-            this.root.tickrate = 0;
+            this.root.nodiSolver.tickrate = 0;
         else
-            this.root.tickrate = 2001 - Number(this.getRangeInputElement().value);
+            this.root.nodiSolver.tickrate = 2001 - Number(this.getRangeInputElement().value);
     }
 
 
-    modifyLevel(amount) {
+    runButtonClicked()
+    {
         let buttonElement = this.element.querySelector("button.nodiRunStop");
-        if(this.root.nodistate == 0)
+        if(this.root.nodiSolver.nodistate == 0)
         {
-          this.root.nodistate = 1;
-          buttonElement.classList.remove("nodiRun");
-          buttonElement.classList.add("nodiStop");
+          this.root.nodiSolver.nodistate = 1;
         }
         else
         {
-          this.root.nodistate = 0;
+          this.root.nodiSolver.nodistate = 0;
+        }
+        this.updateRunButton();
+    }
+
+    updateRunButton()
+    {
+        let buttonElement = this.element.querySelector("button.nodiRunStop");
+        if(this.root.nodiSolver.nodistate == 0)
+        {
           buttonElement.classList.add("nodiRun");
           buttonElement.classList.remove("nodiStop");
+          this.root.currentLayer = "regular";
         }
+        else
+        {
+          buttonElement.classList.add("nodiStop");
+          buttonElement.classList.remove("nodiRun");
+          this.root.currentLayer = "wires";
+        }
+        this.root.signals.editModeChanged.dispatch(this.root.currentLayer);
     }
 
     initialize() {

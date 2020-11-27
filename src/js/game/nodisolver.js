@@ -53,6 +53,9 @@ export class NodiSolver {
 
         this.noditick = 0;
 
+        this.tickrate = 200;
+
+        this.nodistate = 0;
     }
 
 
@@ -182,7 +185,7 @@ export class NodiSolver {
             return;
         }
 
-        if (this.root.tickrate == 0) {
+        if (this.tickrate == 0) {
             // Disabled
             return;
         }
@@ -191,8 +194,8 @@ export class NodiSolver {
 
         const secondsSinceLastSave = performance.now() - this.lastSaveTime;
 
-        let shouldSave = secondsSinceLastSave > this.root.tickrate;
-        if(this.root.nodistate == 0) shouldSave = false;
+        let shouldSave = secondsSinceLastSave > this.tickrate;
+        if(this.nodistate == 0) shouldSave = false;
 
         if (shouldSave) {
             //logger.log("Saving automatically");
