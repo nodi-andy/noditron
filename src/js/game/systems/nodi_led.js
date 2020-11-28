@@ -18,11 +18,11 @@ export class NodiLedSystem extends GameSystemWithFilter {
 /*        for (let i = 0; i < this.allEntities.length; ++i) {
             const entity = this.allEntities[i];
 
-            const leverComp = entity.components.NodiLed;
+            const buttonComp = entity.components.NodiLed;
             const pinsComp = entity.components.WiredPins;
 
             // Simply sync the status to the first slot
-            pinsComp.slots[0].value = leverComp.toggled ? BOOL_TRUE_SINGLETON : BOOL_FALSE_SINGLETON;
+            pinsComp.slots[0].value = buttonComp.toggled ? BOOL_TRUE_SINGLETON : BOOL_FALSE_SINGLETON;
         }*/
     }
 
@@ -35,9 +35,9 @@ export class NodiLedSystem extends GameSystemWithFilter {
         const contents = chunk.containedEntitiesByLayer.regular;
         for (let i = 0; i < contents.length; ++i) {
             const entity = contents[i];
-            const leverComp = entity.components.NodiLed;
-            if (leverComp) {
-                const sprite = leverComp.toggled ? this.spriteOn : this.spriteOff;
+            const ledComp = entity.components.NodiLed;
+            if (ledComp) {
+                const sprite = ledComp.toggled ? this.spriteOn : this.spriteOff;
                 entity.components.StaticMapEntity.drawSpriteOnBoundsClipped(parameters, sprite);
                 
                 const staticComp = entity.components.StaticMapEntity;
@@ -49,7 +49,7 @@ export class NodiLedSystem extends GameSystemWithFilter {
                     context.textAlign = "center";
                     context.textBaseline = "middle";
                     context.fillStyle = "#64666e";
-                    context.fillText(formatBigNumber(leverComp.allowedValue), center.x, center.y);
+                    context.fillText(formatBigNumber(ledComp.allowedValue), center.x, center.y);
                     context.textAlign = "left";
                 }
             }

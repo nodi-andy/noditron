@@ -508,7 +508,7 @@ buildings:
             name: Signalgeber
             description: Sendet ein konstantes Signal. Du wählst zwischen Formen, Farben und
                 Wahrheitswerten (1 oder 0).
-    lever:
+    nodi_button:
         default:
             name: Schalter
             description: Sendet einen Wahrheitswert (1 oder 0) auf der Wires-Ebene abhängig
@@ -985,7 +985,7 @@ keybindings:
         wire: Stromkabel
         constant_signal: Signalgeber
         logic_gate: Logikgatter
-        lever: Schalter (regulär)
+        nodi_button: Schalter (regulär)
         filter: Filter
         wire_tunnel: Kabelkreuzung
         display: Anzeige

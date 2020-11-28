@@ -9,7 +9,7 @@ import { T } from "../../../translations";
 import { enumItemProcessorTypes, ItemProcessorComponent } from "../../components/item_processor";
 import { ShapeItem } from "../../items/shape_item";
 import { WireComponent } from "../../components/wire";
-import { LeverComponent } from "../../components/lever";
+import { NodiButtonComponent } from "../../components/nodi_button";
 import { NodiLedComponent } from "../../components/nodi_led";
 
 // @todo: Make dictionary
@@ -108,7 +108,7 @@ const tutorialsByLevel = [
             id: "21_3_place_button",
             title: "1",
             condition: /** @param {GameRoot} root */ root =>
-                root.entityMgr.getAllWithComponent(LeverComponent).length === 0,
+                root.entityMgr.getAllWithComponent(NodiButtonComponent).length === 0,
         },
 
         // 21.4 activate button
@@ -116,7 +116,7 @@ const tutorialsByLevel = [
             id: "21_4_press_button",
             title: "1",
             condition: /** @param {GameRoot} root */ root =>
-                root.entityMgr.getAllWithComponent(LeverComponent).some(e => !e.components.Lever.toggled),
+                root.entityMgr.getAllWithComponent(NodiButtonComponent).some(e => !e.components.Lever.toggled),
         },
     ],
 ];

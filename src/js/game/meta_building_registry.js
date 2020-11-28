@@ -17,7 +17,7 @@ import { MetaNodiDataBuilding } from "./buildings/nodi_data";
 import { MetaFilterBuilding } from "./buildings/filter";
 import { MetaHubBuilding } from "./buildings/hub";
 import { MetaItemProducerBuilding } from "./buildings/item_producer";
-import { MetaLeverBuilding } from "./buildings/lever";
+import { MetaNodiButtonBuilding } from "./buildings/nodi_button";
 import { enumLogicGateVariants, MetaLogicGateBuilding } from "./buildings/logic_gate";
 import { enumMinerVariants, MetaMinerBuilding } from "./buildings/miner";
 import { MetaMixerBuilding } from "./buildings/mixer";
@@ -56,7 +56,7 @@ export function initMetaBuildingRegistry() {
     gMetaBuildingRegistry.register(MetaWireBuilding);
     gMetaBuildingRegistry.register(MetaConstantSignalBuilding);
     gMetaBuildingRegistry.register(MetaLogicGateBuilding);
-    gMetaBuildingRegistry.register(MetaLeverBuilding);
+    gMetaBuildingRegistry.register(MetaNodiButtonBuilding);
     gMetaBuildingRegistry.register(MetaFilterBuilding);
     gMetaBuildingRegistry.register(MetaWireTunnelBuilding);
     gMetaBuildingRegistry.register(MetaNodiBlueBuilding);
@@ -151,8 +151,8 @@ export function initMetaBuildingRegistry() {
     registerBuildingVariant(38, MetaTransistorBuilding, defaultBuildingVariant);
     registerBuildingVariant(60, MetaTransistorBuilding, enumTransistorVariants.mirrored);
 
-    // Lever
-    registerBuildingVariant(33, MetaLeverBuilding);
+    // nodi_button
+    registerBuildingVariant(33, MetaNodiButtonBuilding);
 
     // Filter
     registerBuildingVariant(37, MetaFilterBuilding);

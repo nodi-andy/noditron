@@ -2,7 +2,7 @@ import { HUDBaseToolbar } from "./base_toolbar";
 import { MetaWireBuilding } from "../../buildings/wire";
 import { MetaConstantSignalBuilding } from "../../buildings/constant_signal";
 import { MetaLogicGateBuilding } from "../../buildings/logic_gate";
-import { MetaLeverBuilding } from "../../buildings/lever";
+import { MetaNodiButtonBuilding } from "../../buildings/nodi_button";
 import { MetaWireTunnelBuilding } from "../../buildings/wire_tunnel";
 import { MetaVirtualProcessorBuilding } from "../../buildings/virtual_processor";
 import { MetaTransistorBuilding } from "../../buildings/transistor";
@@ -29,7 +29,7 @@ export class HUDWiresToolbar extends HUDBaseToolbar {
             secondaryBuildings: [
                 MetaStorageBuilding,
                 MetaReaderBuilding,
-                MetaLeverBuilding,
+                MetaNodiButtonBuilding,
                 MetaFilterBuilding,
                 MetaNodiBlueBuilding,
             ],

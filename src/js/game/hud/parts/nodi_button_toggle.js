@@ -3,7 +3,7 @@ import { Vector } from "../../../core/vector";
 import { enumMouseButton } from "../../camera";
 import { BaseHUDPart } from "../base_hud_part";
 
-export class HUDLeverToggle extends BaseHUDPart {
+export class HUDNodiButtonToggle extends BaseHUDPart {
     initialize() {
         this.root.camera.downPreHandler.add(this.downPreHandler, this);
         this.root.camera.upPostHandler.add(this.upPostHandler, this);
@@ -17,11 +17,11 @@ export class HUDLeverToggle extends BaseHUDPart {
         const tile = this.root.camera.screenToWorld(pos).toTileSpace();
         const contents = this.root.map.getLayerContentXY(tile.x, tile.y, "wires");
         if (contents) {
-            const leverComp = contents.components.Lever;
-            if (leverComp) {
+            const buttonComp = contents.components.nodi_button;
+            if (buttonComp) {
                 if (button === enumMouseButton.left) {
-                    leverComp.toggled = true;
-                    leverComp.toggleSignal(this.root.map);
+                    buttonComp.toggled = true;
+                    buttonComp.toggleSignal(this.root.map);
                     return STOP_PROPAGATION;
                 } else if (button === enumMouseButton.right) {
                     this.root.logic.tryDeleteBuilding(contents);
@@ -38,10 +38,10 @@ export class HUDLeverToggle extends BaseHUDPart {
         const tile = this.root.camera.screenToWorld(pos).toTileSpace();
         const contents = this.root.map.getLayerContentXY(tile.x, tile.y, "wires");
         if (contents) {
-            const leverComp = contents.components.Lever;
-            if (leverComp) 
+            const buttonComp = contents.components.nodi_button;
+            if (buttonComp) 
             {
-                leverComp.toggled = false;
+                buttonComp.toggled = false;
                 //leverComp.toggleSignal(this.root.map);
                 return STOP_PROPAGATION;
             }

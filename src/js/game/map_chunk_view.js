@@ -66,7 +66,7 @@ export class MapChunkView extends MapChunk {
         const systems = this.root.systemMgr.systems;
 
         systems.staticMapEntities.drawChunk(parameters, this);
-        systems.lever.drawChunk(parameters, this);
+        systems.nodi_button.drawChunk(parameters, this);
         systems.display.drawChunk(parameters, this);
         systems.storage.drawChunk(parameters, this);
         systems.nodi_led.drawChunk(parameters, this);
@@ -296,7 +296,7 @@ export class MapChunkView extends MapChunk {
         systems.wire.drawChunk(parameters, this);
         systems.staticMapEntities.drawWiresChunk(parameters, this);
         systems.wiredPins.drawChunk(parameters, this);
-        systems.lever.drawChunk(parameters, this);
+        systems.nodi_button.drawChunk(parameters, this);
         systems.nodi_led.drawChunk(parameters, this);
     }
 }

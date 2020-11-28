@@ -1,7 +1,7 @@
 import { gMetaBuildingRegistry } from "../core/global_registries";
 import { Vector } from "../core/vector";
 import { defaultBuildingVariant } from "./meta_building";
-import { MetaLeverBuilding } from "./buildings/lever";
+import { MetaNodiButtonBuilding } from "./buildings/nodi_button";
 import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 import { NodiLedComponent } from "./components/nodi_led";
 import { GameRoot } from "./root";
@@ -26,10 +26,10 @@ export class LevelManager{
             origin: new Vector(x, y),
         });
 
-        if(newEntity.components.Lever)
+        if(newEntity.components.nodi_button)
         {
-          newEntity.components.Lever.storedCount = val;
-          if(toggled) newEntity.components.Lever.toggled = toggled;
+          newEntity.components.nodi_button.storedCount = val;
+          if(toggled) newEntity.components.nodi_button.toggled = toggled;
         }
         else if(newEntity.components.NodiLed)
         {
@@ -80,26 +80,26 @@ export class LevelManager{
         if(level == 1) // a = 1
         {
 
-            this.addEntity(MetaLeverBuilding    , -4, -1, 1);
+            this.addEntity(MetaNodiButtonBuilding    , -4, -1, 1);
             this.addEntity(MetaNodiLedBuilding  , 4, 1, 1);
         }
         else if(level == 2) // a=7; b=12;
         {
-            this.addEntity(MetaLeverBuilding    , -4, 0, 12);
-            this.addEntity(MetaLeverBuilding    , -3, 4, 7);
+            this.addEntity(MetaNodiButtonBuilding    , -4, 0, 12);
+            this.addEntity(MetaNodiButtonBuilding    , -3, 4, 7);
             this.addEntity(MetaNodiLedBuilding  , 4, -2, 7);
             this.addEntity(MetaNodiLedBuilding  , 4, 2, 12);
         }
         else if(level == 3) // a = b
         {
             this.addEntity(MetaNodiLedBuilding  , -2, 0, 12, 12);
-            this.addEntity(MetaLeverBuilding    , 8, 0, 1);
+            this.addEntity(MetaNodiButtonBuilding    , 8, 0, 1);
             this.addEntity(MetaNodiLedBuilding  , 4, 2, 12, 12, true);
         }
         else if(level == 4) // 5 + 7 = 12
         {
             this.addEntity(MetaNodiLedBuilding  , 3, 3, 12, 12);
-            this.addEntity(MetaLeverBuilding    , -5, 3, 5);
+            this.addEntity(MetaNodiButtonBuilding    , -5, 3, 5);
             this.addEntity(MetaNodiLedBuilding  , 0, 0, 7, 7, true);
         }
         else if(level == 5) // ((1+1)+2)+4) = 8
@@ -108,11 +108,11 @@ export class LevelManager{
             this.addEntity(MetaNodiLedBuilding  , 0, 0, 2, 2);
             this.addEntity(MetaNodiLedBuilding  , 5, 0, 4, 4);
             this.addEntity(MetaNodiLedBuilding  , 10, 0, 8, 8);
-            this.addEntity(MetaLeverBuilding  , -3, -3, 1);
+            this.addEntity(MetaNodiButtonBuilding  , -3, -3, 1);
         }
         else if(level == 6) // 2*3 + 5 = 11
         {
-            this.addEntity(MetaLeverBuilding    , -5, 1, 1);
+            this.addEntity(MetaNodiButtonBuilding    , -5, 1, 1);
             this.addEntity(MetaNodiLedBuilding  , 2, 3, 5, 5, true);
             this.addEntity(MetaNodiLedBuilding  , -4, -2, 3, 3, true);
             this.addEntity(MetaNodiLedBuilding  ,  0, -2, 2, 2, true);
@@ -120,7 +120,7 @@ export class LevelManager{
         }
         else if(level == 7) // if(a==5) b= 5
         {
-            this.addEntity(MetaLeverBuilding  , -6, 0, 5, 0, true);
+            this.addEntity(MetaNodiButtonBuilding  , -6, 0, 5, 0, true);
             this.addEntity(MetaNodiLedBuilding  , 0, 0, 5, 5, true);
             this.addEntity(MetaNodiLedBuilding  , 6, 0, 5, 5);
 
@@ -132,7 +132,7 @@ export class LevelManager{
         }
         else if(level == 8)
         {
-            this.addEntity(MetaLeverBuilding     , -2, -2, 1, 0, true);
+            this.addEntity(MetaNodiButtonBuilding     , -2, -2, 1, 0, true);
             this.addEntity(MetaNodiDataBuilding  , 0, 0, 5, 5, true);
             this.addEntity(MetaNodiDataBuilding  , 2, 0, 5, 5);
             this.addEntity(MetaNodiDataBuilding  , 4, 0, 5, 5);

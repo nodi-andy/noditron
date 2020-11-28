@@ -8,7 +8,7 @@ import { MetaNodiDiscusBuilding } from "../../buildings/nodi_discus";
 import { MetaNodiOperBuilding } from "../../buildings/nodi_oper";
 import { MetaNodiDataBuilding } from "../../buildings/nodi_data";
 import { MetaFilterBuilding } from "../../buildings/filter";
-import { MetaLeverBuilding } from "../../buildings/lever";
+import { MetaNodiButtonBuilding } from "../../buildings/nodi_button";
 import { MetaMinerBuilding } from "../../buildings/miner";
 import { MetaMixerBuilding } from "../../buildings/mixer";
 import { MetaPainterBuilding } from "../../buildings/painter";
@@ -44,7 +44,7 @@ export class HUDBuildingsToolbar extends HUDBaseToolbar {
             secondaryBuildings: [
                 MetaStorageBuilding,
                 MetaReaderBuilding,
-                MetaLeverBuilding,
+                MetaNodiButtonBuilding,
                 MetaFilterBuilding,
             ],
             visibilityCondition: () =>

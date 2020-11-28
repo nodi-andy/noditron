@@ -63,7 +63,7 @@ export const KEYMAPPINGS = {
         // Secondary toolbar
         storage: { keyCode: key("Y") },
         reader: { keyCode: key("U") },
-        lever: { keyCode: key("I") },
+        nodi_button: { keyCode: key("I") },
         filter: { keyCode: key("O") },
         nodi_blue: { keyCode: key("P") },
         display_red: { keyCode: key("J") },

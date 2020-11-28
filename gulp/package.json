@@ -96,7 +96,7 @@
         "imagemin-gifsicle": "^7.0.0",
         "imagemin-jpegtran": "^7.0.0",
         "imagemin-pngquant": "^9.0.0",
-        "jimp": "^0.6.1",
+        "jimp": "^0.16.1",
         "js-yaml": "^3.13.1",
         "postcss-assets": "^5.0.0",
         "postcss-critical-split": "^2.5.3",

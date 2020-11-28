@@ -14,7 +14,7 @@ import { BeltUnderlaysComponent } from "./components/belt_underlays";
 import { WireComponent } from "./components/wire";
 import { ConstantSignalComponent } from "./components/constant_signal";
 import { LogicGateComponent } from "./components/logic_gate";
-import { LeverComponent } from "./components/lever";
+import { NodiButtonComponent } from "./components/nodi_button";
 import { WireTunnelComponent } from "./components/wire_tunnel";
 import { NodiBlueComponent } from "./components/nodi_blue";
 import { DisplayRedComponent } from "./components/display_red";
@@ -43,7 +43,7 @@ export function initComponentRegistry() {
     gComponentRegistry.register(WireComponent);
     gComponentRegistry.register(ConstantSignalComponent);
     gComponentRegistry.register(LogicGateComponent);
-    gComponentRegistry.register(LeverComponent);
+    gComponentRegistry.register(NodiButtonComponent);
     gComponentRegistry.register(WireTunnelComponent);
     gComponentRegistry.register(NodiBlueComponent);
     gComponentRegistry.register(DisplayRedComponent);

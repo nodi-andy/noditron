@@ -1,0 +1,2 @@
+cd tmp_standalone_files\built
+electron-packager . noditron --platform=win32 --arch=x64 --asar --icon=favicon.ico --out=../../tmp_standalone_files --electron-version=10.1.3 --overwrite=true --disable-direct-composition --in-process-gpu

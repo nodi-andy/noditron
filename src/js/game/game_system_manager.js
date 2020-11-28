@@ -18,7 +18,7 @@ import { BeltUnderlaysSystem } from "./systems/belt_underlays";
 import { WireSystem } from "./systems/wire";
 import { ConstantSignalSystem } from "./systems/constant_signal";
 import { LogicGateSystem } from "./systems/logic_gate";
-import { LeverSystem } from "./systems/lever";
+import { NodiButtonSystem } from "./systems/nodi_button";
 import { DisplaySystem } from "./systems/display";
 import { NodiLedSystem } from "./systems/nodi_led";
 import { NodiDiscusSystem } from "./systems/nodi_discus";
@@ -84,7 +84,7 @@ export class GameSystemManager {
             /** @type {LogicGateSystem} */
             logicGate: null,
 
-            /** @type {LeverSystem} */
+            /** @type {NodiButtonSystem} */
             lever: null,
 
             /** @type {DisplaySystem} */
@@ -161,7 +161,7 @@ export class GameSystemManager {
         // Wires must be before all gate, signal etc logic!
         add("wire", WireSystem);
 
-        add("lever", LeverSystem);
+        add("nodi_button", NodiButtonSystem);
 
         add("nodi_led", NodiLedSystem);
 

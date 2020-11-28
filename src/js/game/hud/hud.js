@@ -42,7 +42,7 @@ import { HUDSandboxController } from "./parts/sandbox_controller";
 import { HUDTimeController } from "./parts/time_controller";
 import { HUDWiresToolbar } from "./parts/wires_toolbar";
 import { HUDWireInfo } from "./parts/wire_info";
-import { HUDLeverToggle } from "./parts/lever_toggle";
+import { HUDNodiButtonToggle } from "./parts/nodi_button_toggle";
 import { HUDDisplayToggle } from "./parts/display_toggle";
 import { HUDLayerPreview } from "./parts/layer_preview";
 import { HUDMinerHighlight } from "./parts/miner_highlight";
@@ -87,7 +87,7 @@ export class GameHUD {
             statistics: new HUDStatistics(this.root),
             waypoints: new HUDWaypoints(this.root),
             wireInfo: new HUDWireInfo(this.root),
-            leverToggle: new HUDLeverToggle(this.root),
+            nodiButtonToggle: new HUDNodiButtonToggle(this.root),
             displayToggle: new HUDDisplayToggle(this.root),
 
             // Must always exist

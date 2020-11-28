@@ -642,9 +642,9 @@ buildings:
             name: &constant_signal Constant Signal
             description: Emits a constant signal, which can be either a shape, color or boolean (1 or 0).
 
-    lever:
+    nodi_button:
         default:
-            name: &lever Switch
+            name: &nodi_button Switch
             description: Can be toggled to emit a boolean signal (1 or 0) on the wires layer, which can then be used to control components, for example an item filter.
     
     nodi_oper:
@@ -1167,7 +1167,7 @@ keybindings:
         wire: *wire
         constant_signal: *constant_signal
         logic_gate: Logic Gate
-        lever: *lever
+        nodi_button: *nodi_button
         filter: *filter
         wire_tunnel: *wire_tunnel
         nodi_blue: *nodi_blue
