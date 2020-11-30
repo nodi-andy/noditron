@@ -29,7 +29,7 @@ export class NodiDiscusComponent extends NodiComponent {
             if(pingedEntity && pingedEntity.components) 
             {
                 let pingedNodiData = undefined;
-                if(pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiLed;
+                pingedNodiData = pingedEntity.components.NodiLed;
                 if (pingedNodiData !== undefined){
                     pingedNodiData.nodiProc(map, this, i);
                 }

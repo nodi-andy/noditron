@@ -85,7 +85,7 @@ export class GameSystemManager {
             logicGate: null,
 
             /** @type {NodiButtonSystem} */
-            lever: null,
+            nodi_button: null,
 
             /** @type {DisplaySystem} */
             display: null,

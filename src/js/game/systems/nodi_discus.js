@@ -18,11 +18,11 @@ export class NodiDiscusSystem extends GameSystemWithFilter {
         for (let i = 0; i < this.allEntities.length; ++i) {
             const entity = this.allEntities[i];
 
-            const leverComp = entity.components.NodiLed;
+            const buttonComp = entity.components.NodiLed;
             const pinsComp = entity.components.WiredPins;
 
             // Simply sync the status to the first slot
-            //pinsComp.slots[0].value = leverComp.toggled ? BOOL_TRUE_SINGLETON : BOOL_FALSE_SINGLETON;
+            //pinsComp.slots[0].value = buttonComp.toggled ? BOOL_TRUE_SINGLETON : BOOL_FALSE_SINGLETON;
         }
     }
 

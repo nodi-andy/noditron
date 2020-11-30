@@ -81,7 +81,7 @@ export class EntityComponentStorage {
         this.LogicGate;
 
         /** @type {NodiButtonComponent} */
-        this.nodi_button;
+        this.NodiButton;
 
         /** @type {WireTunnelComponent} */
         this.WireTunnel;

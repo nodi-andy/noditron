@@ -43,7 +43,7 @@ export class NodiLedComponent extends NodiComponent {
           this.storedCount = val;
           this.toggled = true;
         }
-        if(val == 0)
+        else
         {
           this.storedCount = val;
           this.toggled = false;
@@ -87,9 +87,9 @@ export class NodiLedComponent extends NodiComponent {
             }
 
             // read
-            if (f == 2) { caller.storedCount = this.storedCount; }
+            if (f == 2) { caller.storedCount = this.allowedValue; }
             // add
-            if (f == 3) { caller.storedCount += this.storedCount; }
+            if (f == 3) { caller.storedCount += this.allowedValue; }
             // compare
             if (f == 4) {
                 // equal
@@ -103,6 +103,9 @@ export class NodiLedComponent extends NodiComponent {
             }
             // multiple
             if (f == 5) { caller.storedCount *= this.storedCount; }
+            // write
+            if (f == 6) { this.allowedValue = caller.storedCount; }
+
             nodiData.clearNewtypeBit(enumNodiBits.TRAN);
             nodiData.setNewtypeBit(enumNodiBits.PUSH);
         }

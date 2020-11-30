@@ -9,6 +9,13 @@ export class NodiButtonComponent extends NodiBlueComponent {
         return "NodiButton";
     }
 
+    static getSchema() {
+        return {
+            storedCount: types.int,
+            storedType: types.int,
+            toggled: types.bool
+        };
+    }
 
     /**
      * Copy the current state to another component

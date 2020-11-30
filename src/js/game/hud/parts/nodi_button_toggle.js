@@ -14,10 +14,12 @@ export class HUDNodiButtonToggle extends BaseHUDPart {
      * @param {enumMouseButton} button
      */
     downPreHandler(pos, button) {
-        const tile = this.root.camera.screenToWorld(pos).toTileSpace();
-        const contents = this.root.map.getLayerContentXY(tile.x, tile.y, "wires");
-        if (contents) {
-            const buttonComp = contents.components.nodi_button;
+        if(this.root.nodiSolver.nodistate == 1)
+        {
+          const tile = this.root.camera.screenToWorld(pos).toTileSpace();
+          const contents = this.root.map.getLayerContentXY(tile.x, tile.y, "wires");
+          if (contents) {
+            const buttonComp = contents.components.NodiButton;
             if (buttonComp) {
                 if (button === enumMouseButton.left) {
                     buttonComp.toggled = true;
@@ -28,6 +30,7 @@ export class HUDNodiButtonToggle extends BaseHUDPart {
                     return STOP_PROPAGATION;
                 }
             }
+          }
         }
     }
 
@@ -38,11 +41,10 @@ export class HUDNodiButtonToggle extends BaseHUDPart {
         const tile = this.root.camera.screenToWorld(pos).toTileSpace();
         const contents = this.root.map.getLayerContentXY(tile.x, tile.y, "wires");
         if (contents) {
-            const buttonComp = contents.components.nodi_button;
+            const buttonComp = contents.components.NodiButton;
             if (buttonComp) 
             {
                 buttonComp.toggled = false;
-                //leverComp.toggleSignal(this.root.map);
                 return STOP_PROPAGATION;
             }
         }

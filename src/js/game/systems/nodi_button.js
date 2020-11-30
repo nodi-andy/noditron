@@ -15,15 +15,15 @@ export class NodiButtonSystem extends GameSystemWithFilter {
     }
 
     update() {
-        for (let i = 0; i < this.allEntities.length; ++i) {
+       /* for (let i = 0; i < this.allEntities.length; ++i) {
             const entity = this.allEntities[i];
 
-            const buttonComp = entity.components.nodi_button;
+            const buttonComp = entity.components.NodiButton;
             const pinsComp = entity.components.WiredPins;
 
             // Simply sync the status to the first slot
             pinsComp.slots[0].value = buttonComp.toggled ? BOOL_TRUE_SINGLETON : BOOL_FALSE_SINGLETON;
-        }
+        }*/
     }
 
     /**
@@ -35,7 +35,7 @@ export class NodiButtonSystem extends GameSystemWithFilter {
         const contents = chunk.containedEntitiesByLayer.wires;
         for (let i = 0; i < contents.length; ++i) {
             const entity = contents[i];
-            const buttonComp = entity.components.nodi_button;
+            const buttonComp = entity.components.NodiButton;
             if (buttonComp) {
                 let sprite;
                 if(buttonComp.toggled) 

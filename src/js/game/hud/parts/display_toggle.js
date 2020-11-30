@@ -36,7 +36,7 @@ export class HUDDisplayToggle extends BaseHUDPart {
             if (dispComp) {
                 if (button === enumMouseButton.left) {
                    // contents.components.WiredPins.slots[0].nodiType = parseInt(window.prompt("Enter the memory value.", dispComp.storedCount));
-                   
+                   /*
                     const entity = contents;
 
                     // Ok, query, but also save the uid because it could get stale
@@ -116,7 +116,7 @@ export class HUDDisplayToggle extends BaseHUDPart {
                         }
 
                         this.root.logic.tryDeleteBuilding(entityRef);
-                    });
+                    });*/
                    return STOP_PROPAGATION;
                 } else if (button === enumMouseButton.right) {
                     this.root.logic.tryDeleteBuilding(contents);

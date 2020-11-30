@@ -26,10 +26,10 @@ export class LevelManager{
             origin: new Vector(x, y),
         });
 
-        if(newEntity.components.nodi_button)
+        if(newEntity.components.NodiButton)
         {
-          newEntity.components.nodi_button.storedCount = val;
-          if(toggled) newEntity.components.nodi_button.toggled = toggled;
+          newEntity.components.NodiButton.storedCount = val;
+          if(toggled) newEntity.components.NodiButton.toggled = toggled;
         }
         else if(newEntity.components.NodiLed)
         {
@@ -132,10 +132,9 @@ export class LevelManager{
         }
         else if(level == 8)
         {
-            this.addEntity(MetaNodiButtonBuilding     , -2, -2, 1, 0, true);
-            this.addEntity(MetaNodiDataBuilding  , 0, 0, 5, 5, true);
-            this.addEntity(MetaNodiDataBuilding  , 2, 0, 5, 5);
-            this.addEntity(MetaNodiDataBuilding  , 4, 0, 5, 5);
+            this.addEntity(MetaNodiButtonBuilding   , -2, -2, 1, 0, true);
+            this.addEntity(MetaNodiLedBuilding      , -2,  2, 1, 5, true);
+            this.addEntity(MetaNodiLedBuilding      ,  3,  2, 5, 5, false);
         }
     }
 }

@@ -13,13 +13,17 @@ const overlayMatrix = generateMatrixRotations([1, 1, 0, 1, 1, 1, 0, 1, 0]);
 export class MetaNodiButtonBuilding extends MetaBuilding {
     constructor() {
         super("nodi_button");
+        this.isRemovable = false;
     }
 
     getSilhouetteColor() {
         // @todo: Render differently based on if its activated or not
         return "#ff678b";
     }
-
+    
+    getIsRemovable() {
+        return this.isRemovable;
+    }
     /**
      * @param {GameRoot} root
      */
