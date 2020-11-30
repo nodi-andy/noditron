@@ -80,8 +80,8 @@ export class LevelManager{
         if(level == 1) // a = 1
         {
 
-            this.addEntity(MetaNodiButtonBuilding    , -4, -1, 1);
-            this.addEntity(MetaNodiLedBuilding  , 4, 1, 1);
+            this.addEntity(MetaNodiButtonBuilding       , -4, 0, 1);
+            this.addEntity(MetaNodiLedBuilding          ,  4, 0, 1);
         }
         else if(level == 2) // a=7; b=12;
         {
@@ -92,9 +92,9 @@ export class LevelManager{
         }
         else if(level == 3) // a = b
         {
-            this.addEntity(MetaNodiLedBuilding  , -2, 0, 12, 12);
-            this.addEntity(MetaNodiButtonBuilding    , 8, 0, 1);
-            this.addEntity(MetaNodiLedBuilding  , 4, 2, 12, 12, true);
+            this.addEntity(MetaNodiLedBuilding          , -4, 0, 12, 12);
+            this.addEntity(MetaNodiButtonBuilding       ,  6, 0, 1);
+            this.addEntity(MetaNodiLedBuilding          ,  2, 2, 12, 12, true);
         }
         else if(level == 4) // 5 + 7 = 12
         {
@@ -118,7 +118,13 @@ export class LevelManager{
             this.addEntity(MetaNodiLedBuilding  ,  0, -2, 2, 2, true);
             this.addEntity(MetaNodiLedBuilding  ,  4, -2, 11, 11);
         }
-        else if(level == 7) // if(a==5) b= 5
+        else if(level == 7) // 1+1+1+1+1+1 = 6
+        {
+            this.addEntity(MetaNodiButtonBuilding    , -5, 1, 1);
+            this.addEntity(MetaNodiLedBuilding  ,  0, -2, 3, 3, true);
+            this.addEntity(MetaNodiLedBuilding  ,  4, -2, 6, 6);
+        }
+        else if(level == 8) // if(a==5) b= 5
         {
             this.addEntity(MetaNodiButtonBuilding  , -6, 0, 5, 0, true);
             this.addEntity(MetaNodiLedBuilding  , 0, 0, 5, 5, true);
@@ -130,11 +136,11 @@ export class LevelManager{
             this.addWall([0,1], -1);
             this.addWall([-8,-7,-6,-5,-4,-3,-2,-1,0], 2);
         }
-        else if(level == 8)
+        else if(level == 9)
         {
-            this.addEntity(MetaNodiButtonBuilding   , -2, -2, 1, 0, true);
-            this.addEntity(MetaNodiLedBuilding      , -2,  2, 1, 5, true);
-            this.addEntity(MetaNodiLedBuilding      ,  3,  2, 5, 5, false);
+            this.addEntity(MetaNodiButtonBuilding   , -2, -2, 1, 0);
+            this.addEntity(MetaNodiLedBuilding      , -2,  2, 0, 0, true);
+            this.addEntity(MetaNodiLedBuilding      ,  3,  2, -5, -5, false);
         }
     }
 }

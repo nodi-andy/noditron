@@ -34,18 +34,21 @@ export class HUDNodiButtonToggle extends BaseHUDPart {
         }
     }
 
-        /**
+    /**
      * @param {Vector} pos
      */
     upPostHandler(pos) {
-        const tile = this.root.camera.screenToWorld(pos).toTileSpace();
-        const contents = this.root.map.getLayerContentXY(tile.x, tile.y, "wires");
-        if (contents) {
-            const buttonComp = contents.components.NodiButton;
-            if (buttonComp) 
-            {
-                buttonComp.toggled = false;
-                return STOP_PROPAGATION;
+        if(this.root.nodiSolver.nodistate == 1)
+        {
+            const tile = this.root.camera.screenToWorld(pos).toTileSpace();
+            const contents = this.root.map.getLayerContentXY(tile.x, tile.y, "wires");
+            if (contents) {
+                const buttonComp = contents.components.NodiButton;
+                if (buttonComp) 
+                {
+                    buttonComp.toggled = false;
+                    return STOP_PROPAGATION;
+                }
             }
         }
     }

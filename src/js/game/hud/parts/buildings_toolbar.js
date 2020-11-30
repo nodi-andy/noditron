@@ -42,10 +42,10 @@ export class HUDBuildingsToolbar extends HUDBaseToolbar {
 //               ...(queryParamOptions.sandboxMode || G_IS_DEV ? [MetaItemProducerBuilding] : []),
             ],
             secondaryBuildings: [
-                MetaStorageBuilding,
+               /* MetaStorageBuilding,
                 MetaReaderBuilding,
                 MetaNodiButtonBuilding,
-                MetaFilterBuilding,
+                MetaFilterBuilding,*/
             ],
             visibilityCondition: () =>
                 !this.root.camera.getIsMapOverlayActive() && this.root.currentLayer === "regular",

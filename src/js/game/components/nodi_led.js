@@ -85,7 +85,8 @@ export class NodiLedComponent extends NodiComponent {
                     nodiData.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1]);
                 }
             }
-
+            // multiple
+            if (f == 1) { caller.storedCount *= this.storedCount; }
             // read
             if (f == 2) { caller.storedCount = this.allowedValue; }
             // add
@@ -101,8 +102,8 @@ export class NodiLedComponent extends NodiComponent {
                 // sub
                 //setValue(x - 1, y, getV(i, j) - getV(x - 1, y));
             }
-            // multiple
-            if (f == 5) { caller.storedCount *= this.storedCount; }
+            // subtract
+            if (f == 5) { caller.storedCount = this.allowedValue - caller.storedCount; }
             // write
             if (f == 6) { this.allowedValue = caller.storedCount; }
 

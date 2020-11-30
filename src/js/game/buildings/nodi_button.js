@@ -24,12 +24,6 @@ export class MetaNodiButtonBuilding extends MetaBuilding {
     getIsRemovable() {
         return this.isRemovable;
     }
-    /**
-     * @param {GameRoot} root
-     */
-    getIsUnlocked(root) {
-        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers);
-    }
 
     /** @returns {"wires"} **/
     getLayer() {
@@ -40,6 +34,13 @@ export class MetaNodiButtonBuilding extends MetaBuilding {
         return new Vector(1, 1);
     }
 
+    /**
+     * @param {GameRoot} root
+     */
+    getIsUnlocked(root) {
+        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_storage);
+    }
+    
     getSprite() {
         return null;
     }    
