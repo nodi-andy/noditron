@@ -20,32 +20,47 @@ export class NodiDataComponent extends NodiComponent {
         this.entity = entityFromSystem;
     }
     
-    nodiProc(map, caller, f){
+    nodiProc(map, caller, f)
+    {
         const staticComp = this.entity.components.StaticMapEntity;
-        if(f == undefined){
+        if(f == undefined) {
             for (var i = 0; i < 8; i++) {
                 var NB = this.getNB(i);
                 let xt = staticComp.origin.x + NB[0];
                 let yt = staticComp.origin.y + NB[1];
-                this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1]);
+                let pingerEntity = map.getLayerContentXY(xt, yt, "regular");
+                if(pingerEntity && pingerEntity.components && pingerEntity.components.NodiDiscus && pingerEntity.components.NodiDiscus.hasTypeBit(enumNodiBits.PUSH)) 
+                {
+                    f = i;
+                    caller = pingerEntity.components.NodiDiscus;
+                }
+
+                //this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1]);
             }
         }
-
+        // multiple
+        if (f == 5) { caller.storedCount *= this.storedCount; }
         // read
-        if (f == 2) { caller.storedCount = this.storedCount; }
+        if (f == 6) { caller.storedCount = this.allowedValue; }
         // add
-        if (f == 3) { caller.storedCount += this.storedCount; }
+        if (f == 7) { caller.storedCount += this.allowedValue; }
         // compare
-        if (f == 4) {
+        if (f == 0) {
+            let correctedInputValue = this.allowedValue - caller.storedCount;
             // equal
-            //if (caller.storedCount == this.allowedValue) { this.ping(map, staticComp.origin.x + 1, staticComp.origin.y, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS, enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2]); }
+            if (correctedInputValue == this.allowedValue) { this.ping(map, staticComp.origin.x + 1, staticComp.origin.y, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1, enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2], correctedInputValue); }
             // bigger
-            //if (getV(i, j) > getV(i - 1, j)) { ping(i - 1, j, i + 1, j + 1, [COND_1, DISCUS_1, COND_2, DISCUS_2]); }
+            if (correctedInputValue > this.allowedValue) { this.ping(map, staticComp.origin.x + 1, staticComp.origin.y-1, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1, enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2], correctedInputValue); }
             // smaller
-            //if (getV(i, j) < getV(i - 1, j)) { ping(i - 1, j, i + 1, j - 1, [COND_1, DISCUS_1, COND_2, DISCUS_2]); }
+            if (correctedInputValue < this.allowedValue) { this.ping(map, staticComp.origin.x + 1, staticComp.origin.y+1, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1, enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2], correctedInputValue); }
             // sub
             //setValue(x - 1, y, getV(i, j) - getV(x - 1, y));
         }
+        // subtract
+        if (f == 1) { caller.storedCount = this.allowedValue - caller.storedCount; }
+        // write
+        if (f == 2) { this.allowedValue = caller.storedCount; }
+
         this.clearNewtypeBit(enumNodiBits.TRAN);
         this.setNewtypeBit(enumNodiBits.PUSH);
     }

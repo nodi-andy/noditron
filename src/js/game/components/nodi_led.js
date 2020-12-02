@@ -2,8 +2,9 @@ import { enumNodiTypes, enumNodiBits } from "../nodisolver";
 import { Entity } from "../entity";
 import { NodiComponent } from "../nodi_component";
 import { types } from "../../savegame/serialization";
+import { NodiDataComponent } from "./nodi_data";
 
-export class NodiLedComponent extends NodiComponent {
+export class NodiLedComponent extends NodiDataComponent {
     static getId() {
         return "NodiLed";
     }
@@ -54,70 +55,16 @@ export class NodiLedComponent extends NodiComponent {
         const staticComponents = this.entity.components;
         if(caller.entity.components.NodiDiscus)
         {
-            const staticCompCaller = caller.entity.components.StaticMapEntity;
-            const staticCompThis = this.entity.components.StaticMapEntity;
-            let f = 0;
-            if(staticCompCaller.origin.x == staticCompThis.origin.x - 1 && staticCompCaller.origin.y == staticCompThis.origin.y)
-            {
-              f = 4;
-            }
-            this.nodiProc(map, caller, f);
+            this.setNewtypeBit(enumNodiBits.TRAN);
+            this.clearNewtypeBit(enumNodiBits.PUSH);
         }
-        else
+        else if(caller.entity.components.NodiBlue)
         {
-            if(staticComponents.NodiData)
+            if(this.hasTypeBit(enumNodiBits.PUSH) == 0)
             {
               this.setValue(caller.storedCount);
             }
         }
     }
 
-    nodiProc(map, caller, f) {
-        const staticComponents = this.entity.components;
-        let nodiData = staticComponents.NodiData;
-        if(nodiData) {
-            const staticComp = this.entity.components.StaticMapEntity;
-            if(f == undefined) {
-                for (var i = 0; i < 8; i++) {
-                    var NB = nodiData.getNB(i);
-                    let xt = staticComp.origin.x + NB[0];
-                    let yt = staticComp.origin.y + NB[1];
-                    nodiData.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1]);
-                }
-            }
-            // multiple
-            if (f == 1) { caller.storedCount *= this.storedCount; }
-            // read
-            if (f == 2) { caller.storedCount = this.allowedValue; }
-            // add
-            if (f == 3) { caller.storedCount += this.allowedValue; }
-            // compare
-            if (f == 4) {
-                // equal
-                if (caller.storedCount == this.allowedValue) { nodiData.ping(map, staticComp.origin.x + 1, staticComp.origin.y, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1, enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2], this.allowedValue); }
-                // bigger
-                //if (getV(i, j) > getV(i - 1, j)) { ping(i - 1, j, i + 1, j + 1, [COND_1, DISCUS_1, COND_2, DISCUS_2]); }
-                // smaller
-                //if (getV(i, j) < getV(i - 1, j)) { ping(i - 1, j, i + 1, j - 1, [COND_1, DISCUS_1, COND_2, DISCUS_2]); }
-                // sub
-                //setValue(x - 1, y, getV(i, j) - getV(x - 1, y));
-            }
-            // subtract
-            if (f == 5) { caller.storedCount = this.allowedValue - caller.storedCount; }
-            // write
-            if (f == 6) { this.allowedValue = caller.storedCount; }
-
-            nodiData.clearNewtypeBit(enumNodiBits.TRAN);
-            nodiData.setNewtypeBit(enumNodiBits.PUSH);
-        }
-    }
-   /* toggleSignal(map)
-    {
-        if(this.toggled)
-          this.storedCount = 1;
-        else
-          this.storedCount = 0;
-        this.setTypeBit(enumNodiBits.PUSH);
-        this.nodiProc(map);
-    }*/
 }

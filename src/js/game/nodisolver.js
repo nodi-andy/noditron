@@ -111,7 +111,7 @@ export class NodiSolver {
     }
 
     doSave() {
-        if(this.noditick == 0)
+       /* if(this.noditick == 0)
         {
             for (let i = 0; i < this.root.entityMgr.getAllWithComponent(MinerComponent).length ; ++i) {
                 let minerEntity = this.root.entityMgr.getAllWithComponent(MinerComponent)[i];
@@ -123,17 +123,17 @@ export class NodiSolver {
                     const dispCompNB = entityNB.components.NodiBlue;
                     if (dispCompNB) {
                         dispCompNB.setTypeBit(enumNodiBits.TRAN);
-                        dispCompNB.storedCount = 77;
                     }
                 }
             }
-        }
+        }*/
 
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
             let displayComp = undefined;
-            if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.NodiButton;
+            if(displayComp == undefined) displayComp = entity.components.NodiLed;
+            if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
@@ -146,9 +146,10 @@ export class NodiSolver {
         // clean PUSH's
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
-           let displayComp = undefined;
-            if(displayComp == undefined) displayComp = entity.components.NodiBlue;
+            let displayComp = undefined;
             if(displayComp == undefined) displayComp = entity.components.NodiButton;
+            if(displayComp == undefined) displayComp = entity.components.NodiLed;
+            if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
@@ -161,9 +162,10 @@ export class NodiSolver {
         // copy new matrix onto current
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
-           let displayComp = undefined;
-            if(displayComp == undefined) displayComp = entity.components.NodiBlue;
+            let displayComp = undefined;
             if(displayComp == undefined) displayComp = entity.components.NodiButton;
+            if(displayComp == undefined) displayComp = entity.components.NodiLed;
+            if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp == undefined) displayComp = entity.components.NodiDiscus;

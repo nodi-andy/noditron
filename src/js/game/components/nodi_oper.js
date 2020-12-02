@@ -1,7 +1,6 @@
-import { types } from "../../savegame/serialization";
 import { NodiComponent } from "../nodi_component";
-import { enumNodiTypes } from "../nodisolver";
-import { enumNodiBits } from "../nodisolver";
+import { enumNodiTypes, enumNodiBits } from "../nodisolver";
+
 
 
 /** @enum {string} */
@@ -11,7 +10,6 @@ export const enumNodiOperType = {
     xor: "xor",
     or: "or",
     transistor: "transistor",
-
     analyzer: "analyzer",
     rotater: "rotater",
     unstacker: "unstacker",
@@ -40,16 +38,39 @@ export class NodiOperComponent extends NodiComponent {
 
     nodiProc(map){
         const staticComp = this.entity.components.StaticMapEntity;
-
+        let inputArray = [];
         for (var i = 0; i < 8; i++) {
             var NB = this.getNB(i);
             let xt = staticComp.origin.x + NB[0];
             let yt = staticComp.origin.y + NB[1];
-            this.ping(map, xt, yt, [enumNodiTypes.COND_2, enumNodiTypes.DISCUS_2]);
+            let inputEntity = map.getLayerContentXY(xt, yt, "regular");
+            if(inputEntity && inputEntity.components) 
+            {
+                let inputComp = undefined;
+                if(inputComp == undefined) inputComp = inputEntity.components.NodiData;
+                if(inputComp)
+                {
+                    inputArray.push(inputComp.storedCount);
+                }
+            }
         }
+        let output = 0;
+        if(this.storedCount == 1)
+        {
+            if(inputArray[0])
+              output = 1;
+
+            for (var i = 0; i < 8; i++) {
+                var NB = this.getNB(i);
+                let xt = staticComp.origin.x + NB[0];
+                let yt = staticComp.origin.y + NB[1];
+                this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1], output);
+            }
+        }
+
+
 
         this.clearNewtypeBit(enumNodiBits.TRAN);
         this.setNewtypeBit(enumNodiBits.PUSH);
-        this.storedCount = 0;
     }
 }

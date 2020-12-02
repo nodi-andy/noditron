@@ -99,7 +99,7 @@ export class EntityComponentStorage {
         this.NodiDiscus;
 
         /** @type {NodiOperComponent} */
-        this.Oper;
+        this.NodiOper;
 
           /** @type {NodiDataComponent} */
         this.NodiData;      

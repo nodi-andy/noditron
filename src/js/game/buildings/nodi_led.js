@@ -48,6 +48,5 @@ export class MetaNodiLedBuilding extends MetaBuilding {
      */
     setupEntityComponents(entity) {
         entity.addComponent(new NodiLedComponent({entity}));
-        entity.addComponent(new NodiDataComponent({entity}));
     }
 }

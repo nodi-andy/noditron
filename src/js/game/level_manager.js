@@ -126,7 +126,7 @@ export class LevelManager{
         }
         else if(level == 8) // if(a==5) b= 5
         {
-            this.addEntity(MetaNodiButtonBuilding  , -6, 0, 5, 0, true);
+            this.addEntity(MetaNodiButtonBuilding  , -6, 0, 5, 0);
             this.addEntity(MetaNodiLedBuilding  , 0, 0, 5, 5, true);
             this.addEntity(MetaNodiLedBuilding  , 6, 0, 5, 5);
 
@@ -136,7 +136,20 @@ export class LevelManager{
             this.addWall([0,1], -1);
             this.addWall([-8,-7,-6,-5,-4,-3,-2,-1,0], 2);
         }
-        else if(level == 9)
+        else if(level == 9) // if(a>5) b= a else c = a
+        {
+            this.addEntity(MetaNodiButtonBuilding   , -6, -1, 7, 0);
+            this.addEntity(MetaNodiButtonBuilding   , -6,  1, 3, 0);
+            this.addEntity(MetaNodiLedBuilding      ,  0,  0, 5, 5, true);
+            this.addEntity(MetaNodiLedBuilding      ,  6, -1, 7, 7);
+            this.addEntity(MetaNodiLedBuilding      ,  6,  1, 3, 3);
+
+            this.addWall([-8,-7,-6,-5,-4,-3,-2,-1,0], -3);
+            this.addWall(-8, [-2,-1,0,1,2]);
+            this.addWall([-8,-7,-6,-5,-4,-3,-2,-1,0], 3);
+            this.addWall(0, [-2,-1, 1, 2]);
+        }
+        else if(level == 10)
         {
             this.addEntity(MetaNodiButtonBuilding   , -2, -2, 1, 0);
             this.addEntity(MetaNodiLedBuilding      , -2,  2, 0, 0, true);

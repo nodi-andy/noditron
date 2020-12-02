@@ -24,8 +24,8 @@ export class NodiComponent extends Component {
          * Currently stored item
          * 
          */
-        this.storedCount = 17;
-        this.storedCountNext = 18;
+        this.storedCount = 0;
+        this.storedCountNext = 0;
         this.entity = null;
 
         /**

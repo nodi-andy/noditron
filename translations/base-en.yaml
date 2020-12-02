@@ -1233,24 +1233,23 @@ demo:
     settingNotAvailable: Not available in the demo.
 
 tips:
-    - The conductors can also forward the data in diagonals
-    - If you don't know what it is a <b>turing machine</b>, then go and learn now!
-    - You can use the debugger if the things get complicated.
-    - You have an infinite map. Don't cramp your factory, expand!
-    - Try to build compact factories - it will pay out!
-    - Press F4 to show your FPS and Tick Rate.
-    - Press F4 twice to show the tile of your mouse and camera.
-    - You will unlock more cell variants later in the game!
-    - Serial execution is more efficient than parallel.
-    - Holding <b>SHIFT</b> lets you place multiple buildings in one click.
-    - You can use <b>T</b> to switch between different variants.
-    - This game has a lot of useful keybindings! Be sure to check out the settings page.
-    - This game has a lot of settings, be sure to check them out!
-    - Your hub marker has a small compass that shows which direction it is in!
-    - You can run your design on any hardware (e.g. arduino) with real electronical components
-    - Speed of light (299 792 458 m/s) is the fastest way to transmit any data in the universe
-    - Plan in advance, or it will be a mess!
-    - Don't complicate things, try to stay simple and you'll go far.
-    - Use <b>CTRL</b> + Click to select an area.
-    - Also try Factorio! It's my favorite game.
-    - You can download your savegames in the main menu!
+    - Die Leiterbahnen können die Daten auch diagonal weiterleiten
+    - Wenn Sie nicht wissen, was eine <b> Turingmaschine </b> ist, dann lernen Sie jetzt!
+    - Sie können den Debugger verwenden, wenn die Dinge kompliziert werden.
+    - Die Spielfläche ist unendlich groß.
+    - Drücken Sie F4, um Ihre FPS und Tick Rate anzuzeigen.
+    - Drücken Sie zweimal F4, um die Kachel Ihrer Maus und Kamera anzuzeigen.
+    - Sie werden später im Spiel weitere Zellvarianten freischalten!
+    - Die serielle Ausführung ist effizienter als die parallele.
+    - Wenn Sie <b> UMSCHALT </b> gedrückt halten, können Sie mehrere Gebäude mit einem Klick platzieren.
+    - Mit <b> T </b> können Sie zwischen verschiedenen Varianten wechseln.
+    - Dieses Spiel hat viele nützliche Tastenkombinationen! Schauen Sie sich unbedingt die Einstellungsseite an.
+    - Dieses Spiel hat viele Einstellungen, schau sie dir an!
+    - Ihr Hub-Marker hat einen kleinen Kompass, der anzeigt, in welche Richtung er sich befindet!
+    - Sie können Ihr Design auf jeder Hardware (z. B. Arduino) mit echten elektronischen Komponenten ausführen
+    - Die Lichtgeschwindigkeit (299 792 458 m / s) ist der schnellste Weg, um Daten im Universum zu übertragen
+    - Planen Sie im Voraus, sonst wird es ein Chaos!
+    - Komplizieren Sie die Dinge nicht, versuchen Sie einfach zu bleiben und Sie werden weit gehen.
+    - Verwenden Sie <b> STRG </b> + Klicken Sie, um einen Bereich auszuwählen.
+    - Probieren Sie auch Factorio! Es ist mein Lieblingsspiel.
+    - Sie können Ihre Spielstände im Hauptmenü herunterladen!

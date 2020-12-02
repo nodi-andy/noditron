@@ -61,6 +61,18 @@ export class MetaNodiOperBuilding extends MetaBuilding {
         ];
     }
 
+    /**
+     * Should update the entity to match the given variants
+     * @param {Entity} entity
+     * @param {number} rotationVariant
+     * @param {string} variant
+     */
+    updateVariants(entity, rotationVariant, variant)
+    {
+        if(variant == enumNodiOperVariants.or)
+           entity.components.NodiOper.storedCount = 1;
+    }
+
     getDimensions() {
         return new Vector(1, 1);
     }
