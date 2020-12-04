@@ -2,23 +2,6 @@ import { NodiComponent } from "../nodi_component";
 import { enumNodiTypes, enumNodiBits } from "../nodisolver";
 
 
-
-/** @enum {string} */
-export const enumNodiOperType = {
-    and: "and",
-    not: "not",
-    xor: "xor",
-    or: "or",
-    transistor: "transistor",
-    analyzer: "analyzer",
-    rotater: "rotater",
-    unstacker: "unstacker",
-    cutter: "cutter",
-    compare: "compare",
-    stacker: "stacker",
-    painter: "painter",
-};
-
 export class NodiOperComponent extends NodiComponent {
 
     static getId() {
@@ -65,6 +48,15 @@ export class NodiOperComponent extends NodiComponent {
                 let xt = staticComp.origin.x + NB[0];
                 let yt = staticComp.origin.y + NB[1];
                 this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1], output);
+            }
+        }
+        else if(this.storedCount == 2)
+        {
+            for (var i = 0; i < 8; i++) {
+                var NB = this.getNB(i);
+                let xt = staticComp.origin.x + NB[0];
+                let yt = staticComp.origin.y + NB[1];
+                this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1], 1);
             }
         }
 

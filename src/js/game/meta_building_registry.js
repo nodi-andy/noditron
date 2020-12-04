@@ -167,7 +167,8 @@ export function initMetaBuildingRegistry() {
     registerBuildingVariant(104, MetaNodiOperBuilding);
     registerBuildingVariant(105, MetaNodiOperBuilding, enumNodiOperVariants.not);
     registerBuildingVariant(106, MetaNodiOperBuilding, enumNodiOperVariants.xor);
-    registerBuildingVariant(107, MetaNodiOperBuilding, enumNodiOperVariants.or);
+    registerBuildingVariant(110, MetaNodiOperBuilding, enumNodiOperVariants.or);
+    registerBuildingVariant(107, MetaNodiOperBuilding, enumNodiOperVariants.starter);
     registerBuildingVariant(108, MetaNodiLedBuilding);
     registerBuildingVariant(109, MetaNodiDiscusBuilding);
 

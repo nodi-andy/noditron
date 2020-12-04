@@ -110,23 +110,21 @@ export class NodiSolver {
         }
     }
 
-    doSave() {
-       /* if(this.noditick == 0)
+    doSave()
+    {
+        if(this.noditick == 0)
         {
-            for (let i = 0; i < this.root.entityMgr.getAllWithComponent(MinerComponent).length ; ++i) {
-                let minerEntity = this.root.entityMgr.getAllWithComponent(MinerComponent)[i];
-                let x = minerEntity.components.StaticMapEntity.origin.x;
-                let y = minerEntity.components.StaticMapEntity.origin.y;
-                const entityNB = this.root.map.getLayerContentXY(x, y-1, "regular");
-                if(entityNB)
+            for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
+                const entity = this.root.entityMgr.entities[i];
+                if(entity)
                 { 
-                    const dispCompNB = entityNB.components.NodiBlue;
-                    if (dispCompNB) {
+                    const dispCompNB = entity.components.NodiOper;
+                    if (dispCompNB && dispCompNB.storedCount == 2) {
                         dispCompNB.setTypeBit(enumNodiBits.TRAN);
                     }
                 }
             }
-        }*/
+        }
 
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
@@ -137,6 +135,7 @@ export class NodiSolver {
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
+            if(displayComp == undefined) displayComp = entity.components.NodiOper;
             if(displayComp && displayComp.hasTypeBit(enumNodiBits.TRAN))
             {
                 displayComp.nodiProc(this.root.map);
@@ -153,6 +152,7 @@ export class NodiSolver {
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
+            if(displayComp == undefined) displayComp = entity.components.NodiOper;
             if(displayComp && displayComp.hasTypeBit(enumNodiBits.PUSH))
             {
                 displayComp.clearNewtypeBit(enumNodiBits.PUSH);
@@ -169,6 +169,7 @@ export class NodiSolver {
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
             if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
+            if(displayComp == undefined) displayComp = entity.components.NodiOper;
             if(displayComp)
             {
                 displayComp.storedType = displayComp.storedTypeNext;

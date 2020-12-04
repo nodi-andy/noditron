@@ -3,7 +3,7 @@ import { enumPinSlotType, WiredPinsComponent } from "../components/wired_pins";
 import { Entity } from "../entity";
 import { MetaBuilding, defaultBuildingVariant} from "../meta_building";
 import { GameRoot } from "../root";
-import { enumNodiOperType, NodiOperComponent } from "../components/nodi_oper";
+import { NodiOperComponent } from "../components/nodi_oper";
 import { generateMatrixRotations } from "../../core/utils";
 import { enumHubGoalRewards } from "../tutorial_goals";
 
@@ -12,14 +12,7 @@ export const enumNodiOperVariants = {
     not: "not",
     xor: "xor",
     or: "or",
-};
-
-/** @enum {string} */
-export const enumVariantToGate = {
-    [defaultBuildingVariant]: enumNodiOperType.and,
-    [enumNodiOperVariants.not]: enumNodiOperType.not,
-    [enumNodiOperVariants.xor]: enumNodiOperType.xor,
-    [enumNodiOperVariants.or]: enumNodiOperType.or,
+    starter: "starter",
 };
 
 const overlayMatrices = {
@@ -27,6 +20,7 @@ const overlayMatrices = {
     [enumNodiOperVariants.xor]: generateMatrixRotations([0, 1, 0, 1, 1, 1, 0, 1, 1]),
     [enumNodiOperVariants.or]: generateMatrixRotations([0, 1, 0, 1, 1, 1, 0, 1, 1]),
     [enumNodiOperVariants.not]: generateMatrixRotations([0, 1, 0, 0, 1, 0, 0, 1, 0]),
+    [enumNodiOperVariants.starter]: generateMatrixRotations([0, 1, 0, 0, 1, 0, 0, 1, 0]),
 };
 
 const colors = {
@@ -34,6 +28,7 @@ const colors = {
     [enumNodiOperVariants.xor]: "#f4a241",
     [enumNodiOperVariants.or]: "#f4d041",
     [enumNodiOperVariants.not]: "#f44184",
+    [enumNodiOperVariants.starter]: "#f44184",
 };
 
 export class MetaNodiOperBuilding extends MetaBuilding {
@@ -58,6 +53,7 @@ export class MetaNodiOperBuilding extends MetaBuilding {
             enumNodiOperVariants.or,
             enumNodiOperVariants.not,
             enumNodiOperVariants.xor,
+            enumNodiOperVariants.starter,
         ];
     }
 
@@ -71,6 +67,8 @@ export class MetaNodiOperBuilding extends MetaBuilding {
     {
         if(variant == enumNodiOperVariants.or)
            entity.components.NodiOper.storedCount = 1;
+        else if(variant == enumNodiOperVariants.starter)
+           entity.components.NodiOper.storedCount = 2;
     }
 
     getDimensions() {

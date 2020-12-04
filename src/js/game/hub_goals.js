@@ -172,24 +172,12 @@ export class HubGoals extends BasicSerializableObject {
      * Returns how much of the current goal was already delivered
      */
     getCurrentGoalDelivered() {
-       /* if (this.currentGoal.throughputOnly) {
-            return (
-                this.root.productionAnalytics.getCurrentShapeRate(
-                    enumAnalyticsDataSource.delivered,
-                    this.currentGoal.definition
-                ) / globalConfig.analyticsSliceDurationSeconds
-            );
+
+        let allLeds = this.root.entityMgr.getAllWithComponent(NodiLedComponent);
+        if(allLeds.filter(e => e.components.NodiLed.toggled === true).length ===  allLeds.length){
+            this.root.hubGoals.onGoalCompleted();
         }
 
-        return this.getShapesStored(this.currentGoal.definition);*/
-
-        //if(this.root.hubGoals.level >= 1 && this.root.hubGoals.level < 6)
-        {
-            let allLeds = this.root.entityMgr.getAllWithComponent(NodiLedComponent);
-            if(allLeds.filter(e => e.components.NodiLed.toggled === true).length ===  allLeds.length){
-                this.root.hubGoals.onGoalCompleted();
-            }
-        }
         return 0;
     }
 
@@ -281,16 +269,22 @@ export class HubGoals extends BasicSerializableObject {
      * Called when the level was completed
      */
     onGoalCompleted() {
-        const reward = this.currentGoal.reward;
-        this.gainedRewards[reward] = (this.gainedRewards[reward] || 0) + 1;
-        this.root.nodiSolver.nodistate = 0;
-        this.root.nodiSolver.noditick = 0;
-        this.root.app.gameAnalytics.handleLevelCompleted(this.level);
-        this.root.hud.parts.timeController.updateRunButton();
-        ++this.level;
-        this.computeNextGoal();
-
-        this.root.signals.storyGoalCompleted.dispatch(this.level - 1, reward);
+        if(this.root.nodiSolver.nodistate == 1)
+        {
+            const timeout = setTimeout(() => {
+                const reward = this.currentGoal.reward;
+                this.gainedRewards[reward] = (this.gainedRewards[reward] || 0) + 1;
+                this.root.nodiSolver.nodistate = 0;
+                this.root.nodiSolver.noditick = 0;
+                this.root.app.gameAnalytics.handleLevelCompleted(this.level);
+                this.root.hud.parts.timeController.updateRunButton();
+                ++this.level;
+                this.computeNextGoal();
+    
+                this.root.signals.storyGoalCompleted.dispatch(this.level - 1, reward);
+            }, 500);
+            this.root.nodiSolver.nodistate = 0;
+        }
     }
 
     /**

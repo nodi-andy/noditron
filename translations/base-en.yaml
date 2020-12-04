@@ -664,7 +664,10 @@ buildings:
             name: OR Gate
             description: Emits a boolean "1" if one of the inputs is truthy. (Truthy means
                 shape, color or boolean "1")
-
+        starter:
+            name: Starter
+            description: Emits a boolean "1" if one of the inputs is truthy. (Truthy means
+                shape, color or boolean "1")
     logic_gate:
         default:
             name: AND Gate
