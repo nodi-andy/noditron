@@ -48,7 +48,7 @@ export class NodiDiscusComponent extends NodiComponent {
                     // subtract
                     if (i == 5) { this.storedCount -= pingedNodiData.allowedValue; }
                     // write
-                    if (i == 6) { this.allowedValue = pingedNodiData.storedCount; }
+                    if (i == 6) { pingedNodiData.storedCount = this.storedCount; }
                 }
             }
         }

@@ -145,6 +145,12 @@ export class LevelManager{
             this.addEntity(MetaNodiLedBuilding  ,  0, -2, 3, 3, true);
             this.addEntity(MetaNodiLedBuilding  ,  4, -2, 6, 6);
         }
+        else if(level == 9) // 2*2*2*2*2*2 = 64
+        {
+            this.addEntity(MetaNodiButtonBuilding    , -5,  1, 2);
+            this.addEntity(MetaNodiLedBuilding       ,  0, -2, 2, 2, true);
+            this.addEntity(MetaNodiLedBuilding       ,  4, -2, 64, 64);
+        }
         else if(level == 9) // if(a==5) b= 5
         {
             this.addEntity(MetaNodiButtonBuilding  , -6, 0, 5, 0);
@@ -176,14 +182,7 @@ export class LevelManager{
             this.addEntity(MetaNodiLedBuilding      , -2,  2,  0,  0, true);
             this.addEntity(MetaNodiLedBuilding      ,  3,  2, -5, -5, false);
         }
-        else if(level == 12) // 
-        {
-            this.addEntity(MetaNodiOperBuilding     ,  0,  0,  1,  0, enumNodiOperVariants.starter);
-            this.addEntity(MetaNodiButtonBuilding   , -2, -2,  1,  0);
-            this.addEntity(MetaNodiLedBuilding      , -2,  2,  0,  0, true);
-            this.addEntity(MetaNodiLedBuilding      ,  3,  2, -5, -5, false);
-        }
-        else if(level == 13) // Main > 3+1+1+1 = 6
+        else if(level == 12) // Main > 3+1+1+1 = 6
         {
             this.addEntity(MetaNodiOperBuilding     , -1, -2,  1,  0, enumNodiOperVariants.starter);
             this.addEntity(MetaNodiLedBuilding      , -3,  2,  1,  1, true);
