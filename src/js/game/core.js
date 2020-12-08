@@ -39,7 +39,7 @@ import { GameRoot } from "./root";
 import { ShapeDefinitionManager } from "./shape_definition_manager";
 import { SoundProxy } from "./sound_proxy";
 import { GameTime } from "./time/game_time";
-import { NodiSolver } from "./nodisolver";
+import { NodiSolver } from "./nodi_solver";
 
 const logger = createLogger("ingame/core");
 

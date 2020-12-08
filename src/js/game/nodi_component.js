@@ -1,6 +1,6 @@
 import { types } from "../savegame/serialization";
 import { Component } from "./component";
-import { enumNodiBits } from "./nodisolver"
+import { enumNodiBits } from "./nodi_solver"
 import { GameRoot } from "./root";
 
 export class NodiComponent extends Component {

@@ -701,9 +701,9 @@ buildings:
             name: &nodi_blue Nodi_Blue
             description: Connect a signal to show it on the display - It can be a shape, color or boolean.
 
-    display_red:
+    nodi_red:
         default:
-            name: &display_red Display_red
+            name: &nodi_red Nodi_Red
             description: Connect a signal to show it on the display - It can be a shape, color or boolean.
     
     nodi_led:
@@ -764,6 +764,14 @@ buildings:
 
 storyRewards:
     # Those are the rewards gained from completing the store
+    reward_1_variable:
+        title: Different buttons
+        desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
+
+    reward_2_nodi_discus:
+        title: Different buttons
+        desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
+
     reward_cutter_and_trash:
         title: Different buttons
         desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
@@ -1174,7 +1182,7 @@ keybindings:
         filter: *filter
         wire_tunnel: *wire_tunnel
         nodi_blue: *nodi_blue
-        display_red: *display_red
+        nodi_red: *nodi_red
         nodi_led: *nodi_led
         nodi_discus: *nodi_discus
         nodi_oper: *nodi_oper

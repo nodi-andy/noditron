@@ -3,15 +3,15 @@
  * @enum {string}
  */
 export const enumHubGoalRewards = {
+    reward_1_variable: "reward_1_variable",
+    reward_2_nodi_discus: "reward_2_nodi_discus",
     reward_cutter_and_trash: "reward_cutter_and_trash",
-    reward_nodi_discus: "reward_nodi_discus",
     reward_rotater: "reward_rotater",
     reward_painter: "reward_painter",
     reward_mixer: "reward_mixer",
     reward_stacker: "reward_stacker",
     reward_balancer: "reward_balancer",
     reward_tunnel: "reward_tunnel",
-
     reward_rotater_ccw: "reward_rotater_ccw",
     reward_rotater_180: "reward_rotater_180",
     reward_miner_chainable: "reward_miner_chainable",

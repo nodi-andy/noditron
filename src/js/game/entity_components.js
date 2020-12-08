@@ -17,7 +17,7 @@ import { LogicGateComponent } from "./components/logic_gate";
 import { NodiButtonComponent } from "./components/nodi_button";
 import { WireTunnelComponent } from "./components/wire_tunnel";
 import { NodiBlueComponent } from "./components/nodi_blue";
-import { DisplayRedComponent } from "./components/display_red";
+import { NodiRedComponent } from "./components/nodi_red";
 import { NodiLedComponent } from "./components/nodi_led";
 import { NodiDiscusComponent } from "./components/nodi_discus";
 import { NodiOperComponent } from "./components/nodi_oper";
@@ -89,7 +89,7 @@ export class EntityComponentStorage {
         /** @type {NodiBlueComponent} */
         this.NodiBlue;
 
-        /** @type {DisplayRedComponent} */
+        /** @type {NodiRedComponent} */
         this.DisplayRed;
 
         /** @type {NodiLedComponent} */

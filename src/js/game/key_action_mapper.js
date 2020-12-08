@@ -66,7 +66,7 @@ export const KEYMAPPINGS = {
         nodi_button: { keyCode: key("I") },
         filter: { keyCode: key("O") },
         nodi_blue: { keyCode: key("P") },
-        display_red: { keyCode: key("J") },
+        nodi_red: { keyCode: key("J") },
         nodi_led: { keyCode: key("K") },
         nodi_discus: { keyCode: key("=") },
         nodi_data: { keyCode: key("B") },

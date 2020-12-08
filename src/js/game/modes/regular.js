@@ -224,7 +224,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "CuCuCuCu", // belts t1
             required: 30,
-            reward: enumHubGoalRewards.reward_cutter_and_trash,
+            reward: enumHubGoalRewards.reward_1_variable,
         },
 
         // 2
@@ -232,7 +232,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "----CuCu", //
             required: 40,
-            reward: enumHubGoalRewards.reward_nodi_discus,
+            reward: enumHubGoalRewards.reward_2_nodi_discus,
         },
 
         // 3

@@ -13,7 +13,7 @@ import { MapView } from "./map_view";
 import { Camera } from "./camera";
 import { InGameState } from "../states/ingame";
 import { AutomaticSave } from "./automatic_save";
-import { NodiSolver } from "./nodisolver";
+import { NodiSolver } from "./nodi_solver";
 import { Application } from "../application";
 import { SoundProxy } from "./sound_proxy";
 import { Savegame } from "../savegame/savegame";

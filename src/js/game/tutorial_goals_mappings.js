@@ -3,7 +3,7 @@ import { enumBalancerVariants, MetaBalancerBuilding } from "./buildings/balancer
 import { MetaConstantSignalBuilding } from "./buildings/constant_signal";
 import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
 import { MetaNodiBlueBuilding } from "./buildings/nodi_blue";
-import { MetaDisplayRedBuilding } from "./buildings/display_red";
+import { MetaNodiRedBuilding } from "./buildings/nodi_red";
 import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 import { MetaFilterBuilding } from "./buildings/filter";
 import { MetaLogicGateBuilding } from "./buildings/logic_gate";
@@ -31,8 +31,9 @@ const typed = x => x;
  * @enum {TutorialGoalReward?}
  */
 export const enumHubGoalRewardsToContentUnlocked = {
+    [enumHubGoalRewards.reward_1_variable]: null,
+    [enumHubGoalRewards.reward_2_nodi_discus]: typed([[MetaNodiDiscusBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_cutter_and_trash]: typed([[MetaCutterBuilding, defaultBuildingVariant]]),
-    [enumHubGoalRewards.reward_nodi_discus]: typed([[MetaNodiDiscusBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_rotater]: typed([[MetaRotaterBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_painter]: typed([[MetaPainterBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_mixer]: typed([[MetaMixerBuilding, defaultBuildingVariant]]),
@@ -53,7 +54,6 @@ export const enumHubGoalRewardsToContentUnlocked = {
     [enumHubGoalRewards.reward_storage]: typed([[MetaStorageBuilding, defaultBuildingVariant]]),
 
     [enumHubGoalRewards.reward_belt_reader]: typed([[MetaReaderBuilding, defaultBuildingVariant]]),
-    [enumHubGoalRewards.reward_display]: typed([[MetaNodiBlueBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_display]: typed([[MetaNodiBlueBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_constant_signal]: typed([
         [MetaConstantSignalBuilding, defaultBuildingVariant],

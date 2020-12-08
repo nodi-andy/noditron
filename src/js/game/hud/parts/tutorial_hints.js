@@ -16,7 +16,6 @@ export class HUDPartTutorialHints extends BaseHUDPart {
             [],
             `
         <div class="header">
-            <span>${T.ingame.tutorialHints.title}</span>
             <button class="styledButton toggleHint">
                 <span class="show">${T.ingame.tutorialHints.showHint}</span>
                 <span class="hide">${T.ingame.tutorialHints.hideHint}</span>

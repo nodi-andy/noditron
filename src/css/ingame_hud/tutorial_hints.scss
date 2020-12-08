@@ -1,6 +1,6 @@
 #ingame_HUD_TutorialHints {
     position: absolute;
-    @include S(left, 10px);
+    @include S(right, 10px);
     @include S(bottom, 10px);
 
     @include StyleBelowWidth(1430px) {

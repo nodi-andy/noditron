@@ -24,7 +24,7 @@ export class MetaNodiDiscusBuilding extends MetaBuilding {
      * @param {GameRoot} root
      */
     getIsUnlocked(root) {
-        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_nodi_discus);
+        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_2_nodi_discus);
     }
     /**
      *

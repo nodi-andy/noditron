@@ -1,5 +1,5 @@
 import { NodiComponent } from "../nodi_component";
-import { enumNodiTypes, enumNodiBits } from "../nodisolver";
+import { enumNodiTypes, enumNodiBits } from "../nodi_solver";
 
 
 export class NodiOperComponent extends NodiComponent {

@@ -16,7 +16,7 @@ import { BOOL_FALSE_SINGLETON, BOOL_TRUE_SINGLETON } from "../../items/boolean_i
 import { COLOR_ITEM_SINGLETONS } from "../../items/color_item";
 import { ShapeDefinition } from "../../shape_definition";
 import { enumNotificationType } from "./notifications";
-import { enumNodiBits } from "../../nodisolver";
+import { enumNodiBits } from "../../nodi_solver";
 
 export class HUDDisplayToggle extends BaseHUDPart {
     initialize() {
