@@ -4,7 +4,7 @@ import { MetaCutterBuilding } from "../../buildings/cutter";
 import { MetaNodiBlueBuilding } from "../../buildings/nodi_blue";
 import { MetaNodiRedBuilding } from "../../buildings/nodi_red";
 import { MetaNodiLedBuilding } from "../../buildings/nodi_led";
-import { MetaNodiDiscusBuilding } from "../../buildings/nodi_discus";
+import { MetaNodiBlueDiscusBuilding } from "../../buildings/nodi_blue_discus";
 import { MetaNodiOperBuilding } from "../../buildings/nodi_oper";
 import { MetaNodiDataBuilding } from "../../buildings/nodi_data";
 import { MetaFilterBuilding } from "../../buildings/filter";
@@ -27,26 +27,15 @@ export class HUDBuildingsToolbar extends HUDBaseToolbar {
     constructor(root) {
         super(root, {
             primaryBuildings: [
-                MetaNodiBlueBuilding,
                 MetaNodiRedBuilding,
-                MetaNodiDiscusBuilding,
-                MetaNodiDataBuilding,
+                MetaNodiRedBuilding,
                 MetaNodiOperBuilding,
-//                MetaUndergroundBeltBuilding,
-//                MetaMinerBuilding,
-//                MetaCutterBuilding,
-//                MetaRotaterBuilding,
-//                MetaStackerBuilding,
-//                MetaMixerBuilding,
-//                MetaPainterBuilding,
-//                MetaTrashBuilding,
 //               ...(queryParamOptions.sandboxMode || G_IS_DEV ? [MetaItemProducerBuilding] : []),
             ],
             secondaryBuildings: [
-               /* MetaStorageBuilding,
-                MetaReaderBuilding,
-                MetaNodiButtonBuilding,
-                MetaFilterBuilding,*/
+                MetaNodiBlueBuilding,
+                MetaNodiBlueDiscusBuilding,
+                MetaNodiDataBuilding,
             ],
             visibilityCondition: () =>
                 !this.root.camera.getIsMapOverlayActive() && this.root.currentLayer === "regular",

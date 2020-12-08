@@ -711,9 +711,9 @@ buildings:
             name: &nodi_led Nodi_LED
             description: Connect a signal to show it on the display - It can be a shape, color or boolean.
 
-    nodi_discus:
+    nodi_blue_discus:
         default:
-            name: &nodi_discus Nodi_Discus
+            name: &nodi_blue_discus Nodi_Blue_Discus
             description: Connect a signal to show it on the display - It can be a shape, color or boolean.
     
     nodi_data:
@@ -768,7 +768,11 @@ storyRewards:
         title: Different buttons
         desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
 
-    reward_2_nodi_discus:
+    reward_2_nodi_blue_discus:
+        title: Different buttons
+        desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
+
+    reward_6_nodi_red:
         title: Different buttons
         desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
 
@@ -776,7 +780,7 @@ storyRewards:
         title: Different buttons
         desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
 
-    reward_nodi_discus:
+    reward_nodi_blue_discus:
         title: Different buttons
         desc: You just unlocked a new nodi, the <strong>blue discus</strong>. The blue discus can read the content of a light, if you place the discus <strong>above</strong> the light.
 
@@ -1184,7 +1188,7 @@ keybindings:
         nodi_blue: *nodi_blue
         nodi_red: *nodi_red
         nodi_led: *nodi_led
-        nodi_discus: *nodi_discus
+        nodi_blue_discus: *nodi_blue_discus
         nodi_oper: *nodi_oper
         nodi_data: *nodi_data
         reader: *reader

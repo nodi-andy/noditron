@@ -28,11 +28,11 @@ export class HUDWiresToolbar extends HUDBaseToolbar {
                 MetaTransistorBuilding,
             ],
             secondaryBuildings: [
-                /*MetaStorageBuilding,
+                MetaStorageBuilding,
                 MetaReaderBuilding,
                 MetaNodiButtonBuilding,
                 MetaFilterBuilding,
-                MetaNodiBlueBuilding,*/
+                MetaNodiBlueBuilding,
             ],
             visibilityCondition: () =>
                 !this.root.camera.getIsMapOverlayActive() && this.root.currentLayer === "wires",

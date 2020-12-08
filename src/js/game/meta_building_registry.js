@@ -11,7 +11,7 @@ import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
 import { MetaNodiBlueBuilding } from "./buildings/nodi_blue";
 import { MetaNodiRedBuilding } from "./buildings/nodi_red";
 import { MetaNodiLedBuilding } from "./buildings/nodi_led";
-import { MetaNodiDiscusBuilding } from "./buildings/nodi_discus";
+import { MetaNodiBlueDiscusBuilding } from "./buildings/nodi_blue_discus";
 import { MetaNodiOperBuilding, enumNodiOperVariants } from "./buildings/nodi_oper";
 import { MetaNodiDataBuilding } from "./buildings/nodi_data";
 import { MetaFilterBuilding } from "./buildings/filter";
@@ -61,7 +61,7 @@ export function initMetaBuildingRegistry() {
     gMetaBuildingRegistry.register(MetaWireTunnelBuilding);
     gMetaBuildingRegistry.register(MetaNodiBlueBuilding);
     gMetaBuildingRegistry.register(MetaNodiLedBuilding);
-    gMetaBuildingRegistry.register(MetaNodiDiscusBuilding);
+    gMetaBuildingRegistry.register(MetaNodiBlueDiscusBuilding);
     gMetaBuildingRegistry.register(MetaNodiRedBuilding);
     gMetaBuildingRegistry.register(MetaNodiOperBuilding);
     gMetaBuildingRegistry.register(MetaNodiDataBuilding);
@@ -170,7 +170,7 @@ export function initMetaBuildingRegistry() {
     registerBuildingVariant(110, MetaNodiOperBuilding, enumNodiOperVariants.or);
     registerBuildingVariant(107, MetaNodiOperBuilding, enumNodiOperVariants.starter);
     registerBuildingVariant(108, MetaNodiLedBuilding);
-    registerBuildingVariant(109, MetaNodiDiscusBuilding);
+    registerBuildingVariant(109, MetaNodiBlueDiscusBuilding);
 
     // Virtual Processor
     registerBuildingVariant(42, MetaVirtualProcessorBuilding);

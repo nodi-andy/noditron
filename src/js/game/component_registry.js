@@ -19,7 +19,7 @@ import { WireTunnelComponent } from "./components/wire_tunnel";
 import { NodiBlueComponent } from "./components/nodi_blue";
 import { NodiRedComponent } from "./components/nodi_red";
 import { NodiLedComponent } from "./components/nodi_led";
-import { NodiDiscusComponent } from "./components/nodi_discus";
+import { NodiBlueDiscusComponent } from "./components/nodi_blue_discus";
 import { NodiOperComponent } from "./components/nodi_oper";
 import { NodiDataComponent } from "./components/nodi_data";
 import { NodiComponent } from "./nodi_component";
@@ -48,7 +48,7 @@ export function initComponentRegistry() {
     gComponentRegistry.register(NodiBlueComponent);
     gComponentRegistry.register(NodiRedComponent);
     gComponentRegistry.register(NodiLedComponent);
-    gComponentRegistry.register(NodiDiscusComponent);
+    gComponentRegistry.register(NodiBlueDiscusComponent);
     gComponentRegistry.register(NodiOperComponent);
     gComponentRegistry.register(NodiDataComponent);
     gComponentRegistry.register(BeltReaderComponent);

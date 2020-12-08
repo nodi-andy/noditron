@@ -19,7 +19,7 @@ import { WireTunnelComponent } from "./components/wire_tunnel";
 import { NodiBlueComponent } from "./components/nodi_blue";
 import { NodiRedComponent } from "./components/nodi_red";
 import { NodiLedComponent } from "./components/nodi_led";
-import { NodiDiscusComponent } from "./components/nodi_discus";
+import { NodiBlueDiscusComponent } from "./components/nodi_blue_discus";
 import { NodiOperComponent } from "./components/nodi_oper";
 import { NodiDataComponent } from "./components/nodi_data";
 import { BeltReaderComponent } from "./components/belt_reader";
@@ -95,7 +95,7 @@ export class EntityComponentStorage {
         /** @type {NodiLedComponent} */
         this.NodiLed;
 
-        /** @type {NodiDiscusComponent} */
+        /** @type {NodiBlueDiscusComponent} */
         this.NodiDiscus;
 
         /** @type {NodiOperComponent} */

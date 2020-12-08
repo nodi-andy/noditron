@@ -21,7 +21,7 @@ import { LogicGateSystem } from "./systems/logic_gate";
 import { NodiButtonSystem } from "./systems/nodi_button";
 import { DisplaySystem } from "./systems/display";
 import { NodiLedSystem } from "./systems/nodi_led";
-import { NodiDiscusSystem } from "./systems/nodi_discus";
+import { NodiBlueDiscusSystem } from "./systems/nodi_blue_discus";
 import { ItemProcessorOverlaysSystem } from "./systems/item_processor_overlays";
 import { BeltReaderSystem } from "./systems/belt_reader";
 import { FilterSystem } from "./systems/filter";
@@ -93,8 +93,8 @@ export class GameSystemManager {
             /** @type {NodiLedSystem} */
             nodi_led: null,
 
-             /** @type {NodiDiscusSystem} */
-            nodi_discus: null,
+             /** @type {NodiBlueDiscusSystem} */
+            nodi_blue_discus: null,
 
             /** @type {ItemProcessorOverlaysSystem} */
             itemProcessorOverlays: null,
@@ -165,7 +165,7 @@ export class GameSystemManager {
 
         add("nodi_led", NodiLedSystem);
 
-        add("nodi_discus", NodiDiscusSystem);
+        add("nodi_blue_discus", NodiBlueDiscusSystem);
 
         // IMPORTANT: We have 2 phases: In phase 1 we compute the output values of all gates,
         // processors etc. In phase 2 we propagate it through the wires network
