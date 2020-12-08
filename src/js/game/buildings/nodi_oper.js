@@ -1,7 +1,7 @@
 import { enumDirection, Vector } from "../../core/vector";
 import { enumPinSlotType, WiredPinsComponent } from "../components/wired_pins";
 import { Entity } from "../entity";
-import { MetaBuilding, defaultBuildingVariant} from "../meta_building";
+import { MetaBuilding, defaultBuildingVariant } from "../meta_building";
 import { GameRoot } from "../root";
 import { NodiOperComponent } from "../components/nodi_oper";
 import { generateMatrixRotations } from "../../core/utils";
@@ -44,7 +44,7 @@ export class MetaNodiOperBuilding extends MetaBuilding {
      * @param {GameRoot} root
      */
     getIsUnlocked(root) {
-        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_logic_gates);
+        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_6_nodi_red_discus);
     }
 
     getAvailableVariants() {
@@ -65,8 +65,7 @@ export class MetaNodiOperBuilding extends MetaBuilding {
      */
     updateVariants(entity, rotationVariant, variant)
     {
-        if(variant == enumNodiOperVariants.or)
-           entity.components.NodiOper.storedCount = 1;
+        if (variant == enumNodiOperVariants.or) entity.components.NodiOper.storedCount = 1;
         else if(variant == enumNodiOperVariants.starter)
            entity.components.NodiOper.storedCount = 2;
     }

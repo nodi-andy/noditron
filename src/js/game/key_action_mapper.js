@@ -46,7 +46,6 @@ export const KEYMAPPINGS = {
     buildings: {
         // Primary Toolbar
         belt: { keyCode: key("1") },
-        cond: { keyCode: key("N") },
         balancer: { keyCode: key("2") },
         underground_belt: { keyCode: key("3") },
         miner: { keyCode: key("4") },
@@ -69,6 +68,7 @@ export const KEYMAPPINGS = {
         nodi_red: { keyCode: key("J") },
         nodi_led: { keyCode: key("K") },
         nodi_blue_discus: { keyCode: key("=") },
+        nodi_red_discus: { keyCode: key("N") },
         nodi_data: { keyCode: key("B") },
         nodi_oper: { keyCode: key("H") },
 

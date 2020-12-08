@@ -1,6 +1,5 @@
 /* typehints:start */
 import { BeltComponent } from "./components/belt";
-import { CondComponent } from "./components/cond";
 import { BeltUnderlaysComponent } from "./components/belt_underlays";
 import { HubComponent } from "./components/hub";
 import { ItemAcceptorComponent } from "./components/item_acceptor";

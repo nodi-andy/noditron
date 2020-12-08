@@ -1,25 +1,30 @@
+import { generateMatrixRotations } from "../../core/utils";
 import { enumDirection, Vector } from "../../core/vector";
 import { enumPinSlotType, WiredPinsComponent } from "../components/wired_pins";
 import { Entity } from "../entity";
 import { MetaBuilding } from "../meta_building";
 import { GameRoot } from "../root";
-import { NodiRedComponent } from "../components/nodi_red";
+import { NodiRedDiscusComponent } from "../components/nodi_red_discus";
 import { enumHubGoalRewards } from "../tutorial_goals";
 
-export class MetaNodiRedBuilding extends MetaBuilding {
+const overlayMatrix = generateMatrixRotations([1, 1, 1, 1, 0, 1, 1, 1, 1]);
+
+export class MetaNodiRedDiscusBuilding extends MetaBuilding {
     constructor() {
-        super("nodi_red");
+        super("nodi_red_discus");
     }
 
     getSilhouetteColor() {
-        return "#ff5500";
+        return "#4C8BF5";
     }
-
+    getSpecialOverlayRenderMatrix(rotation) {
+        return overlayMatrix[rotation];
+    }
     /**
      * @param {GameRoot} root
      */
     getIsUnlocked(root) {
-        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_5_nodi_red);
+        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_6_nodi_red_discus);
     }
     /**
      *
@@ -49,11 +54,11 @@ export class MetaNodiRedBuilding extends MetaBuilding {
                     {
                         pos: new Vector(0, 0),
                         direction: enumDirection.bottom,
-                        type: enumPinSlotType.logicalAcceptor
+                        type: enumPinSlotType.logicalAcceptor,
                     },
                 ],
             })
         );
-        entity.addComponent(new NodiRedComponent(entity));
+        entity.addComponent(new NodiRedDiscusComponent(entity));
     }
 }

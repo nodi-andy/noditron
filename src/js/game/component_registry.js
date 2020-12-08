@@ -1,7 +1,6 @@
 import { gComponentRegistry } from "../core/global_registries";
 import { StaticMapEntityComponent } from "./components/static_map_entity";
 import { BeltComponent } from "./components/belt";
-import { CondComponent } from "./components/cond";
 import { ItemEjectorComponent } from "./components/item_ejector";
 import { ItemAcceptorComponent } from "./components/item_acceptor";
 import { MinerComponent } from "./components/miner";
@@ -20,9 +19,9 @@ import { NodiBlueComponent } from "./components/nodi_blue";
 import { NodiRedComponent } from "./components/nodi_red";
 import { NodiLedComponent } from "./components/nodi_led";
 import { NodiBlueDiscusComponent } from "./components/nodi_blue_discus";
+import { NodiRedDiscusComponent } from "./components/nodi_red_discus";
 import { NodiOperComponent } from "./components/nodi_oper";
 import { NodiDataComponent } from "./components/nodi_data";
-import { NodiComponent } from "./nodi_component";
 import { BeltReaderComponent } from "./components/belt_reader";
 import { FilterComponent } from "./components/filter";
 import { ItemProducerComponent } from "./components/item_producer";
@@ -30,7 +29,6 @@ import { ItemProducerComponent } from "./components/item_producer";
 export function initComponentRegistry() {
     gComponentRegistry.register(StaticMapEntityComponent);
     gComponentRegistry.register(BeltComponent);
-    gComponentRegistry.register(CondComponent);
     gComponentRegistry.register(ItemEjectorComponent);
     gComponentRegistry.register(ItemAcceptorComponent);
     gComponentRegistry.register(MinerComponent);
@@ -49,6 +47,7 @@ export function initComponentRegistry() {
     gComponentRegistry.register(NodiRedComponent);
     gComponentRegistry.register(NodiLedComponent);
     gComponentRegistry.register(NodiBlueDiscusComponent);
+    gComponentRegistry.register(NodiRedDiscusComponent);
     gComponentRegistry.register(NodiOperComponent);
     gComponentRegistry.register(NodiDataComponent);
     gComponentRegistry.register(BeltReaderComponent);

@@ -15,6 +15,7 @@ import { enumRotaterVariants, MetaRotaterBuilding } from "./buildings/rotater";
 import { MetaStackerBuilding } from "./buildings/stacker";
 import { MetaStorageBuilding } from "./buildings/storage";
 import { MetaNodiBlueDiscusBuilding } from "./buildings/nodi_blue_discus";
+import { MetaNodiRedDiscusBuilding } from "./buildings/nodi_red_discus";
 import { enumUndergroundBeltVariants, MetaUndergroundBeltBuilding } from "./buildings/underground_belt";
 import { defaultBuildingVariant, MetaBuilding } from "./meta_building";
 /** @typedef {Array<[typeof MetaBuilding, string]>} TutorialGoalReward */
@@ -32,8 +33,13 @@ const typed = x => x;
  */
 export const enumHubGoalRewardsToContentUnlocked = {
     [enumHubGoalRewards.reward_1_variable]: null,
-    [enumHubGoalRewards.reward_2_nodi_blue_discus]: typed([[MetaNodiBlueDiscusBuilding, defaultBuildingVariant]]),
-    [enumHubGoalRewards.reward_6_nodi_red]: typed([[MetaNodiRedBuilding, defaultBuildingVariant]]),
+    [enumHubGoalRewards.reward_2_nodi_blue_discus]: typed([
+        [MetaNodiBlueDiscusBuilding, defaultBuildingVariant],
+    ]),
+    [enumHubGoalRewards.reward_5_nodi_red]: typed([[MetaNodiRedBuilding, defaultBuildingVariant]]),
+    [enumHubGoalRewards.reward_6_nodi_red_discus]: typed([
+        [MetaNodiRedDiscusBuilding, defaultBuildingVariant],
+    ]),
     [enumHubGoalRewards.reward_cutter_and_trash]: typed([[MetaCutterBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_rotater]: typed([[MetaRotaterBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_painter]: typed([[MetaPainterBuilding, defaultBuildingVariant]]),

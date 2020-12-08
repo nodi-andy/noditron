@@ -255,7 +255,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "Cu----Cu", // belts t2
             required: 170,
-            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
+            reward: enumHubGoalRewards.reward_5_nodi_red,
         },
 
         // 6
@@ -317,7 +317,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "RpRpRpRp:CwCwCwCw", // painting t3
             required: 3800,
-            reward: enumHubGoalRewards.reward_6_nodi_red,
+            reward: enumHubGoalRewards.reward_6_nodi_red_discus,
         },
 
         // DEMO STOPS HERE

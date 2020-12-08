@@ -5,7 +5,8 @@
 export const enumHubGoalRewards = {
     reward_1_variable: "reward_1_variable",
     reward_2_nodi_blue_discus: "reward_2_nodi_blue_discus",
-    reward_6_nodi_red: "reward_6_nodi_red",
+    reward_5_nodi_red: "reward_5_nodi_red",
+    reward_6_nodi_red_discus: "reward_6_nodi_red_discus",
     reward_cutter_and_trash: "reward_cutter_and_trash",
     reward_rotater: "reward_rotater",
     reward_painter: "reward_painter",

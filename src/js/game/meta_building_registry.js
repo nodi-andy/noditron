@@ -4,7 +4,6 @@ import { T } from "../translations";
 import { MetaAnalyzerBuilding } from "./buildings/analyzer";
 import { enumBalancerVariants, MetaBalancerBuilding } from "./buildings/balancer";
 import { MetaBeltBuilding } from "./buildings/belt";
-import { MetaCondBuilding } from "./buildings/cond";
 import { MetaComparatorBuilding } from "./buildings/comparator";
 import { MetaConstantSignalBuilding } from "./buildings/constant_signal";
 import { enumCutterVariants, MetaCutterBuilding } from "./buildings/cutter";
@@ -12,6 +11,7 @@ import { MetaNodiBlueBuilding } from "./buildings/nodi_blue";
 import { MetaNodiRedBuilding } from "./buildings/nodi_red";
 import { MetaNodiLedBuilding } from "./buildings/nodi_led";
 import { MetaNodiBlueDiscusBuilding } from "./buildings/nodi_blue_discus";
+import { MetaNodiRedDiscusBuilding } from "./buildings/nodi_red_discus";
 import { MetaNodiOperBuilding, enumNodiOperVariants } from "./buildings/nodi_oper";
 import { MetaNodiDataBuilding } from "./buildings/nodi_data";
 import { MetaFilterBuilding } from "./buildings/filter";
@@ -50,7 +50,6 @@ export function initMetaBuildingRegistry() {
     gMetaBuildingRegistry.register(MetaTrashBuilding);
     gMetaBuildingRegistry.register(MetaStorageBuilding);
     gMetaBuildingRegistry.register(MetaBeltBuilding);
-    gMetaBuildingRegistry.register(MetaCondBuilding);
     gMetaBuildingRegistry.register(MetaUndergroundBeltBuilding);
     gMetaBuildingRegistry.register(MetaHubBuilding);
     gMetaBuildingRegistry.register(MetaWireBuilding);
@@ -62,6 +61,7 @@ export function initMetaBuildingRegistry() {
     gMetaBuildingRegistry.register(MetaNodiBlueBuilding);
     gMetaBuildingRegistry.register(MetaNodiLedBuilding);
     gMetaBuildingRegistry.register(MetaNodiBlueDiscusBuilding);
+    gMetaBuildingRegistry.register(MetaNodiRedDiscusBuilding);
     gMetaBuildingRegistry.register(MetaNodiRedBuilding);
     gMetaBuildingRegistry.register(MetaNodiOperBuilding);
     gMetaBuildingRegistry.register(MetaNodiDataBuilding);
@@ -71,9 +71,6 @@ export function initMetaBuildingRegistry() {
     gMetaBuildingRegistry.register(MetaAnalyzerBuilding);
     gMetaBuildingRegistry.register(MetaComparatorBuilding);
     gMetaBuildingRegistry.register(MetaItemProducerBuilding);
-
-    // Cond
-    registerBuildingVariant(101, MetaCondBuilding, defaultBuildingVariant);
 
     // Belt
     registerBuildingVariant(1, MetaBeltBuilding, defaultBuildingVariant, 0);
@@ -171,6 +168,7 @@ export function initMetaBuildingRegistry() {
     registerBuildingVariant(107, MetaNodiOperBuilding, enumNodiOperVariants.starter);
     registerBuildingVariant(108, MetaNodiLedBuilding);
     registerBuildingVariant(109, MetaNodiBlueDiscusBuilding);
+    registerBuildingVariant(111, MetaNodiRedDiscusBuilding);
 
     // Virtual Processor
     registerBuildingVariant(42, MetaVirtualProcessorBuilding);

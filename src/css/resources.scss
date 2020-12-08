@@ -1,5 +1,5 @@
-$buildings: belt, cond, cutter, miner, mixer, painter, rotater, balancer, stacker, trash, underground_belt, wire,
-    constant_signal, logic_gate, nodi_button, filter, wire_tunnel, nodi_blue, nodi_red, nodi_led, nodi_blue_discus, nodi_oper, nodi_data, virtual_processor, reader, storage,
+$buildings: belt, cutter, miner, mixer, painter, rotater, balancer, stacker, trash, underground_belt, wire,
+    constant_signal, logic_gate, nodi_button, filter, wire_tunnel, nodi_blue, nodi_red, nodi_led, nodi_blue_discus, nodi_red_discus, nodi_oper, nodi_data, virtual_processor, reader, storage,
     transistor, analyzer, comparator, item_producer;
 
 @each $building in $buildings {
@@ -9,9 +9,9 @@ $buildings: belt, cond, cutter, miner, mixer, painter, rotater, balancer, stacke
     }
 }
 
-$buildingsAndVariants: belt, cond, balancer, underground_belt, underground_belt-tier2, miner, miner-chainable,
+$buildingsAndVariants: belt, balancer, underground_belt, underground_belt-tier2, miner, miner-chainable,
     cutter, cutter-quad, rotater, rotater-ccw, stacker, mixer, painter-double, painter-quad, trash, storage,
-    reader, rotater-rotate180, nodi_blue, nodi_red, nodi_led, nodi_blue_discus, nodi_oper, nodi_oper-or, nodi_oper-not, nodi_oper-xor, nodi_oper-starter, nodi_data, constant_signal, wire, wire_tunnel, logic_gate-or, logic_gate-not,
+    reader, rotater-rotate180, nodi_blue, nodi_red, nodi_led, nodi_blue_discus, nodi_red_discus, nodi_oper, nodi_oper-or, nodi_oper-not, nodi_oper-xor, nodi_oper-starter, nodi_data, constant_signal, wire, wire_tunnel, logic_gate-or, logic_gate-not,
     logic_gate-xor, analyzer, virtual_processor-rotater, virtual_processor-unstacker, item_producer,
     virtual_processor-stacker, virtual_processor-painter, wire-second, painter, painter-mirrored, comparator;
 @each $building in $buildingsAndVariants {
