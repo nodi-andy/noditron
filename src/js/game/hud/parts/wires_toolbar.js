@@ -17,23 +17,8 @@ import { MetaNodiLedBuilding } from "../../buildings/nodi_led";
 export class HUDWiresToolbar extends HUDBaseToolbar {
     constructor(root) {
         super(root, {
-            primaryBuildings: [
-                MetaNodiButtonBuilding,
-                MetaNodiLedBuilding,
-                MetaConstantSignalBuilding,
-                MetaLogicGateBuilding,
-                MetaVirtualProcessorBuilding,
-                MetaAnalyzerBuilding,
-                MetaComparatorBuilding,
-                MetaTransistorBuilding,
-            ],
-            secondaryBuildings: [
-                MetaStorageBuilding,
-                MetaReaderBuilding,
-                MetaNodiButtonBuilding,
-                MetaFilterBuilding,
-                MetaNodiBlueBuilding,
-            ],
+            primaryBuildings: [MetaNodiButtonBuilding],
+            secondaryBuildings: [MetaNodiLedBuilding],
             visibilityCondition: () =>
                 !this.root.camera.getIsMapOverlayActive() && this.root.currentLayer === "wires",
             htmlElementId: "ingame_HUD_wires_toolbar",

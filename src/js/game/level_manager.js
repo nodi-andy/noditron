@@ -126,18 +126,18 @@ export class LevelManager{
         else if(level == 6) // ((1+1)+2)+4) = 8
         {
             this.addEntity(MetaNodiLedBuilding  , -5, 0, 1, 1);
-            this.addEntity(MetaNodiLedBuilding  , 0, 0, 2, 2);
+            this.addEntity(MetaNodiLedBuilding  , -1, 0, 2, 2);
             this.addEntity(MetaNodiLedBuilding  , 5, 0, 4, 4);
             this.addEntity(MetaNodiLedBuilding  , 10, 0, 8, 8);
             this.addEntity(MetaNodiButtonBuilding  , -3, -3, 1);
         }
         else if(level == 7) // 2*3 + 5 = 11
         {
-            this.addEntity(MetaNodiButtonBuilding    , -5, 1, 1);
-            this.addEntity(MetaNodiLedBuilding  , 2, 3, 5, 5, true);
-            this.addEntity(MetaNodiLedBuilding  , -4, -2, 3, 3, true);
-            this.addEntity(MetaNodiLedBuilding  ,  0, -2, 2, 2, true);
-            this.addEntity(MetaNodiLedBuilding  ,  4, -2, 11, 11);
+            this.addEntity(MetaNodiButtonBuilding   , -6,  1, 1);
+            this.addEntity(MetaNodiLedBuilding      ,  2,  3, 5, 5, true);
+            this.addEntity(MetaNodiLedBuilding      , -4, -2, 3, 3, true);
+            this.addEntity(MetaNodiLedBuilding      ,  0, -2, 2, 2, true);
+            this.addEntity(MetaNodiLedBuilding      ,  4, -2, 11, 11);
         }
         else if(level == 8) // 1+1+1+1+1+1 = 6
         {

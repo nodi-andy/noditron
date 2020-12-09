@@ -35,7 +35,7 @@ export class NodiRedDiscusSystem extends GameSystemWithFilter {
         const contents = chunk.containedEntitiesByLayer.regular;
         for (let i = 0; i < contents.length; ++i) {
             const entity = contents[i];
-            const comp = entity.components.NodiDiscus;
+            const comp = entity.components.NodiBlueDiscus;
             if (comp) {
                 const staticComp = entity.components.StaticMapEntity;
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();

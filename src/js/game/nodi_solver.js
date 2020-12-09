@@ -134,7 +134,7 @@ export class NodiSolver {
             if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
-            if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
+            if(displayComp == undefined) displayComp = entity.components.NodiBlueDiscus;
             if(displayComp == undefined) displayComp = entity.components.NodiOper;
             if(displayComp && displayComp.hasTypeBit(enumNodiBits.TRAN))
             {
@@ -151,7 +151,7 @@ export class NodiSolver {
             if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
-            if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
+            if(displayComp == undefined) displayComp = entity.components.NodiBlueDiscus;
             if(displayComp == undefined) displayComp = entity.components.NodiOper;
             if(displayComp && displayComp.hasTypeBit(enumNodiBits.PUSH))
             {
@@ -168,7 +168,7 @@ export class NodiSolver {
             if(displayComp == undefined) displayComp = entity.components.NodiBlue;
             if(displayComp == undefined) displayComp = entity.components.DisplayRed;
             if(displayComp == undefined) displayComp = entity.components.NodiData;
-            if(displayComp == undefined) displayComp = entity.components.NodiDiscus;
+            if(displayComp == undefined) displayComp = entity.components.NodiBlueDiscus;
             if(displayComp == undefined) displayComp = entity.components.NodiOper;
             if(displayComp)
             {

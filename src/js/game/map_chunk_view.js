@@ -41,9 +41,9 @@ export class MapChunkView extends MapChunk {
      */
     drawBackgroundLayer(parameters) {
         const systems = this.root.systemMgr.systems;
-        systems.mapResources.drawChunk(parameters, this);
-        systems.beltUnderlays.drawChunk(parameters, this);
-        systems.belt.drawChunk(parameters, this);
+        //systems.mapResources.drawChunk(parameters, this);
+        //systems.beltUnderlays.drawChunk(parameters, this);
+        //systems.belt.drawChunk(parameters, this);
     }
 
     /**
@@ -53,9 +53,9 @@ export class MapChunkView extends MapChunk {
     drawForegroundDynamicLayer(parameters) {
         const systems = this.root.systemMgr.systems;
 
-        systems.itemEjector.drawChunk(parameters, this);
-        systems.itemAcceptor.drawChunk(parameters, this);
-        systems.miner.drawChunk(parameters, this);
+        //systems.itemEjector.drawChunk(parameters, this);
+        //systems.itemAcceptor.drawChunk(parameters, this);
+        //systems.miner.drawChunk(parameters, this);
     }
 
     /**
@@ -67,7 +67,7 @@ export class MapChunkView extends MapChunk {
 
         systems.staticMapEntities.drawChunk(parameters, this);
         systems.nodi_button.drawChunk(parameters, this);
-        //systems.display.drawChunk(parameters, this);
+        systems.display.drawChunk(parameters, this);
         //systems.storage.drawChunk(parameters, this);
         systems.nodi_led.drawChunk(parameters, this);
         systems.nodi_blue_discus.drawChunk(parameters, this);

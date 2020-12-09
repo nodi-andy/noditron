@@ -417,7 +417,7 @@ ingame:
             1: Tutorial
             2: Task
         hints:
-            1_1_extractor: Connect the <strong>button</strong> to the <strong>LED</strong> using <strong>copper conductors</strong>!
+            1_1_extractor: Connect the <strong>button</strong> to the <strong>LED</strong> using the <strong>blue conductors</strong>!
             1_2_conveyor: >-
                 Click on the button to turn on the LED and click again to turn off.
 
@@ -426,7 +426,7 @@ ingame:
 
             3_1_rectangles: >-
                 Turn the second light on using the blue discus<br><br>
-                Pay attention that copper conductor do not touch the light bulp
+                Pay attention that blue conductors do not touch the light bulp
 
             21_1_place_quad_painter: >-
                 Place the <strong>quad painter</strong> and get some <strong>circles</strong>, <strong>white</strong> and <strong>red</strong> color!

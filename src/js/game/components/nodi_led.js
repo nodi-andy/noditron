@@ -53,7 +53,7 @@ export class NodiLedComponent extends NodiDataComponent {
 
     nodiHwProc(map, caller){
         const staticComponents = this.entity.components;
-        if(caller.entity.components.NodiDiscus)
+        if(caller.entity.components.NodiBlueDiscus)
         {
             this.setNewtypeBit(enumNodiBits.TRAN);
             this.clearNewtypeBit(enumNodiBits.PUSH);

@@ -19,6 +19,7 @@ import { NodiBlueComponent } from "./components/nodi_blue";
 import { NodiRedComponent } from "./components/nodi_red";
 import { NodiLedComponent } from "./components/nodi_led";
 import { NodiBlueDiscusComponent } from "./components/nodi_blue_discus";
+import { NodiRedDiscusComponent } from "./components/nodi_red_discus";
 import { NodiOperComponent } from "./components/nodi_oper";
 import { NodiDataComponent } from "./components/nodi_data";
 import { BeltReaderComponent } from "./components/belt_reader";
@@ -39,9 +40,6 @@ export class EntityComponentStorage {
 
         /** @type {BeltComponent} */
         this.Belt;
-        
-        /** @type {CondComponent} */
-        this.Cond;
 
         /** @type {ItemEjectorComponent} */
         this.ItemEjector;
@@ -95,13 +93,16 @@ export class EntityComponentStorage {
         this.NodiLed;
 
         /** @type {NodiBlueDiscusComponent} */
-        this.NodiDiscus;
+        this.NodiBlueDiscus;
+
+        /** @type {NodiRedDiscusComponent} */
+        this.NodiRedDiscus;
 
         /** @type {NodiOperComponent} */
         this.NodiOper;
 
-          /** @type {NodiDataComponent} */
-        this.NodiData;      
+        /** @type {NodiDataComponent} */
+        this.NodiData;
 
         /** @type {BeltReaderComponent} */
         this.BeltReader;

@@ -29,10 +29,10 @@ export class NodiDataComponent extends NodiComponent {
                 let xt = staticComp.origin.x + NB[0];
                 let yt = staticComp.origin.y + NB[1];
                 let pingerEntity = map.getLayerContentXY(xt, yt, "regular");
-                if(pingerEntity && pingerEntity.components && pingerEntity.components.NodiDiscus && pingerEntity.components.NodiDiscus.hasTypeBit(enumNodiBits.PUSH)) 
+                if(pingerEntity && pingerEntity.components && pingerEntity.components.NodiBlueDiscus && pingerEntity.components.NodiBlueDiscus.hasTypeBit(enumNodiBits.PUSH)) 
                 {
                     f = i;
-                    caller = pingerEntity.components.NodiDiscus;
+                    caller = pingerEntity.components.NodiBlueDiscus;
                 }
 
                 //this.ping(map, xt, yt, [enumNodiTypes.COND_1, enumNodiTypes.DISCUS_1]);

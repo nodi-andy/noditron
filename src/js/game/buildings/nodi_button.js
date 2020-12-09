@@ -7,7 +7,6 @@ import { GameRoot } from "../root";
 import { NodiButtonComponent } from "../components/nodi_button";
 import { enumHubGoalRewards } from "../tutorial_goals";
 
-
 const overlayMatrix = generateMatrixRotations([1, 1, 0, 1, 1, 1, 0, 1, 0]);
 
 export class MetaNodiButtonBuilding extends MetaBuilding {
@@ -20,7 +19,7 @@ export class MetaNodiButtonBuilding extends MetaBuilding {
         // @todo: Render differently based on if its activated or not
         return "#ff678b";
     }
-    
+
     getIsRemovable() {
         return this.isRemovable;
     }
@@ -38,13 +37,13 @@ export class MetaNodiButtonBuilding extends MetaBuilding {
      * @param {GameRoot} root
      */
     getIsUnlocked(root) {
-        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_storage);
+        return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_6_nodi_red_discus);
     }
-    
+
     getSprite() {
         return null;
-    }    
-    
+    }
+
     /**
      * Creates the entity at the given location
      * @param {Entity} entity
@@ -62,6 +61,6 @@ export class MetaNodiButtonBuilding extends MetaBuilding {
             })
         );
 
-        entity.addComponent(new NodiButtonComponent({entity}));
+        entity.addComponent(new NodiButtonComponent({ entity }));
     }
 }
