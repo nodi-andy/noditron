@@ -9,9 +9,6 @@ import { formatBigNumber } from "../../core/utils";
 export class NodiRedDiscusSystem extends GameSystemWithFilter {
     constructor(root) {
         super(root, [NodiRedDiscusComponent]);
-
-        this.spriteOn = Loader.getSprite("sprites/wires/led_on.png");
-        this.spriteOff = Loader.getSprite("sprites/buildings/nodi_led.png");
     }
 
     update() {

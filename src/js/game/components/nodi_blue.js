@@ -23,6 +23,13 @@ export class NodiBlueComponent extends NodiComponent {
         this.storedCount = val;
     }
 
+    reset()
+    {
+        this.storedType = enumNodiTypes.COND_1;
+        this.storedTypeNext = enumNodiTypes.COND_1;
+        this.storedCount = 0;
+    }
+
     nodiProc(map, caller, f){
         const staticComp = this.entity.components.StaticMapEntity;
         if(f == undefined){

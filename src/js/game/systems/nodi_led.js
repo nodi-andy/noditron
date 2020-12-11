@@ -32,7 +32,7 @@ export class NodiLedSystem extends GameSystemWithFilter {
      * @param {MapChunkView} chunk
      */
     drawChunk(parameters, chunk) {
-        const contents = chunk.containedEntitiesByLayer.regular;
+        const contents = chunk.containedEntitiesByLayer.wires;
         for (let i = 0; i < contents.length; ++i) {
             const entity = contents[i];
             const ledComp = entity.components.NodiLed;

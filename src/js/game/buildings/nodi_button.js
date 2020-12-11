@@ -29,16 +29,18 @@ export class MetaNodiButtonBuilding extends MetaBuilding {
         return "wires";
     }
 
-    getDimensions() {
-        return new Vector(1, 1);
-    }
-
     /**
      * @param {GameRoot} root
      */
     getIsUnlocked(root) {
         return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_6_nodi_red_discus);
     }
+
+    getDimensions() {
+        return new Vector(1, 1);
+    }
+
+
 
     getSprite() {
         return null;

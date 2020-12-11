@@ -5,7 +5,7 @@ import { MetaBuilding } from "../meta_building";
 import { GameRoot } from "../root";
 import { NodiLedComponent } from "../components/nodi_led";
 import { enumHubGoalRewards } from "../tutorial_goals";
-import { NodiDataComponent } from "../components/nodi_data";
+
 
 export class MetaNodiLedBuilding extends MetaBuilding {
     constructor() {
@@ -17,12 +17,20 @@ export class MetaNodiLedBuilding extends MetaBuilding {
         // @todo: Render differently based on if its activated or not
         return "#ff678b";
     }
+
     getStayInPlacementMode() {
         return true;
     }
+
     getIsRemovable() {
         return this.isRemovable;
     }
+
+    /** @returns {"wires"} **/
+    getLayer() {
+        return "wires";
+    }
+
     /**
      * @param {GameRoot} root
      */
@@ -38,15 +46,23 @@ export class MetaNodiLedBuilding extends MetaBuilding {
         return null;
     }
 
-    getShowWiresLayerPreview() {
-        return true;
-    }
 
     /**
      * Creates the entity at the given location
      * @param {Entity} entity
      */
     setupEntityComponents(entity) {
-        entity.addComponent(new NodiLedComponent({entity}));
+        entity.addComponent(
+            new WiredPinsComponent({
+                slots: [
+                    {
+                        pos: new Vector(0, 0),
+                        direction: enumDirection.top,
+                        type: enumPinSlotType.logicalEjector,
+                    },
+                ],
+            })
+        );
+        entity.addComponent(new NodiLedComponent({ entity }));
     }
 }

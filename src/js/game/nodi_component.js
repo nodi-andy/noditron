@@ -52,24 +52,26 @@ export class NodiComponent extends Component {
         if(pingedEntity && pingedEntity.components) 
         {
             let pingedComp = undefined;
+            if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiBlue;
+            if(pingedComp == undefined) pingedComp = pingedEntity.components.DisplayRed;
+            if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiData;
+            if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiBlueDiscus;
+            if(pingedComp == undefined) return;
+
+            if (types.includes(pingedComp.storedType)) {
+                pingedComp.setNewtypeBit(enumNodiBits.TRAN);
+                pingedComp.clearNewtypeBit(enumNodiBits.PUSH);
+                pingedComp.setValue(v);
+            }
+        }
+        pingedEntity = map.getLayerContentXY(xt, yt, "wire");
+        if(pingedEntity && pingedEntity.components) 
+        {
+            let pingedComp = undefined;
             if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiLed;
             if(pingedComp)
             {
                 pingedComp.nodiHwProc(map, this);
-            }
-            else
-            {
-                if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiBlue;
-                if(pingedComp == undefined) pingedComp = pingedEntity.components.DisplayRed;
-                if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiData;
-                if(pingedComp == undefined) pingedComp = pingedEntity.components.NodiBlueDiscus;
-                if(pingedComp == undefined) return;
-
-                if (types.includes(pingedComp.storedType)) {
-                    pingedComp.setNewtypeBit(enumNodiBits.TRAN);
-                    pingedComp.clearNewtypeBit(enumNodiBits.PUSH);
-                    pingedComp.setValue(v);
-                }
             }
         }
     }

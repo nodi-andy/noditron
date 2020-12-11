@@ -10,8 +10,6 @@ export class NodiBlueDiscusSystem extends GameSystemWithFilter {
     constructor(root) {
         super(root, [NodiBlueDiscusComponent]);
 
-        this.spriteOn = Loader.getSprite("sprites/wires/led_on.png");
-        this.spriteOff = Loader.getSprite("sprites/buildings/nodi_led.png");
     }
 
     update() {

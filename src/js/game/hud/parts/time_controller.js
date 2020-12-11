@@ -82,12 +82,23 @@ export class HUDTimeController extends BaseHUDPart {
 
     restartNodiTick() {
         this.root.nodiSolver.noditick = 0;
-        //this.element.querySelector("button.playstop").innerHTML = ">>";
         this.showNodiTick(this.root.nodiSolver.noditick);
+        for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
+            const entity = this.root.entityMgr.entities[i];
+
+            if(entity.components.NodiBlue)
+            {
+                entity.components.NodiBlue.reset();
+            }
+            if(entity.components.NodiLed)
+            {
+                entity.components.NodiLed.reset();
+            }
+        }
     }
 
     setSpeed() {
-        let slider= Number(this.getRangeInputElement().value);
+        let slider = Number(this.getRangeInputElement().value);
         if(slider == 0) 
             this.root.nodiSolver.tickrate = 0;
         else
@@ -98,7 +109,7 @@ export class HUDTimeController extends BaseHUDPart {
     runButtonClicked()
     {
         let buttonElement = this.element.querySelector("button.nodiRunStop");
-        if(this.root.nodiSolver.nodistate == 0)
+        if (this.root.nodiSolver.nodistate == 0)
         {
           this.root.nodiSolver.nodistate = 1;
         }

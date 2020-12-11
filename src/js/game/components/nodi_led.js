@@ -13,7 +13,9 @@ export class NodiLedComponent extends NodiDataComponent {
             storedCount: types.int,
             storedType: types.int,
             allowedValue: types.int,
-            toggled: types.bool
+            initialValue: types.int,
+            toggled: types.bool,
+            initialToggled: types.bool,
         };
     }
     /**
@@ -32,14 +34,21 @@ export class NodiLedComponent extends NodiDataComponent {
     constructor({ entity, toggled = false }) {
         super();
         this.toggled = toggled;
+        this.initialToggled = toggled;
         this.allowedValue = 1;
+        this.initialValue = 1;
         this.entity = entity;
+    }
+
+    reset()
+    {
+        this.toggled = this.initialToggled;
     }
 
     // Derived from DisplayComponent
     setValue(val)
     {
-        if(val == this.allowedValue)
+        if (val == this.allowedValue)
         {
           this.storedCount = val;
           this.toggled = true;
