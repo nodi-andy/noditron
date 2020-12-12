@@ -17,7 +17,7 @@
         "publishOnItch": "yarn publishOnItchWindows && yarn publishOnItchLinux",
         "publishOnSteam": "cd gulp/steampipe && ./upload.bat",
         "publishStandalone": "yarn publishOnItch && yarn publishOnSteam",
-        "publishWeb": "cd gulp && yarn main.deploy.prod",
+        "publishWeb": "cd gulp && yarn gulp main.deploy.prod",
         "publish": "yarn publishStandalone && yarn publishWeb",
         "syncTranslations": "node sync-translations.js",
         "start": "electron-forge start",
