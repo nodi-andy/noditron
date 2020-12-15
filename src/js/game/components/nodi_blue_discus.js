@@ -51,6 +51,32 @@ export class NodiBlueDiscusComponent extends NodiComponent {
                     if (i == 6) { pingedNodiData.storedCount = this.storedCount; }
                 }
             }
+
+            pingedEntity = map.getLayerContentXY(xt, yt, "wires");
+            if(pingedEntity && pingedEntity.components) 
+            {
+                let pingedNodiData = undefined;
+                if(pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiLed;
+                if(pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiData;
+                if(pingedNodiData != undefined)
+                {
+                    // multiple
+                    if (i == 1) { this.storedCount *= pingedNodiData.storedCount; }
+                    // read
+                    if (i == 2) { this.storedCount = pingedNodiData.allowedValue; }
+                    // add
+                    if (i == 3) { this.storedCount += pingedNodiData.allowedValue; }
+                    // compare
+                    if (i == 4) {
+                        this.storedCount = pingedNodiData.allowedValue - this.storedCount;
+                        this.ping(map, xt, yt, [enumNodiTypes.DATA]);
+                    }
+                    // subtract
+                    if (i == 5) { this.storedCount -= pingedNodiData.allowedValue; }
+                    // write
+                    if (i == 6) { pingedNodiData.storedCount = this.storedCount; }
+                }
+            }
         }
         // fCond: After calculations are done, send to blue conductor
         for (var i = 0; i < 8; i++) {

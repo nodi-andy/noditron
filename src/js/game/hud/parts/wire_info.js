@@ -29,13 +29,23 @@ export class HUDWireInfo extends BaseHUDPart {
 
         const worldPos = this.root.camera.screenToWorld(mousePos);
         const tile = worldPos.toTileSpace();
-        const entity = this.root.map.getLayerContentXY(tile.x + 1, tile.y - 1, "wires");
-
+        if ( this.root.map.getLayerContentXY(tile.x + 1, tile.y + 1, "wires") )
+        {
+            parameters.context.fillText("-", mousePos.x, mousePos.y, 60);
+        }
+        if ( this.root.map.getLayerContentXY(tile.x + 1, tile.y - 1, "wires") )
+        {
+            parameters.context.fillText("+", mousePos.x, mousePos.y, 60);
+        }
+        if ( this.root.map.getLayerContentXY(tile.x, tile.y - 1, "wires") )
+        {
+            parameters.context.fillText("Read", mousePos.x, mousePos.y, 60);
+        }
+/*
         if (!entity) {
             // No entity
             return;
         }
-        parameters.context.fillText("+", mousePos.x, mousePos.y, 60);
 
         if (
             !this.root.camera.getIsMapOverlayActive() &&
@@ -76,7 +86,7 @@ export class HUDWireInfo extends BaseHUDPart {
                     60
                 );
             }
-        }
+        }*/
     }
 
     /**
