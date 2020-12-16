@@ -86,17 +86,6 @@ export class MetaNodiOperBuilding extends MetaBuilding {
      * @param {Entity} entity
      */
     setupEntityComponents(entity) {
-        entity.addComponent(
-            new WiredPinsComponent({
-                slots: [
-                    {
-                        pos: new Vector(0, 0),
-                        direction: enumDirection.bottom,
-                        type: enumPinSlotType.logicalAcceptor
-                    },
-                ],
-            })
-        );
         entity.addComponent(new NodiOperComponent(entity));
     }
 }

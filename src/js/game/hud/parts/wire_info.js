@@ -4,11 +4,19 @@ import { WireNetwork } from "../../systems/wire";
 import { THEME } from "../../theme";
 import { BaseHUDPart } from "../base_hud_part";
 import { Loader } from "../../../core/loader";
+import { NodiBlueDiscusComponent } from "../../components/nodi_blue_discus";
+import { MetaNodiBlueDiscusBuilding } from "../../buildings/nodi_blue_discus";
 
 export class HUDWireInfo extends BaseHUDPart {
     initialize() {
         this.spriteEmpty = Loader.getSprite("sprites/wires/network_empty.png");
         this.spriteConflict = Loader.getSprite("sprites/wires/network_conflict.png");
+        this.root.hud.signals.selectedPlacementBuildingChanged.add(this.selectedPlacementBuildingChanged, this);
+        this.currentBuilding = undefined;
+    }
+
+    selectedPlacementBuildingChanged(metaBuilding) {
+        this.currentBuilding = metaBuilding;
     }
 
     /**
@@ -27,19 +35,30 @@ export class HUDWireInfo extends BaseHUDPart {
             return;
         }
 
-        const worldPos = this.root.camera.screenToWorld(mousePos);
-        const tile = worldPos.toTileSpace();
-        if ( this.root.map.getLayerContentXY(tile.x + 1, tile.y + 1, "wires") )
+        if( this.currentBuilding && this.currentBuilding.id == "nodi_blue_discus" )
         {
-            parameters.context.fillText("-", mousePos.x, mousePos.y, 60);
-        }
-        if ( this.root.map.getLayerContentXY(tile.x + 1, tile.y - 1, "wires") )
-        {
-            parameters.context.fillText("+", mousePos.x, mousePos.y, 60);
-        }
-        if ( this.root.map.getLayerContentXY(tile.x, tile.y - 1, "wires") )
-        {
-            parameters.context.fillText("Read", mousePos.x, mousePos.y, 60);
+            const worldPos = this.root.camera.screenToWorld(mousePos);
+            const tile = worldPos.toTileSpace();
+            if ( this.root.map.getLayerContentXY(tile.x + 1, tile.y + 1, "wires") )
+            {
+                parameters.context.fillText("-", mousePos.x, mousePos.y, 60);
+            }
+            if ( this.root.map.getLayerContentXY(tile.x + 1, tile.y - 1, "wires") )
+            {
+                parameters.context.fillText("+", mousePos.x, mousePos.y, 60);
+            }
+            if ( this.root.map.getLayerContentXY(tile.x - 1, tile.y - 1, "wires") )
+            {
+                parameters.context.fillText("X", mousePos.x, mousePos.y, 60);
+            }
+            if ( this.root.map.getLayerContentXY(tile.x, tile.y - 1, "wires") )
+            {
+                parameters.context.fillText("Read", mousePos.x, mousePos.y, 60);
+            }
+            if ( this.root.map.getLayerContentXY(tile.x, tile.y + 1, "wires") )
+            {
+                parameters.context.fillText("Write", mousePos.x, mousePos.y, 60);
+            }
         }
 /*
         if (!entity) {
@@ -96,7 +115,7 @@ export class HUDWireInfo extends BaseHUDPart {
      * @param {WireNetwork} network
      */
     drawHighlightedNetwork(parameters, network) {
-        parameters.context.globalAlpha = 0.5;
+       /* parameters.context.globalAlpha = 0.5;
 
         for (let i = 0; i < network.wires.length; ++i) {
             const wire = network.wires[i];
@@ -125,6 +144,6 @@ export class HUDWireInfo extends BaseHUDPart {
                 overrideColor: THEME.map.wires.highlightColor,
             });
         }
-        parameters.context.globalAlpha = 1;
+        parameters.context.globalAlpha = 1;*/
     }
 }

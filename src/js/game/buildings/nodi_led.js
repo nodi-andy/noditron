@@ -52,17 +52,6 @@ export class MetaNodiLedBuilding extends MetaBuilding {
      * @param {Entity} entity
      */
     setupEntityComponents(entity) {
-        entity.addComponent(
-            new WiredPinsComponent({
-                slots: [
-                    {
-                        pos: new Vector(0, 0),
-                        direction: enumDirection.top,
-                        type: enumPinSlotType.logicalEjector,
-                    },
-                ],
-            })
-        );
         entity.addComponent(new NodiLedComponent({ entity }));
     }
 }

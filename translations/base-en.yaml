@@ -770,12 +770,12 @@ buildings:
 storyRewards:
     # Those are the rewards gained from completing the store
     reward_1_variable:
-        title: Different buttons
-        desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
+        title: Multiple entry points
+        desc: A program has usually a single entry point (main-function). Noditron have infinite entry points. You just unlocked multiple <strong>entry points</strong>. Each all them will send the number 1 at the beginning of the program.
 
     reward_2_nodi_blue_discus:
-        title: Different buttons
-        desc: You just unlocked buttons with <strong>different numbers</strong>. A button can only turn on the light with the <strong>same number</strong>
+        title: Input buttons
+        desc: You just unlocked <strong>buttons</strong>. If you press a button, it will send its number.
 
     reward_5_nodi_red:
         title: Different buttons

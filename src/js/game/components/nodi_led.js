@@ -50,13 +50,13 @@ export class NodiLedComponent extends NodiDataComponent {
     {
         if (val == this.allowedValue)
         {
-          this.storedCount = val;
-          this.toggled = true;
+            this.storedCount = val;
+            this.toggled = true;
         }
         else
         {
-          this.storedCount = val;
-          this.toggled = false;
+            this.storedCount = val;
+            this.toggled = false;
         }
     }
 

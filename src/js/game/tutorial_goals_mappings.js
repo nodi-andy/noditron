@@ -20,6 +20,8 @@ import { enumUndergroundBeltVariants, MetaUndergroundBeltBuilding } from "./buil
 import { defaultBuildingVariant, MetaBuilding } from "./meta_building";
 /** @typedef {Array<[typeof MetaBuilding, string]>} TutorialGoalReward */
 import { enumHubGoalRewards } from "./tutorial_goals";
+import { enumNodiOperVariants, MetaNodiOperBuilding } from "./buildings/nodi_oper";
+import { MetaNodiButtonBuilding } from "./buildings/nodi_button";
 
 /**
  * Helper method for proper types
@@ -32,10 +34,8 @@ const typed = x => x;
  * @enum {TutorialGoalReward?}
  */
 export const enumHubGoalRewardsToContentUnlocked = {
-    [enumHubGoalRewards.reward_1_variable]: null,
-    [enumHubGoalRewards.reward_2_nodi_blue_discus]: typed([
-        [MetaNodiBlueDiscusBuilding, defaultBuildingVariant],
-    ]),
+    [enumHubGoalRewards.reward_1_variable]: typed([[MetaNodiOperBuilding, enumNodiOperVariants.starter]]),
+    [enumHubGoalRewards.reward_2_nodi_blue_discus]: typed([[MetaNodiButtonBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_5_nodi_red]: typed([[MetaNodiRedBuilding, defaultBuildingVariant]]),
     [enumHubGoalRewards.reward_6_nodi_red_discus]: typed([
         [MetaNodiRedDiscusBuilding, defaultBuildingVariant],

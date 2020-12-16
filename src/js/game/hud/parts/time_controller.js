@@ -10,8 +10,7 @@ export class HUDTimeController extends BaseHUDPart {
             parent,
             "ingame_HUD_DebuggerController",
             [],
-            `
-            <label>Debugger (F7)</label>
+            `<label>Debugger (F7)</label>
 
             <div class="buttons">
                 <button class="styledButton nodiRestart"></button>
@@ -20,10 +19,8 @@ export class HUDTimeController extends BaseHUDPart {
             <label class="tickLabel">Cycles: 0</label><br>
             <div class = "debugSlider">
                 <label>Speed: </label> <input class="rangeInput" type="range" value="1900" min="0" max="2000" step="1">
-            </div>
-        `
+            </div>`
         );
-
         const bind = (selector, handler) => this.trackClicks(this.element.querySelector(selector), handler);
 
         bind(".nodiRunStop", () => this.runButtonClicked());
@@ -53,9 +50,9 @@ export class HUDTimeController extends BaseHUDPart {
         this.modifyUpgrade("processors", 100);
         this.modifyUpgrade("painting", 100);
     }
-    
-    showNodiTick(tickCount)  {
-      this.element.querySelector("label.tickLabel").innerHTML = "Cycles: " + tickCount;
+
+    showNodiTick(tickCount) {
+        this.element.querySelector("label.tickLabel").innerHTML = "Cycles: " + tickCount;
     }
 
     modifyUpgrade(id, amount) {
@@ -111,11 +108,12 @@ export class HUDTimeController extends BaseHUDPart {
         let buttonElement = this.element.querySelector("button.nodiRunStop");
         if (this.root.nodiSolver.nodistate == 0)
         {
-          this.root.nodiSolver.nodistate = 1;
+            this.root.nodiSolver.nodistate = 1;
         }
         else
         {
-          this.root.nodiSolver.nodistate = 0;
+            this.root.nodiSolver.nodistate = 0;
+            this.restartNodiTick();
         }
         this.updateRunButton();
     }
@@ -150,6 +148,8 @@ export class HUDTimeController extends BaseHUDPart {
         this.visible = true; //this.root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_wires_painter_and_levers);
         this.domAttach = new DynamicDomAttach(this.root, this.element);
         this.element.querySelector("div.debugSlider").setAttribute("style", "display:none");
+        this.element.querySelector("button.nodiRestart").setAttribute("style", "display:none");
+        this.element.querySelector("label.tickLabel").setAttribute("style", "display:none");
     }
 
     toggle() {

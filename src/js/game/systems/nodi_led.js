@@ -39,7 +39,6 @@ export class NodiLedSystem extends GameSystemWithFilter {
             if (ledComp) {
                 const sprite = ledComp.toggled ? this.spriteOn : this.spriteOff;
                 entity.components.StaticMapEntity.drawSpriteOnBoundsClipped(parameters, sprite);
-                
                 const staticComp = entity.components.StaticMapEntity;
 
                 const center = staticComp.getTileSpaceBounds().getCenter().toWorldSpace();
@@ -48,8 +47,8 @@ export class NodiLedSystem extends GameSystemWithFilter {
                     context.font = "bold 12px GameFont";
                     context.textAlign = "center";
                     context.textBaseline = "middle";
-                    context.fillStyle = "#64666e";
-                    context.fillText(formatBigNumber(ledComp.allowedValue), center.x, center.y);
+                    context.fillStyle = "#000000";
+                    context.fillText(formatBigNumber(ledComp.allowedValue), center.x, center.y-2);
                     context.textAlign = "left";
                 }
             }

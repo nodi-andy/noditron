@@ -104,7 +104,7 @@ export class LevelManager{
             this.addEntity(MetaNodiOperBuilding    , -4,  0, 1, 0, enumNodiOperVariants.starter);
             this.addEntity(MetaNodiOperBuilding    ,  4, -2, 1, 0, enumNodiOperVariants.starter);
             this.addEntity(MetaNodiLedBuilding     , -3,  4, 1);
-            this.addEntity(MetaNodiLedBuilding     ,  4,  2, 1);
+            this.addEntity(MetaNodiLedBuilding     ,  1,  2, 1);
         }
         else if(level == 3) // a=7; main=12;
         {

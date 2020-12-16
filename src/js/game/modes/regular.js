@@ -220,7 +220,6 @@ function generateUpgrades(limitedVersion = false) {
 export function generateLevelDefinitions(limitedVersion = false) {
     const levelDefinitions = [
         // 1
-        // Circle
         {
             shape: "CuCuCuCu", // belts t1
             required: 30,
@@ -228,26 +227,24 @@ export function generateLevelDefinitions(limitedVersion = false) {
         },
 
         // 2
-        // Cutter
         {
             shape: "----CuCu", //
             required: 40,
-            reward: enumHubGoalRewards.reward_1_variable,
+            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
         },
 
         // 3
-        // Rectangle
         {
             shape: "RuRuRuRu", // miners t1
             required: 70,
-            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
+            reward: enumHubGoalRewards.reward_5_nodi_red,
         },
 
         // 4
         {
             shape: "RuRu----", // processors t2
             required: 70,
-            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
+            reward: enumHubGoalRewards.reward_5_nodi_red,
         },
 
         // 5
