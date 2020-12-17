@@ -6,7 +6,6 @@ import { GameRoot } from "../root";
 import { NodiLedComponent } from "../components/nodi_led";
 import { enumHubGoalRewards } from "../tutorial_goals";
 
-
 export class MetaNodiLedBuilding extends MetaBuilding {
     constructor() {
         super("nodi_led");
@@ -45,7 +44,6 @@ export class MetaNodiLedBuilding extends MetaBuilding {
     getSprite() {
         return null;
     }
-
 
     /**
      * Creates the entity at the given location

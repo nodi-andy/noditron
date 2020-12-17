@@ -32,9 +32,6 @@ export class MetaNodiDataBuilding extends MetaBuilding {
         return new Vector(1, 1);
     }
 
-    getShowWiresLayerPreview() {
-        return true;
-    }
     getStayInPlacementMode() {
         return true;
     }

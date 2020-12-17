@@ -4,7 +4,7 @@ import { enumNodiTypes, enumNodiBits } from "../nodi_solver";
 import { Entity } from "../entity";
 
 export class NodiBlueDiscusComponent extends NodiComponent {
-   static getId() {
+    static getId() {
         return "NodiBlueDiscus";
     }
 
@@ -19,7 +19,7 @@ export class NodiBlueDiscusComponent extends NodiComponent {
         this.entity = entityFromSystem;
     }
 
-    nodiProc(map){
+    nodiProc(map) {
         const staticComp = this.entity.components.StaticMapEntity;
         for (var i = 0; i < 8; i++) {
             var NB = this.getNB(i);
@@ -27,54 +27,69 @@ export class NodiBlueDiscusComponent extends NodiComponent {
             let yt = staticComp.origin.y + NB[1];
 
             let pingedEntity = map.getLayerContentXY(xt, yt, "regular");
-            if(pingedEntity && pingedEntity.components) 
-            {
+            if (pingedEntity && pingedEntity.components) {
                 let pingedNodiData = undefined;
-                if(pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiLed;
-                if(pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiData;
-                if(pingedNodiData != undefined)
-                {
+                if (pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiData;
+                if (pingedNodiData != undefined) {
                     // multiple
-                    if (i == 1) { this.storedCount *= pingedNodiData.storedCount; }
+                    if (i == 1) {
+                        this.storedCount *= pingedNodiData.storedCount;
+                    }
                     // read
-                    if (i == 2) { this.storedCount = pingedNodiData.allowedValue; }
+                    if (i == 2) {
+                        this.storedCount = pingedNodiData.allowedValue;
+                    }
                     // add
-                    if (i == 3) { this.storedCount += pingedNodiData.allowedValue; }
+                    if (i == 3) {
+                        this.storedCount += pingedNodiData.allowedValue;
+                    }
                     // compare
                     if (i == 4) {
                         this.storedCount = pingedNodiData.allowedValue - this.storedCount;
                         this.ping(map, xt, yt, [enumNodiTypes.DATA]);
                     }
                     // subtract
-                    if (i == 5) { this.storedCount -= pingedNodiData.allowedValue; }
+                    if (i == 5) {
+                        this.storedCount -= pingedNodiData.allowedValue;
+                    }
                     // write
-                    if (i == 6) { pingedNodiData.storedCount = this.storedCount; }
+                    if (i == 6) {
+                        pingedNodiData.storedCount = this.storedCount;
+                    }
                 }
             }
 
             pingedEntity = map.getLayerContentXY(xt, yt, "wires");
-            if(pingedEntity && pingedEntity.components) 
-            {
+            if (pingedEntity && pingedEntity.components) {
                 let pingedNodiData = undefined;
-                if(pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiLed;
-                if(pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiData;
-                if(pingedNodiData != undefined)
-                {
+                if (pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiLed;
+                if (pingedNodiData == undefined) pingedNodiData = pingedEntity.components.NodiData;
+                if (pingedNodiData != undefined) {
                     // multiple
-                    if (i == 1) { this.storedCount *= pingedNodiData.storedCount; }
+                    if (i == 1) {
+                        this.storedCount *= pingedNodiData.allowedValue;
+                    }
+
                     // read
-                    if (i == 2) { this.storedCount = pingedNodiData.allowedValue; }
+                    if (i == 2) this.storedCount = pingedNodiData.read();
+
                     // add
-                    if (i == 3) { this.storedCount += pingedNodiData.allowedValue; }
+                    if (i == 3) {
+                        this.storedCount += pingedNodiData.allowedValue;
+                    }
                     // compare
                     if (i == 4) {
                         this.storedCount = pingedNodiData.allowedValue - this.storedCount;
                         this.ping(map, xt, yt, [enumNodiTypes.DATA]);
                     }
                     // subtract
-                    if (i == 5) { this.storedCount -= pingedNodiData.allowedValue; }
+                    if (i == 5) {
+                        this.storedCount -= pingedNodiData.allowedValue;
+                    }
+
                     // write
-                    if (i == 6) { pingedNodiData.storedCount = this.storedCount; }
+                    if (i == 6) pingedNodiData.write(this.storedCount);
+
                 }
             }
         }

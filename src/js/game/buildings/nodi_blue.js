@@ -21,16 +21,15 @@ export class MetaNodiBlueBuilding extends MetaBuilding {
     getAvailableVariants(root) {
         return super.getAvailableVariants(root);
     }
+
     getDimensions() {
         return new Vector(1, 1);
     }
 
-    getShowWiresLayerPreview() {
-        return true;
-    }
     getStayInPlacementMode() {
         return true;
     }
+
     /**
      * Creates the entity at the given location
      * @param {Entity} entity

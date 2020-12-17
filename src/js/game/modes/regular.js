@@ -230,21 +230,21 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "----CuCu", //
             required: 40,
-            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
+            reward: enumHubGoalRewards.reward_1_variable,
         },
 
         // 3
         {
             shape: "RuRuRuRu", // miners t1
             required: 70,
-            reward: enumHubGoalRewards.reward_5_nodi_red,
+            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
         },
 
         // 4
         {
             shape: "RuRu----", // processors t2
             required: 70,
-            reward: enumHubGoalRewards.reward_5_nodi_red,
+            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
         },
 
         // 5
@@ -252,7 +252,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "Cu----Cu", // belts t2
             required: 170,
-            reward: enumHubGoalRewards.reward_5_nodi_red,
+            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
         },
 
         // 6
@@ -274,7 +274,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "RbRb----", // painter t2
             required: 480,
-            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
+            reward: enumHubGoalRewards.reward_5_nodi_red,
         },
 
         // 9

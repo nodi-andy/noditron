@@ -4,7 +4,7 @@ import { NodiComponent } from "../nodi_component";
 import { types } from "../../savegame/serialization";
 import { NodiDataComponent } from "./nodi_data";
 
-export class NodiLedComponent extends NodiDataComponent {
+export class NodiLedComponent extends NodiComponent {
     static getId() {
         return "NodiLed";
     }
@@ -40,9 +40,28 @@ export class NodiLedComponent extends NodiDataComponent {
         this.entity = entity;
     }
 
+
+    read()
+    {
+        if(this.toggled) {
+            return this.allowedValue;
+        }
+        else {
+            return 0;
+        }
+    }
+
+    write(val)
+    {
+        if(this.toggled) {
+            this.allowedValue = val;;
+        }
+    }
+
     reset()
     {
         this.toggled = this.initialToggled;
+        this.allowedValue = this.initialValue;
     }
 
     // Derived from DisplayComponent
@@ -60,17 +79,13 @@ export class NodiLedComponent extends NodiDataComponent {
         }
     }
 
-    nodiHwProc(map, caller){
+    nodiHwProc(map, caller) {
         const staticComponents = this.entity.components;
-        if(caller.entity.components.NodiBlueDiscus)
-        {
+        if (caller.entity.components.NodiBlueDiscus) {
             this.setNewtypeBit(enumNodiBits.TRAN);
             this.clearNewtypeBit(enumNodiBits.PUSH);
-        }
-        else if(caller.entity.components.NodiBlue)
-        {
-            if(this.hasTypeBit(enumNodiBits.PUSH) == 0)
-            {
+        } else if (caller.entity.components.NodiBlue) {
+            if (this.hasTypeBit(enumNodiBits.PUSH) == 0) {
               this.setValue(caller.storedCount);
             }
         }

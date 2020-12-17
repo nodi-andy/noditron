@@ -1,9 +1,7 @@
 import { NodiComponent } from "../nodi_component";
 import { enumNodiTypes, enumNodiBits } from "../nodi_solver";
 
-
 export class NodiOperComponent extends NodiComponent {
-
     static getId() {
         return "NodiOper";
     }
@@ -17,33 +15,31 @@ export class NodiOperComponent extends NodiComponent {
         this.storedTypeNext = 3;
         this.storedCount = 0;
         this.entity = entityFromSystem;
+        this.isRemovable = false;
     }
 
     nodiProc(map){
         const staticComp = this.entity.components.StaticMapEntity;
         let inputArray = [];
-        for (var i = 0; i < 8; i++) {
+        var i;
+        for (i = 0; i < 8; i++) {
             var NB = this.getNB(i);
             let xt = staticComp.origin.x + NB[0];
             let yt = staticComp.origin.y + NB[1];
             let inputEntity = map.getLayerContentXY(xt, yt, "regular");
-            if(inputEntity && inputEntity.components) 
-            {
+            if (inputEntity && inputEntity.components) {
                 let inputComp = undefined;
                 if(inputComp == undefined) inputComp = inputEntity.components.NodiData;
-                if(inputComp)
-                {
+                if (inputComp) {
                     inputArray.push(inputComp.storedCount);
                 }
             }
         }
         let output = 0;
-        if(this.storedCount == 1)
-        {
-            if(inputArray[0])
-              output = 1;
+        if (this.storedCount == 1) {
+            if (inputArray[0]) output = 1;
 
-            for (var i = 0; i < 8; i++) {
+            for (i = 0; i < 8; i++) {
                 var NB = this.getNB(i);
                 let xt = staticComp.origin.x + NB[0];
                 let yt = staticComp.origin.y + NB[1];

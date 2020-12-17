@@ -47,6 +47,10 @@ export class MetaNodiOperBuilding extends MetaBuilding {
         return root.hubGoals.isRewardUnlocked(enumHubGoalRewards.reward_6_nodi_red_discus);
     }
 
+    getIsRemovable() {
+        return this.isRemovable;
+    }
+
     getAvailableVariants() {
         return [
             defaultBuildingVariant,
@@ -63,19 +67,13 @@ export class MetaNodiOperBuilding extends MetaBuilding {
      * @param {number} rotationVariant
      * @param {string} variant
      */
-    updateVariants(entity, rotationVariant, variant)
-    {
+    updateVariants(entity, rotationVariant, variant) {
         if (variant == enumNodiOperVariants.or) entity.components.NodiOper.storedCount = 1;
-        else if(variant == enumNodiOperVariants.starter)
-           entity.components.NodiOper.storedCount = 2;
+        else if (variant == enumNodiOperVariants.starter) entity.components.NodiOper.storedCount = 2;
     }
 
     getDimensions() {
         return new Vector(1, 1);
-    }
-
-    getShowWiresLayerPreview() {
-        return true;
     }
 
     getStayInPlacementMode() {

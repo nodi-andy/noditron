@@ -2,13 +2,12 @@ import { NodiComponent } from "../nodi_component";
 import { enumNodiTypes, enumNodiBits } from "../nodi_solver";
 
 export class NodiBlueComponent extends NodiComponent {
-
     static getId() {
         return "NodiBlue";
     }
 
     /**
-     * 
+     *
      */
     constructor(entityFromSystem) {
         super();
@@ -18,21 +17,29 @@ export class NodiBlueComponent extends NodiComponent {
         this.entity = entityFromSystem;
     }
     // Derived from NodiComponent
-    setValue(val)
-    {
+    setValue(val) {
         this.storedCount = val;
     }
 
-    reset()
-    {
+    reset() {
         this.storedType = enumNodiTypes.COND_1;
         this.storedTypeNext = enumNodiTypes.COND_1;
         this.storedCount = 0;
     }
 
-    nodiProc(map, caller, f){
+    nodiProc(map, caller, f) {
         const staticComp = this.entity.components.StaticMapEntity;
-        if(f == undefined){
+
+        let pingedEntity = map.getLayerContentXY(staticComp.origin.x, staticComp.origin.y, "wire");
+        if (pingedEntity && pingedEntity.components) {
+            let pingedComp = undefined;
+            if (pingedComp == undefined) pingedComp = pingedEntity.components.NodiLed;
+            if (pingedComp) {
+                pingedComp.nodiHwProc(map, this);
+            }
+        }
+
+        if (f == undefined) {
             for (var i = 0; i < 8; i++) {
                 var NB = this.getNB(i);
                 let xt = staticComp.origin.x + NB[0];
@@ -42,9 +49,13 @@ export class NodiBlueComponent extends NodiComponent {
         }
 
         // read
-        if (f == 2) { caller.storedCount = this.storedCount; }
+        if (f == 2) {
+            caller.storedCount = this.storedCount;
+        }
         // add
-        if (f == 3) { caller.storedCount += this.storedCount; }
+        if (f == 3) {
+            caller.storedCount += this.storedCount;
+        }
         // compare
         if (f == 4) {
             // equal
@@ -59,5 +70,4 @@ export class NodiBlueComponent extends NodiComponent {
         this.clearNewtypeBit(enumNodiBits.TRAN);
         this.setNewtypeBit(enumNodiBits.PUSH);
     }
-
 }
