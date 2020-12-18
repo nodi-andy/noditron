@@ -19,6 +19,12 @@ export class NodiBlueDiscusComponent extends NodiComponent {
         this.entity = entityFromSystem;
     }
 
+    reset() {
+        this.storedType = enumNodiTypes.DISCUS_1;
+        this.storedTypeNext = enumNodiTypes.DISCUS_1;
+        this.storedCount = 0;
+    }
+
     nodiProc(map) {
         const staticComp = this.entity.components.StaticMapEntity;
         for (var i = 0; i < 8; i++) {
@@ -79,8 +85,52 @@ export class NodiBlueDiscusComponent extends NodiComponent {
                     }
                     // compare
                     if (i == 4) {
+                        // equal
+                        if (this.storedCount == pingedNodiData.allowedValue) {
+                            this.ping(
+                                map,
+                                staticComp.origin.x + 2,
+                                staticComp.origin.y,
+                                [
+                                    enumNodiTypes.COND_1,
+                                    enumNodiTypes.DISCUS_1,
+                                    enumNodiTypes.COND_2,
+                                    enumNodiTypes.DISCUS_2,
+                                ],
+                                this.storedCount
+                            );
+                        }
+                        // bigger
+                        if (this.storedCount > pingedNodiData.allowedValue) {
+                            this.ping(
+                                map,
+                                staticComp.origin.x + 2,
+                                staticComp.origin.y - 1,
+                                [
+                                    enumNodiTypes.COND_1,
+                                    enumNodiTypes.DISCUS_1,
+                                    enumNodiTypes.COND_2,
+                                    enumNodiTypes.DISCUS_2,
+                                ],
+                                this.storedCount
+                            );
+                        }
+                        // smaller
+                        if (this.storedCount < pingedNodiData.allowedValue) {
+                            this.ping(
+                                map,
+                                staticComp.origin.x + 2,
+                                staticComp.origin.y + 1,
+                                [
+                                    enumNodiTypes.COND_1,
+                                    enumNodiTypes.DISCUS_1,
+                                    enumNodiTypes.COND_2,
+                                    enumNodiTypes.DISCUS_2,
+                                ],
+                                this.storedCount
+                            );
+                        }
                         this.storedCount = pingedNodiData.allowedValue - this.storedCount;
-                        this.ping(map, xt, yt, [enumNodiTypes.DATA]);
                     }
                     // subtract
                     if (i == 5) {

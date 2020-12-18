@@ -83,8 +83,8 @@ export class DisplaySystem extends GameSystemWithFilter {
                 if (parameters.visibleRect.containsCircle(center.x, center.y + 25, 20)  && ( dispComp.storedType == 10 || entity.components.NodiData || entity.components.Oper)) {
                     context.font = "bold 14px GameFont";
                     context.textAlign = "center";
-                    context.fillStyle = "#64666e";
-                    context.fillText(formatBigNumber(dispComp.storedCount), center.x, center.y+5);
+                    context.fillStyle = "#000000";
+                    context.fillText(formatBigNumber(dispComp.storedCount), center.x, center.y);
                     context.textAlign = "left";
                 }
             }

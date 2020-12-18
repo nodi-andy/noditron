@@ -83,25 +83,17 @@ export class HUDTimeController extends BaseHUDPart {
         for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             const entity = this.root.entityMgr.entities[i];
 
-            if(entity.components.NodiBlue)
-            {
-                entity.components.NodiBlue.reset();
-            }
-            if(entity.components.NodiLed)
-            {
-                entity.components.NodiLed.reset();
-            }
+            if (entity.components.NodiBlue) entity.components.NodiBlue.reset();
+            if (entity.components.NodiBlueDiscus) entity.components.NodiBlueDiscus.reset();
+            if (entity.components.NodiLed) entity.components.NodiLed.reset();
         }
     }
 
     setSpeed() {
         let slider = Number(this.getRangeInputElement().value);
-        if(slider == 0) 
-            this.root.nodiSolver.tickrate = 0;
-        else
-            this.root.nodiSolver.tickrate = 2001 - Number(this.getRangeInputElement().value);
+        if (slider == 0) this.root.nodiSolver.tickrate = 0;
+        else this.root.nodiSolver.tickrate = 2001 - Number(this.getRangeInputElement().value);
     }
-
 
     runButtonClicked()
     {
