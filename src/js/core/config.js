@@ -17,7 +17,7 @@ export const THIRDPARTY_URLS = {
     reddit: "https://www.reddit.com/r/shapezio",
     shapeViewer: "https://viewer.shapez.io",
 
-    standaloneStorePage: "https://store.steampowered.com/app/1318690/shapezio/",
+    standaloneStorePage: "https://store.steampowered.com/app/1505250/Noditron/",
 
     levelTutorialVideos: {
         21: "https://www.youtube.com/watch?v=0nUfRLMCcgo&",

@@ -274,7 +274,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "RbRb----", // painter t2
             required: 480,
-            reward: enumHubGoalRewards.reward_5_nodi_red,
+            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
         },
 
         // 9
@@ -314,7 +314,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
         {
             shape: "RpRpRpRp:CwCwCwCw", // painting t3
             required: 3800,
-            reward: enumHubGoalRewards.reward_6_nodi_red_discus,
+            reward: enumHubGoalRewards.reward_2_nodi_blue_discus,
         },
 
         // DEMO STOPS HERE
@@ -323,7 +323,7 @@ export function generateLevelDefinitions(limitedVersion = false) {
                   {
                       shape: "RpRpRpRp:CwCwCwCw",
                       required: 0,
-                      reward: enumHubGoalRewards.reward_demo_end,
+                      reward: enumHubGoalRewards.reward_5_nodi_red,
                   },
               ]
             : [

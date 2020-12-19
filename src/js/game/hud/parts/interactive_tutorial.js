@@ -20,8 +20,9 @@ const tutorialsByLevel = [
         {
             id: "1_1_extractor",
             title: "1",
-            condition: /** @param {GameRoot} root */ root =>
-                root.entityMgr.getAllWithComponent(NodiBlueComponent).length <= 6,
+            /** @param {GameRoot} root */
+
+            condition: root => root.entityMgr.getAllWithComponent(NodiBlueComponent).length <= 6,
         },
         // 1.2. connect to hub
         {
@@ -30,16 +31,14 @@ const tutorialsByLevel = [
             condition: /** @param {GameRoot} root */ root => root.hubGoals.getCurrentGoalDelivered() === 0,
         },
     ],
-    // Level 2
+    [], // Level 2
+    // Level 3
     [
         // 2.1 place a cutter
         {
             id: "2_1_place_cutter",
-            title: "2",
-            condition: /** @param {GameRoot} root */ root =>
-                root.entityMgr
-                    .getAllWithComponent(NodiLedComponent)
-                    .filter(e => e.components.NodiLed.storedCount === 0).length >=  0,
+            title: "1",
+            condition: /** @param {GameRoot} root */ root => root.hubGoals.getCurrentGoalDelivered() === 0,
         },
     ],
 
@@ -48,7 +47,7 @@ const tutorialsByLevel = [
         // 3.1. rectangles
         {
             id: "3_1_rectangles",
-            title: "2",
+            title: "1",
             condition: /** @param {GameRoot} root */ root =>
                 // 4 miners placed above rectangles and 10 delivered
                 root.hubGoals.getCurrentGoalDelivered() < 10 ||
@@ -64,7 +63,6 @@ const tutorialsByLevel = [
         },
     ],
 
-    [], // Level 4
     [], // Level 5
     [], // Level 6
     [], // Level 7
@@ -116,18 +114,16 @@ const tutorialsByLevel = [
             id: "21_4_press_button",
             title: "1",
             condition: /** @param {GameRoot} root */ root =>
-                root.entityMgr.getAllWithComponent(NodiButtonComponent).some(e => !e.components.Lever.toggled),
+                root.entityMgr
+                    .getAllWithComponent(NodiButtonComponent)
+                    .some(e => !e.components.Lever.toggled),
         },
     ],
 ];
 
 export class HUDInteractiveTutorial extends BaseHUDPart {
     createElements(parent) {
-        this.element = makeDiv(
-            parent,
-            "ingame_HUD_InteractiveTutorial",
-            ["animEven"]
-        );
+        this.element = makeDiv(parent, "ingame_HUD_InteractiveTutorial", ["animEven"]);
         this.elementTitle = makeDiv(this.element, null, ["title"]);
         this.elementDescription = makeDiv(this.element, null, ["desc"]);
         this.elementGif = makeDiv(this.element, null, ["helperGif"]);
@@ -148,11 +144,10 @@ export class HUDInteractiveTutorial extends BaseHUDPart {
     }
 
     onTitleChanged(titleId) {
-        this.elementTitle.innerHTML =  `<strong class="title">${T.ingame.interactiveTutorial.title[titleId]}</strong>`;
+        this.elementTitle.innerHTML = `<strong class="title">${T.ingame.interactiveTutorial.title[titleId]}</strong>`;
         this.element.classList.toggle("animEven");
         this.element.classList.toggle("animOdd");
-        if(T.ingame.interactiveTutorial.title[titleId] == "Task")
-          this.elementGif.remove();
+        if (T.ingame.interactiveTutorial.title[titleId] == "Task") this.elementGif.remove();
     }
 
     update() {

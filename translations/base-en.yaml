@@ -417,9 +417,9 @@ ingame:
             1: Tutorial
             2: Task
         hints:
-            1_1_extractor: Connect the <strong>button</strong> to the <strong>LED</strong> using the <strong>blue conductors</strong>!
+            1_1_extractor: Connect the <strong>entry point</strong> to the <strong>LED</strong> using the <strong>blue conductors</strong>!
             1_2_conveyor: >-
-                Click on the button to turn on the LED and click again to turn off.
+                Click on the <strong>run</strong> in debugger to start the noditron.
 
             2_1_place_cutter: >-
                 Turn both lights on
@@ -771,7 +771,7 @@ storyRewards:
     # Those are the rewards gained from completing the store
     reward_1_variable:
         title: Multiple entry points
-        desc: A program has usually a single entry point (main-function). Noditron have infinite entry points. You just unlocked multiple <strong>entry points</strong>. Each all them will send the number 1 at the beginning of the program.
+        desc: A program has usually a single entry point (main-function). Noditron have infinite entry points. You just unlocked multiple <strong>entry points</strong>. Each all them will send the number 1 on the conductors at the beginning of the program.
 
     reward_2_nodi_blue_discus:
         title: Input buttons

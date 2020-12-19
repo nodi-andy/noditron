@@ -226,18 +226,17 @@ export class HubGoals extends BasicSerializableObject {
      * Creates the next goal
      */
     computeNextGoal(initPuzzle = true) {
-
-        for (let i = 0; i < this.root.entityMgr.entities.length ; ++i) {
+        for (let i = 0; i < this.root.entityMgr.entities.length; ++i) {
             let entity = this.root.entityMgr.entities[i];
             //this.root.entityMgr.destroyEntity(entity);
             this.root.map.removeStaticEntity(entity);
             this.root.entityMgr.destroyEntity(entity);
         }
         this.root.entityMgr.processDestroyList();
-        if(this.root.hud.parts && this.root.hud.parts.timeController)
+        if (this.root.hud.parts && this.root.hud.parts.timeController)
             this.root.hud.parts.timeController.restartNodiTick();
 
-        if(initPuzzle){
+        if (initPuzzle) {
             this.root.levelManager.setupLevel(this.level);
         }
         const storyIndex = this.level - 1;
