@@ -24,6 +24,19 @@ const CLIENT_DIR = path.join(here, '..', '..', 'client');
 const NODIGRAPH_CLIENT_DIR = process.env.NODIGRAPH_CLIENT_DIR || path.join(here, '..', '..', '..', 'nodigraph', 'client');
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8090;
 
+// Same reasoning as nodigraph's own PERSISTENCE_DISABLED (see that
+// server's own comment on it) — `savedProject` below is one variable
+// shared by every request this process handles, so deploying this file
+// as-is anywhere shared (Cloud Run included) would turn it into a single
+// document every visitor silently reads and writes. In-memory-only means
+// there's no disk file to leak *across restarts* the way nodigraph's own
+// unguarded persistence would, but *within* one running instance's
+// lifetime, concurrent visitors would still share it. The Dockerfile sets
+// this to disable persistence by default; local `node src/app.js` keeps
+// its current single-user convenience since nothing sets it there.
+const PERSISTENCE_DISABLED =
+  process.env.NODITRON_DISABLE_PERSISTENCE === 'true' || process.env.NODITRON_DISABLE_PERSISTENCE === '1';
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -67,6 +80,15 @@ function serveFrom(root, urlPath, res) {
 let savedProject = null;
 
 function handleGetProject(res) {
+  if (PERSISTENCE_DISABLED) {
+    // Same shape as "nothing saved yet" below — nodigraph's own client
+    // (see its model/store.js) already treats that as "start fresh" and
+    // falls back to its own per-browser localStorage, so a disabled
+    // deployment needs no special case on the client side at all.
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end('null');
+    return;
+  }
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(savedProject ? JSON.stringify(savedProject) : 'null');
 }
@@ -77,6 +99,14 @@ function handlePutProject(req, res) {
     body += chunk;
   });
   req.on('end', () => {
+    if (PERSISTENCE_DISABLED) {
+      // Accepted but deliberately dropped — nothing reaches this
+      // process's shared memory, nothing reaches another visitor. The
+      // browser's own localStorage already holds this edit.
+      res.writeHead(204);
+      res.end();
+      return;
+    }
     try {
       savedProject = JSON.parse(body);
     } catch {
@@ -124,4 +154,9 @@ wss.on('connection', () => {});
 server.listen(PORT, () => {
   console.log(`noditron server running at http://localhost:${PORT}`);
   console.log(`nodigraph client vendored (read-only) from ${NODIGRAPH_CLIENT_DIR}`);
+  console.log(
+    PERSISTENCE_DISABLED
+      ? 'Persistence disabled (NODITRON_DISABLE_PERSISTENCE) — nothing is stored server-side.'
+      : 'Project data held in memory only (this process, not written to disk).',
+  );
 });
