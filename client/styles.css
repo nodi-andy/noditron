@@ -1,0 +1,202 @@
+/* noditron's own additions on top of nodigraph's unmodified stylesheet
+   (loaded first, see index.html) — the CSS variables it defines (--accent,
+   --border, --bg-well, ...) are reused here rather than redeclared, so
+   this stays in sync with whichever theme (light/dark) nodigraph itself is
+   currently showing. */
+
+/* Top-right, not top-left — nodigraph's own "go to parent" FAB
+   (#fab-parent, top-left under the topbar — see nodigraph's styles.css
+   .fab.fab-left) lives exactly where this used to sit, and a palette
+   floating on top of it made that button unreachable. Top-right is clear
+   of every one of nodigraph's own floating controls (add/delete/colour/
+   font are all bottom corners; parent-nav is top-left) — the one thing
+   that *does* land here is the Inspector drawer when it's open, handled
+   the same way nodigraph shifts its own add-block FAB out of that panel's
+   way (see the body.inspector-open rule below). */
+#noditron-palette {
+  position: fixed;
+  top: calc(var(--topbar-height, 52px) + 12px);
+  right: 12px;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-panel, #fff);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  transition: right 0.22s ease;
+}
+
+@media (min-width: 769px) {
+  body.inspector-open #noditron-palette {
+    right: calc(12px + 300px);
+  }
+}
+
+#noditron-palette .noditron-palette-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 2px 6px 4px;
+}
+
+#noditron-palette button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+#noditron-palette button:hover {
+  background: var(--bg-hover);
+  border-color: var(--border);
+}
+
+#noditron-palette .noditron-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* The Inspector's "Logic" tab (see src/logicTab.js) — rendered inside
+   nodigraph's own #inspector, so it reuses that panel's fonts/colours via
+   the plain `field`/`hint-text`/`apply-row` classes nodigraph's own
+   Inspector rows already use; only the code-editor-specific bits below are
+   noditron's own. */
+.noditron-logic-sig {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.noditron-logic-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+  white-space: pre;
+}
+
+.noditron-logic-result {
+  margin: 8px 0 0;
+  padding: 8px;
+  background: var(--bg-well);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-family: 'JetBrains Mono', ui-monospace, Consolas, monospace;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.noditron-logic-result-error {
+  color: #e5484d;
+  border-color: #e5484d;
+}
+
+/* The `html` prop's own layer (see src/htmlOverlay.js) — a `position:fixed`
+   sheet covering the viewport, exactly like the canvas it sits on top of;
+   its children are positioned with plain viewport-relative left/top, set
+   every frame from inside window.nodigraphDrawBlock. The layer itself
+   ignores clicks so empty space in a block's html area still falls through
+   to nodigraph's own canvas for selection/dragging — only actual form
+   controls opt back in (see the input/select/button rule below), the same
+   pattern the old click-to-toggle dot used. */
+#noditron-html-layer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.noditron-html-block {
+  position: absolute;
+  pointer-events: none;
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 8px;
+  font-family: Inter, ui-sans-serif, sans-serif;
+  /* No background of its own — nodigraph's own block fill/border, drawn
+     underneath on canvas an instant earlier (see htmlOverlay.js's own doc
+     on draw order), is what's visible around and behind whatever content a
+     block's own `html` prop puts here. `color` is still set explicitly so
+     text a block author forgets to color is legible in either theme rather
+     than defaulting to black. */
+  color: var(--text-primary);
+}
+
+.noditron-html-block input,
+.noditron-html-block select,
+.noditron-html-block button,
+.noditron-html-block textarea,
+.noditron-html-block a {
+  pointer-events: auto;
+}
+
+/* The `dialog` prop's own modal (see src/dialogSystem.js) — a plain
+   centered overlay, no per-frame positioning needed since it isn't tied to
+   any block's place on the canvas. */
+.noditron-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 14, 20, 0.55);
+}
+
+.noditron-dialog-panel {
+  position: relative;
+  min-width: 320px;
+  max-width: min(480px, calc(100vw - 32px));
+  max-height: calc(100vh - 64px);
+  overflow: auto;
+  padding: 20px;
+  background: var(--bg-surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  color: var(--text-primary);
+}
+
+.noditron-dialog-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.noditron-dialog-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.noditron-dialog-body {
+  font-family: Inter, ui-sans-serif, sans-serif;
+}
