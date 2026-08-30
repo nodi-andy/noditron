@@ -21,6 +21,17 @@ COPY server ./server
 # build time instead. A plain shallow clone of nodigraph's own default
 # branch; pin a tag/commit here instead if noditron ever needs to freeze
 # against a specific nodigraph version rather than floating with it.
+#
+# The ADD right before it is the cache-bust: a RUN instruction's cache key
+# is its own literal text, which never changes here, so without this
+# Docker (and Cloud Build/Kaniko) would happily keep reusing whatever
+# nodigraph revision got baked into some earlier build's layer forever —
+# "git clone the latest" is not actually latest if the layer is cached.
+# ADD with a URL is the one instruction Docker always re-fetches rather
+# than trusting its cache for, so this file only stays byte-identical
+# (and the clone below only stays cached) for as long as nodigraph's main
+# branch hasn't actually moved.
+ADD https://api.github.com/repos/nodi-andy/nodigraph/commits/main /tmp/nodigraph-version.json
 RUN git clone --depth 1 https://github.com/nodi-andy/nodigraph.git /tmp/nodigraph \
   && mkdir -p /usr/src/nodigraph \
   && cp -r /tmp/nodigraph/client /usr/src/nodigraph/client \
