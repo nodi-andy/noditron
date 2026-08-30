@@ -542,11 +542,19 @@ export function installLibraryUI(nodigraph, onInstalled) {
           })
         : catalog;
       if (!matches.length) {
+        // GitHub returns a plain 404 for an unauthenticated request to a
+        // private repo — deliberately indistinguishable from "doesn't
+        // exist" (see nodigraph's own GitHubConnectDialog doc on this same
+        // behavior) — so an empty catalog with no token set is the single
+        // most likely cause here, not "genuinely nothing exists": this
+        // app's own default repo (nodi-andy/noditron) is private.
+        const hint = !q && !getStoredToken()
+          ? ' This app\'s own modules live in a private repo — add a GitHub token below ("Import from a repo / manage GitHub token…") to see them.'
+          : '';
         resultsArea.appendChild(
           statusLine(
-            q
-              ? 'No modules match that filter.'
-              : 'No modules published yet — see "Export selected as a module" below, or import one you already know by repo.',
+            (q ? 'No modules match that filter.' : 'No modules found.') +
+              (hint || (q ? '' : ' See "Export selected as a module" below, or import one you already know by repo.')),
           ),
         );
         return;
