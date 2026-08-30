@@ -92,15 +92,48 @@ export async function connect(blockId, { onLog } = {}) {
   return session;
 }
 
+// Closes and reopens the same already-granted port with a brand new
+// Transport, at a plain baud rate — no ESPLoader, no SLIP framing. Needed
+// because ESPLoader's own connect (see detectChip below) starts a
+// persistent internal read loop that never gives the port's reader lock
+// back on its own (there's no "stop being in bootloader mode" call in
+// esptool-js — only closing the port itself releases it), so the only way
+// serialConsole.js's plain-text reads can follow a bootloader session on
+// the *same* port is a full close/reopen cycle, not a mode switch.
+export async function reopenPlain(blockId, baudrate = 115200) {
+  const session = sessions.get(blockId);
+  if (!session) throw new Error('Not connected — pick a serial port first.');
+  try {
+    await session.transport.disconnect();
+  } catch {
+    // Already closed, or never fully opened — nothing to release.
+  }
+  const transport = new Transport(session.port, true);
+  await transport.connect(baudrate);
+  const fresh = { port: session.port, transport, esploader: null, chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };
+  sessions.set(blockId, fresh);
+  return fresh;
+}
+
 // Resets the board, syncs with its ROM bootloader, and identifies the chip
 // — this is what turns "a port is open" into "we know what's on the other
 // end," and is a precondition for writeFlash (it needs esploader.chip to
-// know per-chip flash timing/offsets).
+// know per-chip flash timing/offsets). Always starts from a freshly
+// (re)opened transport of its own, regardless of what state the port was
+// in before (never opened, or already plain-opened for a console read) —
+// ESPLoader's own connect() needs to open the device itself.
 export async function detectChip(blockId, { onLog } = {}) {
   const session = sessions.get(blockId);
   if (!session) throw new Error('Not connected — pick a serial port first.');
+  try {
+    await session.transport.disconnect();
+  } catch {
+    // Never opened yet, or already closed — nothing to release.
+  }
+  const transport = new Transport(session.port, true);
+  session.transport = transport;
   const terminal = { clean() {}, writeLine: (line) => onLog?.(line), write: (line) => onLog?.(line) };
-  session.esploader = new ESPLoader({ transport: session.transport, baudrate: 115200, terminal });
+  session.esploader = new ESPLoader({ transport, baudrate: 115200, terminal });
   session.chipName = await session.esploader.main();
   session.bootloaderOffset = session.esploader.chip.BOOTLOADER_FLASH_OFFSET;
   return { chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };

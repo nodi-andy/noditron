@@ -21,7 +21,7 @@
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { getLastResult } from './runtime.js';
 import * as serialFlash from './serialFlash.js';
-import * as deviceLink from './deviceLink.js';
+import * as serialConsole from './serialConsole.js';
 
 const HOST_ID = 'noditron-dialog-host';
 const GEAR_RADIUS = 8;
@@ -141,15 +141,19 @@ export function installDialogSystem(nodigraph) {
         firmwarePresets: serialFlash.FIRMWARE_PRESETS,
         fetchPresetBytes: serialFlash.fetchPresetBytes,
       },
-      // A separate bridge from `serial` above on purpose — this is WiFi/
-      // HTTP to a *booted* board's own logicMod firmware (see deviceLink.js),
-      // nothing to do with the Web Serial ROM-bootloader link flashing uses.
+      // A separate bridge from `serial` above on purpose — this talks to a
+      // *booted* board's own logicMod firmware over the plain-text console
+      // it already runs during normal operation (see serialConsole.js),
+      // over the exact same Web Serial connection `serial` above uses for
+      // flashing — not a second link, no WiFi/network switch required.
       // Generic the same way `serial` is: meaningful only to whichever
       // block's dialog actually calls it.
-      device: {
-        identify: deviceLink.identify,
-        sendDesign: deviceLink.sendDesign,
-        buildMinimalDesign: deviceLink.buildMinimalDesign,
+      console: {
+        identify: (opts) => serialConsole.identify(block.id, opts),
+        readDesign: (opts) => serialConsole.readDesign(block.id, opts),
+        sendDesign: (design, opts) => serialConsole.sendDesign(block.id, design, opts),
+        buildMinimalDesign: serialConsole.buildMinimalDesign,
+        close: () => serialConsole.closeConsole(block.id),
       },
     };
 
