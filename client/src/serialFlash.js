@@ -23,9 +23,12 @@ export function getSession(blockId) {
   return sessions.get(blockId) || null;
 }
 
-// Known, ready-to-flash firmware — conucon's own committed release
-// builds (see that repo's server.js FIRMWARE_TARGETS map, the source of
-// truth for these offsets). conucon is a private repo, so this goes
+// Known, ready-to-flash firmware — release builds compiled from conucon's
+// esp32_logic (see that repo's server.js FIRMWARE_TARGETS map, the source
+// of truth for these offsets), committed here at the same firmware-assets/
+// path rather than fetched cross-repo: noditron and conucon are both
+// private, so one repo means one token's read access covers both the
+// library manager's own modules and this firmware, instead of two. Fetched
 // through the GitHub Contents API with the same shared token as
 // library.js/nodigraph's own GitHubConnectDialog (getStoredToken) rather
 // than a plain unauthenticated fetch — jsDelivr's CDN has no auth
@@ -35,7 +38,7 @@ export function getSession(blockId) {
 // factory-fresh or previously-flashed ESP32 already does) reboots
 // straight into it; a truly wiped chip still needs a bootloader/
 // partitions file added as an ordinary manual row alongside this one.
-const FIRMWARE_REPO = { owner: 'nodi-andy', repo: 'conucon', ref: 'main' };
+const FIRMWARE_REPO = { owner: 'nodi-andy', repo: 'noditron', ref: 'main' };
 export const FIRMWARE_PRESETS = [
   { id: 'logic-esp32', label: 'Logic — ESP32 (classic)', chip: 'ESP32', path: 'firmware-assets/logic/esp32.bin', address: 0x10000 },
   { id: 'logic-esp32-s3', label: 'Logic — ESP32-S3', chip: 'ESP32-S3', path: 'firmware-assets/logic/esp32-s3.bin', address: 0x10000 },
