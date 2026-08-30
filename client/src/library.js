@@ -276,21 +276,48 @@ function downloadJson(filename, data) {
   URL.revokeObjectURL(url);
 }
 
+// The manual-import/token subdialog — everything a casual "browse and
+// install" visit to the main dialog never needs to see. Its own host, not
+// the main dialog's: opened on top of it rather than replacing it, so
+// closing this one lands back on the list rather than nowhere.
+const IMPORT_HOST_ID = 'noditron-library-import-host';
+
+function ensureImportHost() {
+  let host = document.getElementById(IMPORT_HOST_ID);
+  if (!host) {
+    host = document.createElement('div');
+    host.id = IMPORT_HOST_ID;
+    host.hidden = true;
+    document.body.appendChild(host);
+  }
+  return host;
+}
+
 export function installLibraryUI(nodigraph, onInstalled) {
   const host = ensureHost();
+  const importHost = ensureImportHost();
 
   function close() {
     host.hidden = true;
     host.innerHTML = '';
   }
 
-  function open() {
-    host.innerHTML = '';
-    host.hidden = false;
+  function closeImport() {
+    importHost.hidden = true;
+    importHost.innerHTML = '';
+  }
+
+  // Import/token — a repo by name (with an optional pinned ref/path) and
+  // the shared GitHub token, both things the plain browse-and-install list
+  // in open() below never needs: most modules are public, and typing an
+  // owner/repo is only for one you already know isn't (yet) listed.
+  function openImport() {
+    importHost.innerHTML = '';
+    importHost.hidden = false;
 
     const backdrop = document.createElement('div');
     backdrop.className = 'noditron-dialog-backdrop';
-    backdrop.addEventListener('click', close);
+    backdrop.addEventListener('click', closeImport);
 
     const panel = document.createElement('div');
     panel.className = 'noditron-dialog-panel';
@@ -302,52 +329,31 @@ export function installLibraryUI(nodigraph, onInstalled) {
     closeBtn.className = 'noditron-dialog-close';
     closeBtn.setAttribute('aria-label', 'Close');
     closeBtn.textContent = '×';
-    closeBtn.addEventListener('click', close);
+    closeBtn.addEventListener('click', closeImport);
 
     const body = document.createElement('div');
     body.className = 'noditron-dialog-body';
-    body.appendChild(heading('LIBRARY'));
+    body.appendChild(heading('IMPORT FROM A REPO'));
 
     // Shared with nodigraph's own "Open/Save to GitHub" — same storage key,
-    // so a token set in either place works in both. Collapsed behind a
-    // reveal link when nothing is stored yet (most modules people install
-    // from someone else are public and need no token at all); shown
-    // outright once one is on file, with its own "Forget" action.
-    const tokenField = document.createElement('div');
-    tokenField.style.cssText = 'margin-bottom:14px;';
+    // so a token set in either place works in both.
     const { wrap: tokenWrap, input: tokenInput } = field('GITHUB PERSONAL ACCESS TOKEN', { type: 'password', placeholder: 'ghp_…', value: getStoredToken() });
-    tokenWrap.style.marginBottom = '4px';
-    tokenField.appendChild(tokenWrap);
+    body.appendChild(tokenWrap);
     tokenInput.addEventListener('change', () => setStoredToken(tokenInput.value.trim()));
-    const tokenActions = document.createElement('div');
-    tokenActions.style.cssText = 'display:flex;align-items:center;gap:10px;';
-    tokenField.appendChild(tokenActions);
-    const revealBtn = button('Private repo? Add a token');
-    revealBtn.style.cssText += 'padding:2px 0;border:none;color:var(--text-muted);text-decoration:underline;';
-    revealBtn.addEventListener('click', () => {
-      tokenField.style.display = '';
-      tokenWrap.hidden = false;
-      revealBtn.hidden = true;
-    });
-    tokenActions.appendChild(revealBtn);
     if (getStoredToken()) {
       const forgetBtn = button('Forget this token');
-      forgetBtn.style.cssText += 'padding:2px 0;border:none;color:var(--text-muted);text-decoration:underline;';
+      forgetBtn.style.cssText += 'padding:2px 0;margin:-6px 0 14px;border:none;color:var(--text-muted);text-decoration:underline;';
       forgetBtn.addEventListener('click', () => {
         setStoredToken('');
         tokenInput.value = '';
         forgetBtn.remove();
       });
-      tokenActions.appendChild(forgetBtn);
+      body.appendChild(forgetBtn);
     }
-    tokenWrap.hidden = !getStoredToken();
-    revealBtn.hidden = Boolean(getStoredToken());
-    body.appendChild(tokenField);
+    const tokenHint = statusLine('Only needed for a private repo — sent only to api.github.com, kept only in this browser.');
+    tokenHint.style.margin = '-8px 0 14px';
+    body.appendChild(tokenHint);
 
-    // Manual add — the always-available path: type owner/repo (and
-    // optionally pin a ref/path), fetch, preview, install. Search below is
-    // just a shortcut to fill this in.
-    body.appendChild(sectionLabel('ADD FROM A REPO'));
     const { wrap: repoWrap, input: repoInput } = field('OWNER/REPO', { placeholder: 'e.g. someone/esp32-devkit' });
     const { wrap: refWrap, input: refInput } = field('REF (optional — tag or branch, latest tag if blank)');
     const { wrap: pathWrap, input: pathInput } = field('MANIFEST PATH (optional)', { placeholder: DEFAULT_MANIFEST_PATH });
@@ -385,6 +391,7 @@ export function installLibraryUI(nodigraph, onInstalled) {
             const source = { owner, repo, ref: resolvedRef, path, name: manifest.name, displayName: manifest.displayName || manifest.name, version: manifest.version || null, swatchColor: manifest.swatchColor || '#8b93a3' };
             installModule(nodigraph, manifest, source);
             onInstalled?.();
+            closeImport();
             close();
           } catch (err) {
             preview.appendChild(statusLine(`Install failed: ${err.message}`, true));
@@ -396,19 +403,45 @@ export function installLibraryUI(nodigraph, onInstalled) {
         previewArea.innerHTML = '';
         const needsToken = (err.status === 401 || err.status === 404) && !tokenInput.value.trim();
         previewArea.appendChild(statusLine(`Fetch failed: ${err.message}${needsToken ? ' — this repo may be private; add a token above.' : ''}`, true));
-        if (needsToken) {
-          tokenWrap.hidden = false;
-          revealBtn.hidden = true;
-        }
       }
     });
 
-    // Search — best-effort discovery on top of the manual path above; a
-    // rate-limited or offline GitHub search still leaves manual add working.
-    body.appendChild(sectionLabel('OR SEARCH'));
+    panel.append(closeBtn, body);
+    backdrop.appendChild(panel);
+    importHost.appendChild(backdrop);
+  }
+
+  function open() {
+    host.innerHTML = '';
+    host.hidden = false;
+
+    const backdrop = document.createElement('div');
+    backdrop.className = 'noditron-dialog-backdrop';
+    backdrop.addEventListener('click', close);
+
+    const panel = document.createElement('div');
+    panel.className = 'noditron-dialog-panel';
+    panel.style.minWidth = '380px';
+    panel.addEventListener('click', (e) => e.stopPropagation());
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'noditron-dialog-close';
+    closeBtn.setAttribute('aria-label', 'Close');
+    closeBtn.textContent = '×';
+    closeBtn.addEventListener('click', close);
+
+    const body = document.createElement('div');
+    body.className = 'noditron-dialog-body';
+    body.appendChild(heading('LIBRARY'));
+
+    // Browse — every module tagged noditron-module, loaded up front so
+    // opening this dialog is "here's what's out there," not an empty box
+    // waiting for a query; the search field just narrows the same list.
     const searchRow = document.createElement('div');
-    searchRow.style.cssText = 'display:flex;gap:8px;';
+    searchRow.style.cssText = 'display:flex;gap:8px;margin-bottom:4px;';
     const { wrap: searchWrap, input: searchInput } = field('');
+    searchInput.placeholder = 'Filter by name…';
     searchWrap.style.flex = '1';
     searchWrap.style.marginBottom = '0';
     const searchBtn = button('Search');
@@ -417,43 +450,68 @@ export function installLibraryUI(nodigraph, onInstalled) {
     const resultsArea = document.createElement('div');
     body.appendChild(resultsArea);
 
-    searchBtn.addEventListener('click', async () => {
+    function resultRow(result) {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);';
+      const text = document.createElement('div');
+      text.style.cssText = 'min-width:0;';
+      const name = document.createElement('div');
+      name.textContent = `${result.owner}/${result.repo}`;
+      name.style.cssText = 'font-size:12px;font-weight:600;';
+      const desc = document.createElement('div');
+      desc.textContent = result.description;
+      desc.style.cssText = 'font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      text.append(name, desc);
+      const installBtn = button('Install', { primary: true });
+      installBtn.addEventListener('click', async () => {
+        installBtn.disabled = true;
+        installBtn.textContent = 'Installing…';
+        try {
+          const resolvedRef = await resolveDefaultRef(result.owner, result.repo);
+          const manifest = await fetchManifest(result.owner, result.repo, resolvedRef);
+          const source = { owner: result.owner, repo: result.repo, ref: resolvedRef, path: DEFAULT_MANIFEST_PATH, name: manifest.name, displayName: manifest.displayName || manifest.name, version: manifest.version || null, swatchColor: manifest.swatchColor || '#8b93a3' };
+          installModule(nodigraph, manifest, source);
+          onInstalled?.();
+          close();
+        } catch (err) {
+          installBtn.disabled = false;
+          installBtn.textContent = 'Install';
+          row.appendChild(statusLine(`Failed: ${err.message}`, true));
+        }
+      });
+      row.append(text, installBtn);
+      return row;
+    }
+
+    async function runSearch(query) {
       resultsArea.innerHTML = '';
-      resultsArea.appendChild(statusLine('Searching…'));
+      resultsArea.appendChild(statusLine('Loading…'));
       try {
-        const results = await searchModules(searchInput.value);
+        const results = await searchModules(query);
         resultsArea.innerHTML = '';
         if (!results.length) {
-          resultsArea.appendChild(statusLine('No modules found.'));
+          resultsArea.appendChild(
+            statusLine(query ? 'No modules match that filter.' : 'No modules published yet — see "Export selected as a module" below, or import one you already know by repo.'),
+          );
           return;
         }
-        for (const result of results) {
-          const row = document.createElement('div');
-          row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);';
-          const text = document.createElement('div');
-          text.innerHTML = '';
-          const name = document.createElement('div');
-          name.textContent = `${result.owner}/${result.repo}`;
-          name.style.cssText = 'font-size:12px;font-weight:600;';
-          const desc = document.createElement('div');
-          desc.textContent = result.description;
-          desc.style.cssText = 'font-size:11px;color:var(--text-muted);';
-          text.append(name, desc);
-          const useBtn = button('Use');
-          useBtn.addEventListener('click', () => {
-            repoInput.value = `${result.owner}/${result.repo}`;
-            refInput.value = '';
-            pathInput.value = '';
-            previewArea.innerHTML = '';
-          });
-          row.append(text, useBtn);
-          resultsArea.appendChild(row);
-        }
+        for (const result of results) resultsArea.appendChild(resultRow(result));
       } catch (err) {
         resultsArea.innerHTML = '';
-        resultsArea.appendChild(statusLine(`Search failed: ${err.message}`, true));
+        resultsArea.appendChild(statusLine(`Couldn't load modules: ${err.message}`, true));
       }
+    }
+
+    searchBtn.addEventListener('click', () => runSearch(searchInput.value));
+    searchInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') runSearch(searchInput.value);
     });
+    runSearch('');
+
+    const importLink = button('Import from a repo / manage GitHub token…');
+    importLink.style.cssText += 'width:100%;margin-top:10px;text-align:center;justify-content:center;';
+    importLink.addEventListener('click', () => openImport());
+    body.appendChild(importLink);
 
     // Export — the authoring side of the loop: build a block by hand (its
     // custom fn/render/html/dialog code included — see logicTab.js), select
