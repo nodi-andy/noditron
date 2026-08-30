@@ -29,6 +29,15 @@ const MODULES_DIR = 'modules';
 const INSTALLED_PROP = 'noditronLibraryModules';
 const SOURCE_PROP = 'noditronModuleSource';
 
+// Always part of the catalog, whether or not it's tagged noditron-module —
+// this repo already carries a modules/ catalog of its own (see
+// modules/esp32-devkit/, modules/esp32-s3-devkit/), and topic search can't
+// find it until someone adds that tag by hand in GitHub's own repo settings
+// (no API this project's tools reach). Being private, it still needs a
+// token to actually resolve — same as any other private repo, no special
+// case, just always attempted.
+const DEFAULT_REPOS = [{ owner: 'nodi-andy', repo: 'noditron' }];
+
 // The GitHub Contents API, not jsDelivr's CDN — jsDelivr has no auth
 // mechanism at all, so it can only ever reach public repos. This app's own
 // repos (and plenty of real modules/firmware) are private, so anything
@@ -545,12 +554,41 @@ export function installLibraryUI(nodigraph, onInstalled) {
       for (const entry of matches) resultsArea.appendChild(moduleRow(entry));
     }
 
+    // DEFAULT_REPOS always takes part, on top of whatever topic search
+    // turns up — search failing (rate-limited, offline) shouldn't also
+    // take down the one repo guaranteed to be there, so the two are
+    // resolved independently and merged (deduped by owner/repo) rather
+    // than one being a precondition for the other.
+    async function repoList() {
+      const seen = new Set();
+      const repos = [];
+      for (const { owner, repo } of DEFAULT_REPOS) {
+        seen.add(`${owner}/${repo}`);
+        repos.push({ owner, repo, defaultBranch: null });
+      }
+      try {
+        for (const r of await searchModules('')) {
+          const key = `${r.owner}/${r.repo}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            repos.push(r);
+          }
+        }
+      } catch {
+        // Best-effort discovery on top of the guaranteed default(s) above —
+        // a failed search still leaves those loadable.
+      }
+      return repos;
+    }
+
     async function loadCatalog() {
       resultsArea.innerHTML = '';
       resultsArea.appendChild(statusLine('Loading…'));
       try {
-        const repos = await searchModules('');
-        const perRepo = await Promise.all(repos.map((r) => discoverModules(r.owner, r.repo, r.defaultBranch)));
+        const repos = await repoList();
+        const perRepo = await Promise.all(
+          repos.map((r) => discoverModules(r.owner, r.repo, r.defaultBranch || undefined).catch(() => [])),
+        );
         catalog = perRepo.flat();
         renderCatalog(searchInput.value);
       } catch (err) {
