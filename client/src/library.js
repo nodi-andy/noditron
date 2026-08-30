@@ -1,16 +1,22 @@
 // The library manager — noditron ships only the "primitives" in palette.js;
 // everything else (an ESP32 dev board, a CNC module, ...) is a module a
 // user finds and installs from here instead. A module is plain data: its
-// GitHub repo carries one `noditron.module.json` manifest whose `block`
-// field is exactly nodigraph's own clipboard payload (see nodigraph's
-// client/src/model/clipboard.js) — the JSON you get from Ctrl+C on a block
-// built by hand in the editor. Authoring a module is therefore "build the
-// block once, copy it, paste the JSON into a repo," not a bespoke format to
-// learn — and installing one is nodigraph's own paste path run against a
-// fetched payload instead of the OS clipboard. Nothing here is special-
-// cased inside nodigraph; this only ever calls its public model API, the
-// same rule every other file in this project follows (see palette.js's own
-// doc on it).
+// manifest's `block` field is exactly nodigraph's own clipboard payload
+// (see nodigraph's client/src/model/clipboard.js) — the JSON you get from
+// Ctrl+C on a block built by hand in the editor. Authoring a module is
+// therefore "build the block once, copy it, paste the JSON," not a bespoke
+// format to learn — and installing one is nodigraph's own paste path run
+// against a fetched payload instead of the OS clipboard. Nothing here is
+// special-cased inside nodigraph; this only ever calls its public model
+// API, the same rule every other file in this project follows (see
+// palette.js's own doc on it).
+//
+// A repo is a *catalog*, not a single module — one manifest at its own
+// root (a repo that's nothing but one module) plus any number more under
+// modules/<name>/noditron.module.json (a repo somebody keeps dozens of
+// custom modules in, adding a new folder whenever they build another one).
+// Both conventions are discovered and merged (see discoverModules); a repo
+// can use either, or both at once.
 import { generateId } from '/nodigraph/src/model/Block.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { pasteSelection, isClipboardPayload, serializeSelection } from '/nodigraph/src/model/clipboard.js';
@@ -19,6 +25,7 @@ import { getStoredToken, setStoredToken } from '/nodigraph/src/model/githubSync.
 const GITHUB_API = 'https://api.github.com';
 const MODULE_TOPIC = 'noditron-module';
 const DEFAULT_MANIFEST_PATH = 'noditron.module.json';
+const MODULES_DIR = 'modules';
 const INSTALLED_PROP = 'noditronLibraryModules';
 const SOURCE_PROP = 'noditronModuleSource';
 
@@ -105,6 +112,37 @@ export async function fetchManifest(owner, repo, ref, path = DEFAULT_MANIFEST_PA
   if (Array.isArray(file)) throw new Error(`${path} is a directory, not a file.`);
   const manifest = JSON.parse(base64ToText(file.content));
   return validateManifest(manifest);
+}
+
+// Every module a repo carries, root single-module and modules/-directory
+// catalog alike, merged into one flat list — the browse dialog never needs
+// to know or care which convention a given repo actually used. Each
+// candidate location is allowed to simply not exist (a repo using only one
+// convention, or neither) without that counting as a real error; a
+// manifest that exists but doesn't parse/validate is skipped rather than
+// failing the whole repo's listing, since one broken module shouldn't hide
+// every other one a large catalog carries.
+export async function discoverModules(owner, repo, ref, token = getStoredToken()) {
+  const found = [];
+
+  await fetchManifest(owner, repo, ref, DEFAULT_MANIFEST_PATH, token)
+    .then((manifest) => found.push({ owner, repo, ref, path: DEFAULT_MANIFEST_PATH, manifest }))
+    .catch(() => {});
+
+  const dirListing = await githubFetch(contentsUrl(owner, repo, MODULES_DIR, ref), token).catch(() => null);
+  if (Array.isArray(dirListing)) {
+    const dirs = dirListing.filter((entry) => entry.type === 'dir');
+    await Promise.all(
+      dirs.map((dir) => {
+        const path = `${MODULES_DIR}/${dir.name}/${DEFAULT_MANIFEST_PATH}`;
+        return fetchManifest(owner, repo, ref, path, token)
+          .then((manifest) => found.push({ owner, repo, ref, path, manifest }))
+          .catch(() => {});
+      }),
+    );
+  }
+
+  return found;
 }
 
 function readInstalledModules(nodigraph) {
@@ -450,32 +488,34 @@ export function installLibraryUI(nodigraph, onInstalled) {
     const resultsArea = document.createElement('div');
     body.appendChild(resultsArea);
 
-    function resultRow(result) {
+    // Every module in every noditron-module-tagged repo, flattened into one
+    // list — one repo can carry dozens (see discoverModules), so the unit
+    // shown and installed here is a module, not a repo. Fetched once per
+    // dialog open; the search field re-filters this same array client-side
+    // rather than re-hitting GitHub per keystroke.
+    let catalog = [];
+
+    function moduleRow(entry) {
+      const { manifest } = entry;
       const row = document.createElement('div');
       row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);';
       const text = document.createElement('div');
       text.style.cssText = 'min-width:0;';
       const name = document.createElement('div');
-      name.textContent = `${result.owner}/${result.repo}`;
+      name.textContent = manifest.displayName || manifest.name;
       name.style.cssText = 'font-size:12px;font-weight:600;';
-      const desc = document.createElement('div');
-      desc.textContent = result.description;
-      desc.style.cssText = 'font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-      text.append(name, desc);
+      const sub = document.createElement('div');
+      sub.textContent = `${manifest.description || ''}${manifest.description ? ' — ' : ''}${entry.owner}/${entry.repo}`;
+      sub.style.cssText = 'font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+      text.append(name, sub);
       const installBtn = button('Install', { primary: true });
-      installBtn.addEventListener('click', async () => {
-        installBtn.disabled = true;
-        installBtn.textContent = 'Installing…';
+      installBtn.addEventListener('click', () => {
         try {
-          const resolvedRef = await resolveDefaultRef(result.owner, result.repo);
-          const manifest = await fetchManifest(result.owner, result.repo, resolvedRef);
-          const source = { owner: result.owner, repo: result.repo, ref: resolvedRef, path: DEFAULT_MANIFEST_PATH, name: manifest.name, displayName: manifest.displayName || manifest.name, version: manifest.version || null, swatchColor: manifest.swatchColor || '#8b93a3' };
+          const source = { owner: entry.owner, repo: entry.repo, ref: entry.ref, path: entry.path, name: manifest.name, displayName: manifest.displayName || manifest.name, version: manifest.version || null, swatchColor: manifest.swatchColor || '#8b93a3' };
           installModule(nodigraph, manifest, source);
           onInstalled?.();
           close();
         } catch (err) {
-          installBtn.disabled = false;
-          installBtn.textContent = 'Install';
           row.appendChild(statusLine(`Failed: ${err.message}`, true));
         }
       });
@@ -483,30 +523,48 @@ export function installLibraryUI(nodigraph, onInstalled) {
       return row;
     }
 
-    async function runSearch(query) {
+    function renderCatalog(query) {
+      resultsArea.innerHTML = '';
+      const q = query.trim().toLowerCase();
+      const matches = q
+        ? catalog.filter((entry) => {
+            const m = entry.manifest;
+            return [m.name, m.displayName, m.description, entry.repo].some((s) => String(s || '').toLowerCase().includes(q));
+          })
+        : catalog;
+      if (!matches.length) {
+        resultsArea.appendChild(
+          statusLine(
+            q
+              ? 'No modules match that filter.'
+              : 'No modules published yet — see "Export selected as a module" below, or import one you already know by repo.',
+          ),
+        );
+        return;
+      }
+      for (const entry of matches) resultsArea.appendChild(moduleRow(entry));
+    }
+
+    async function loadCatalog() {
       resultsArea.innerHTML = '';
       resultsArea.appendChild(statusLine('Loading…'));
       try {
-        const results = await searchModules(query);
-        resultsArea.innerHTML = '';
-        if (!results.length) {
-          resultsArea.appendChild(
-            statusLine(query ? 'No modules match that filter.' : 'No modules published yet — see "Export selected as a module" below, or import one you already know by repo.'),
-          );
-          return;
-        }
-        for (const result of results) resultsArea.appendChild(resultRow(result));
+        const repos = await searchModules('');
+        const perRepo = await Promise.all(repos.map((r) => discoverModules(r.owner, r.repo, r.defaultBranch)));
+        catalog = perRepo.flat();
+        renderCatalog(searchInput.value);
       } catch (err) {
         resultsArea.innerHTML = '';
         resultsArea.appendChild(statusLine(`Couldn't load modules: ${err.message}`, true));
       }
     }
 
-    searchBtn.addEventListener('click', () => runSearch(searchInput.value));
+    searchBtn.addEventListener('click', () => renderCatalog(searchInput.value));
+    searchInput.addEventListener('input', () => renderCatalog(searchInput.value));
     searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') runSearch(searchInput.value);
+      if (e.key === 'Enter') renderCatalog(searchInput.value);
     });
-    runSearch('');
+    loadCatalog();
 
     const importLink = button('Import from a repo / manage GitHub token…');
     importLink.style.cssText += 'width:100%;margin-top:10px;text-align:center;justify-content:center;';
@@ -546,7 +604,7 @@ export function installLibraryUI(nodigraph, onInstalled) {
       });
       body.appendChild(exportBtn);
 
-      const exportHint = statusLine('Push the downloaded file to a GitHub repo as noditron.module.json. A public repo tagged with the topic "noditron-module" shows up in search for anyone; a private one installs too, for anyone with a token that can read it.');
+      const exportHint = statusLine('Push the downloaded file to a GitHub repo: as noditron.module.json at its root for a repo that\'s just this one module, or as modules/NAME/noditron.module.json alongside others if that repo keeps a whole catalog (both are discovered). A repo tagged with the topic "noditron-module" shows up in the browse list for anyone; a private one installs too, for anyone with a token that can read it.');
       body.appendChild(exportHint);
     }
 
