@@ -1,0 +1,60 @@
+{
+  "noditronModule": 1,
+  "name": "esp32-devkit",
+  "displayName": "ESP32 DevKit",
+  "version": "0.1.0",
+  "description": "A blank ESP32 board with no known firmware yet. Connect via serial, WebSocket, or IP once a connection method is wired up.",
+  "swatchColor": "#c98a2f",
+  "block": {
+    "format": "nodigraph/clipboard-v1",
+    "blocks": [
+      {
+        "id": "blk_mtft5j671",
+        "name": "ESP32 DevKit",
+        "type": "block",
+        "kind": "block",
+        "description": "Block: ESP32 DevKit\n\nprop.noditronKind: esp32-devkit\nprop.connectionState: disconnected\nprop.dialog: container.style.fontFamily = 'Inter, sans-serif';\n\nconst heading = document.createElement('h3');\nheading.textContent = 'ESP32 DEVKIT';\nheading.style.cssText = 'margin:0 0 14px;color:var(--success,#3ecf5d);font-size:15px;letter-spacing:.03em;';\ncontainer.appendChild(heading);\n\nconst status = document.createElement('p');\nstatus.textContent = 'Not connected. This board has no known firmware yet.';\nstatus.style.cssText = 'margin:0 0 14px;font-size:12px;color:var(--text-muted);';\ncontainer.appendChild(status);\n\nfunction section(labelText) {\n  const wrap = document.createElement('div');\n  wrap.style.cssText = 'margin-bottom:14px;';\n  const label = document.createElement('div');\n  label.textContent = labelText;\n  label.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px;';\n  wrap.appendChild(label);\n  container.appendChild(wrap);\n  return wrap;\n}\n\nconst connectSection = section('CONNECT VIA');\nconst btnRow = document.createElement('div');\nbtnRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';\nconst btnStyle = 'padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text-primary);font-size:12px;cursor:pointer;';\n['Serial port', 'WebSocket', 'IP address'].forEach((label) => {\n  const btn = document.createElement('button');\n  btn.type = 'button';\n  btn.textContent = label;\n  btn.style.cssText = btnStyle;\n  btn.disabled = true;\n  btnRow.appendChild(btn);\n});\nconnectSection.appendChild(btnRow);\n\nconst hint = document.createElement('p');\nhint.textContent = 'Connecting and firmware detection are not wired up yet -- this dialog is a placeholder for that step.';\nhint.style.cssText = 'margin:0;font-size:11px;color:var(--text-muted);';\ncontainer.appendChild(hint);",
+        "geometry": {
+          "x": 0,
+          "y": 0,
+          "width": 240,
+          "height": 160
+        },
+        "style": {
+          "color": "#3b6fa0"
+        },
+        "logicalPorts": [],
+        "ports": [],
+        "props": [
+          {
+            "id": "prp_mtft5j672",
+            "name": "noditronKind",
+            "kind": "value",
+            "value": "esp32-devkit"
+          },
+          {
+            "id": "prp_mtft5j673",
+            "name": "connectionState",
+            "kind": "value",
+            "value": "disconnected"
+          },
+          {
+            "id": "prp_mtft5j674",
+            "name": "dialog",
+            "kind": "value",
+            "value": "container.style.fontFamily = 'Inter, sans-serif';\n\nconst heading = document.createElement('h3');\nheading.textContent = 'ESP32 DEVKIT';\nheading.style.cssText = 'margin:0 0 14px;color:var(--success,#3ecf5d);font-size:15px;letter-spacing:.03em;';\ncontainer.appendChild(heading);\n\nconst status = document.createElement('p');\nstatus.textContent = 'Not connected. This board has no known firmware yet.';\nstatus.style.cssText = 'margin:0 0 14px;font-size:12px;color:var(--text-muted);';\ncontainer.appendChild(status);\n\nfunction section(labelText) {\n  const wrap = document.createElement('div');\n  wrap.style.cssText = 'margin-bottom:14px;';\n  const label = document.createElement('div');\n  label.textContent = labelText;\n  label.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px;';\n  wrap.appendChild(label);\n  container.appendChild(wrap);\n  return wrap;\n}\n\nconst connectSection = section('CONNECT VIA');\nconst btnRow = document.createElement('div');\nbtnRow.style.cssText = 'display:flex;gap:8px;flex-wrap:wrap;';\nconst btnStyle = 'padding:6px 10px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text-primary);font-size:12px;cursor:pointer;';\n['Serial port', 'WebSocket', 'IP address'].forEach((label) => {\n  const btn = document.createElement('button');\n  btn.type = 'button';\n  btn.textContent = label;\n  btn.style.cssText = btnStyle;\n  btn.disabled = true;\n  btnRow.appendChild(btn);\n});\nconnectSection.appendChild(btnRow);\n\nconst hint = document.createElement('p');\nhint.textContent = 'Connecting and firmware detection are not wired up yet -- this dialog is a placeholder for that step.';\nhint.style.cssText = 'margin:0;font-size:11px;color:var(--text-muted);';\ncontainer.appendChild(hint);"
+          }
+        ],
+        "hasChildren": true,
+        "boundaryGeometry": {
+          "x": 0,
+          "y": 0,
+          "width": 320,
+          "height": 240
+        },
+        "requirementIds": []
+      }
+    ],
+    "connections": []
+  }
+}

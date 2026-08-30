@@ -5,6 +5,7 @@
 // instant this module starts; a short poll covers that gap without this
 // file needing to know anything about nodigraph's internal timing.
 import { mountPalette } from './palette.js';
+import { mountLibrary } from './library.js';
 import { startRuntime, kindOf } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
 import { installHtmlOverlay } from './htmlOverlay.js';
@@ -31,6 +32,7 @@ async function boot() {
   const nodigraph = await waitForNodigraph();
 
   mountPalette(nodigraph, document.getElementById('noditron-palette'));
+  mountLibrary(nodigraph, document.getElementById('noditron-palette'));
 
   // Three independent draw contributors, composed into the single
   // window.nodigraphDrawBlock hook nodigraph calls once per block per
