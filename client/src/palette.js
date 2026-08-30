@@ -69,26 +69,189 @@ function changedExpr() {
   return "helpers.changed('state', { value: props.value, wiring: helpers.portsSignature() })";
 }
 
-export function createBoolBlock(nodigraph) {
+// Digital I/O replaces what used to be two separate primitives — Bool (a
+// plain manual toggle, no pin) and Digital Input (a fixed, input-only GPIO
+// reading) — with one block that covers both plus the output direction
+// neither had: pick a pin (or "Simulated" for the old Bool behavior, no
+// pin at all) and a direction, and it's whichever of the three this canvas
+// needs. This is also the block a future esp32-devkit sub-circuit sync
+// reads pin/direction off of (see modules/esp32-devkit's own dialog) —
+// one shape for "a single digital signal," not three.
+//
+// Direction is a real port swap (out for input, in for output), not just a
+// label — see DIGITAL_IO_DIALOG's own change handler, which does the same
+// remove-then-add-port dance the Inspector's own port list does, including
+// dropping any wire that pointed at whichever port direction switching
+// away from.
+const DIGITAL_IO_HTML = `
+container.style.position = 'relative';
+container.style.display = 'flex';
+container.style.flexDirection = 'column';
+container.style.justifyContent = 'space-between';
+container.style.alignItems = 'center';
+container.style.boxSizing = 'border-box';
+container.style.padding = '8px';
+container.style.fontFamily = 'Inter, sans-serif';
+
+let badge = container.querySelector('.dio-badge');
+if (!badge) {
+  badge = document.createElement('div');
+  badge.className = 'dio-badge';
+  badge.style.cssText = 'align-self:flex-start;font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--text-muted);';
+
+  const gear = document.createElement('button');
+  gear.type = 'button';
+  gear.className = 'dio-gear';
+  gear.textContent = String.fromCharCode(9881);
+  gear.title = 'Configure';
+  gear.style.cssText = 'position:absolute;top:4px;right:4px;width:20px;height:20px;padding:0;border-radius:5px;border:1px solid var(--border);background:none;color:var(--text-muted);font-size:11px;line-height:1;cursor:pointer;';
+  gear.addEventListener('click', helpers.openDialog);
+
+  // A real <button>, not a <div> -- only input/select/button/textarea/a get
+  // pointer-events back from noditron-html-block's own blanket "let clicks
+  // fall through to the canvas underneath" rule (see styles.css), so a plain
+  // div here would silently never receive a click at all, real user or not.
+  const dot = document.createElement('button');
+  dot.type = 'button';
+  dot.className = 'dio-dot';
+  dot.style.cssText = 'width:18px;height:18px;padding:0;border-radius:50%;border:2px solid var(--border);background:none;box-sizing:border-box;';
+  dot.addEventListener('click', () => {
+    const dir = (block.props.find((p) => p.name === 'direction') || {}).value || 'input';
+    if (dir !== 'input') return;
+    const current = block.props.find((p) => p.name === 'value');
+    helpers.setProp('value', Number(current && current.value) >= 1 ? 0 : 1);
+  });
+
+  container.append(badge, gear, dot);
+}
+
+const pinProp = block.props.find((p) => p.name === 'pin');
+const pin = pinProp ? pinProp.value : null;
+const direction = ((block.props.find((p) => p.name === 'direction') || {}).value) === 'output' ? 'output' : 'input';
+badge.textContent = (pin === null || pin === undefined || pin === '' ? 'SIM' : 'GPIO' + pin) + ' · ' + direction.toUpperCase();
+
+const dot = container.querySelector('.dio-dot');
+const on = direction === 'input' ? Boolean(outputs.value) : Boolean(inputs.value);
+dot.style.background = on ? '#3ecf5d' : 'transparent';
+dot.style.borderColor = on ? '#3ecf5d' : 'var(--border)';
+dot.style.cursor = direction === 'input' ? 'pointer' : 'default';
+`.trim();
+
+const DIGITAL_IO_DIALOG = `
+container.style.fontFamily = 'Inter, sans-serif';
+
+const heading = document.createElement('h3');
+heading.textContent = String(block.name || 'DIGITAL I/O').toUpperCase();
+heading.style.cssText = 'margin:0 0 14px;color:var(--success,#3ecf5d);font-size:15px;letter-spacing:.03em;';
+container.appendChild(heading);
+
+function section(labelText) {
+  const wrap = document.createElement('div');
+  wrap.style.cssText = 'margin-bottom:16px;';
+  const label = document.createElement('div');
+  label.textContent = labelText;
+  label.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px;';
+  wrap.appendChild(label);
+  container.appendChild(wrap);
+  return wrap;
+}
+
+const fieldStyle = 'width:100%;padding:6px 8px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;box-sizing:border-box;';
+
+const dirSection = section('DIRECTION');
+const dirSelect = document.createElement('select');
+dirSelect.style.cssText = fieldStyle;
+[['input', 'Input (reads a signal)'], ['output', 'Output (drives a signal)']].forEach(([value, label]) => {
+  const opt = document.createElement('option');
+  opt.value = value;
+  opt.textContent = label;
+  dirSelect.appendChild(opt);
+});
+dirSelect.value = props.direction === 'output' ? 'output' : 'input';
+dirSection.appendChild(dirSelect);
+
+const pinSection = section('PIN');
+const pinSelect = document.createElement('select');
+pinSelect.style.cssText = fieldStyle;
+const simOpt = document.createElement('option');
+simOpt.value = '';
+simOpt.textContent = 'Simulated (no pin)';
+pinSelect.appendChild(simOpt);
+for (let i = 0; i <= 39; i += 1) {
+  const opt = document.createElement('option');
+  opt.value = String(i);
+  opt.textContent = 'GPIO ' + i;
+  pinSelect.appendChild(opt);
+}
+pinSelect.value = props.pin === null || props.pin === undefined ? '' : String(props.pin);
+pinSelect.addEventListener('change', () => helpers.setProp('pin', pinSelect.value === '' ? null : Number(pinSelect.value)));
+pinSection.appendChild(pinSelect);
+
+const pinHint = document.createElement('p');
+pinHint.textContent = 'A pin is metadata for when this circuit is sent to a real board -- it always simulates locally via the value below, connected or not.';
+pinHint.style.cssText = 'margin:6px 0 0;font-size:11px;color:var(--text-muted);';
+pinSection.appendChild(pinHint);
+
+const valueSection = section('SIMULATED VALUE');
+const valueRow = document.createElement('div');
+valueRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
+const slider = document.createElement('input');
+slider.type = 'range';
+slider.min = '0';
+slider.max = '1';
+slider.step = '1';
+slider.value = String(Number(props.value || 0));
+slider.style.flex = '1';
+slider.disabled = dirSelect.value === 'output';
+const readout = document.createElement('span');
+readout.style.cssText = 'font-size:12px;color:var(--text-muted);min-width:34px;';
+function describe(v) { return Number(v) >= 1 ? 'HIGH' : 'LOW'; }
+readout.textContent = describe(props.value);
+slider.addEventListener('input', () => {
+  helpers.setProp('value', Number(slider.value));
+  readout.textContent = describe(slider.value);
+});
+valueRow.append(slider, readout);
+valueSection.appendChild(valueRow);
+if (dirSelect.value === 'output') {
+  const outHint = document.createElement('p');
+  outHint.textContent = 'Driven by whatever is wired into this block -- not directly editable while set to Output.';
+  outHint.style.cssText = 'margin:6px 0 0;font-size:11px;color:var(--text-muted);';
+  valueSection.appendChild(outHint);
+}
+
+dirSelect.addEventListener('change', async () => {
+  const dir = dirSelect.value;
+  helpers.setProp('direction', dir);
+  const bd = await import('/nodigraph/src/model/BlockDescription.js');
+  for (const lp of [...(block.logicalPorts || [])]) {
+    const removedPinIds = bd.removeLogicalPort(block, lp.id);
+    for (const pinId of removedPinIds) helpers.project.removeConnectionsForPort(pinId);
+  }
+  bd.addPort(block, { direction: dir === 'output' ? 'in' : 'out' });
+  const newLogical = block.logicalPorts[block.logicalPorts.length - 1];
+  if (newLogical) newLogical.name = 'value';
+  block.description = bd.serializeBlockDescription(block);
+  helpers.refresh();
+  helpers.close();
+});
+`.trim();
+
+export function createDigitalIOBlock(nodigraph) {
   const { x, y } = nextPosition(nodigraph);
-  const block = createBlock({ x, y, name: 'Bool' });
-  addNamedPort(block, 'out', 'out');
-  addNamedPort(block, 'out', 'changed');
-  // The slider (see BlockDescription's min..max = value range prop, and
-  // InspectorPanel's slider rendering for it) — select the block to set it.
-  // The on-canvas click-to-toggle (see canvasIndicators.js) is the quicker way.
+  const block = createBlock({ x, y, name: 'Digital I/O' });
+  addNamedPort(block, 'out', 'value');
+  block.props.push({ id: generateId('prp'), name: 'pin', kind: 'value', value: null });
+  block.props.push({ id: generateId('prp'), name: 'direction', kind: 'value', value: 'input' });
   block.props.push({ id: generateId('prp'), name: 'value', kind: 'range', min: 0, max: 1, value: 0 });
-  addKindProp(block, 'bool');
+  addKindProp(block, 'digital-io');
   addLogicProps(
     block,
-    `return { out: Number(props.value) >= 1, changed: ${changedExpr()} };`,
-    // This dot IS what's on screen — draws exactly like any other
-    // block's indicator (see canvasIndicators.js), just seeded with
-    // `outputs.out` (this block's own already-computed value, from
-    // Function above) and a different default colour. Only *clicking*
-    // it is special-cased, not the drawing — edit this freely.
-    "helpers.dot(Boolean(outputs.out), '#4f8cff');",
+    `return { value: Number(props.value) >= 1, changed: ${changedExpr()} };`,
+    '// No canvas indicator dot here -- see this block\'s html prop for its on-canvas card instead.',
   );
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: DIGITAL_IO_HTML });
+  block.props.push({ id: generateId('prp'), name: 'dialog', kind: 'value', value: DIGITAL_IO_DIALOG });
   return finish(nodigraph, block);
 }
 
@@ -116,186 +279,7 @@ export function createLedBlock(nodigraph) {
   return finish(nodigraph, block);
 }
 
-// Demonstrates all three customization axes at once (see logicTab.js's own
-// intro text): Function (fn) computes the output the same way Bool does;
-// HTML (html) replaces this block's on-canvas body entirely with a real
-// title/readout/slider instead of a drawn dot; Dialog (dialog) gives it a
-// proper settings panel (GPIO pin, an emit-on-change checkbox, the sim
-// test-value range) instead of raw code fields. Every value either widget
-// touches lives in ordinary props — pin/value/emitOnChange — so both
-// stay in sync with each other and with Function for free.
-const DIN_HTML = `
-container.style.position = 'relative';
-container.style.display = 'flex';
-container.style.flexDirection = 'column';
-container.style.justifyContent = 'space-between';
-container.style.boxSizing = 'border-box';
-container.style.padding = '8px 10px';
-container.style.fontFamily = 'Inter, sans-serif';
-
-let title = container.querySelector('.din-title');
-if (!title) {
-  title = document.createElement('div');
-  title.className = 'din-title';
-  title.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.04em;color:var(--success,#3ecf5d);';
-  title.textContent = 'DIN';
-
-  const gear = document.createElement('button');
-  gear.type = 'button';
-  gear.className = 'din-gear';
-  gear.textContent = String.fromCharCode(9881);
-  gear.title = 'Configure';
-  gear.style.cssText = 'position:absolute;top:4px;right:4px;width:20px;height:20px;padding:0;border-radius:5px;border:1px solid var(--border);background:none;color:var(--text-muted);font-size:11px;line-height:1;cursor:pointer;';
-  gear.addEventListener('click', helpers.openDialog);
-
-  const readout = document.createElement('div');
-  readout.className = 'din-readout';
-  readout.style.cssText = 'flex:1;display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:700;color:var(--success,#3ecf5d);';
-
-  const slider = document.createElement('input');
-  slider.type = 'range';
-  slider.className = 'din-slider';
-  slider.min = '0';
-  slider.max = '1';
-  slider.step = '1';
-  slider.style.width = '100%';
-  slider.addEventListener('input', () => helpers.setProp('value', Number(slider.value)));
-
-  container.append(title, gear, readout, slider);
-}
-
-const pin = block.props.find((p) => p.name === 'pin')?.value ?? '?';
-container.querySelector('.din-readout').textContent = String(pin);
-
-const slider = container.querySelector('.din-slider');
-if (document.activeElement !== slider) {
-  slider.value = String(Number(block.props.find((p) => p.name === 'value')?.value || 0));
-}
-`.trim();
-
-const DIN_DIALOG = `
-container.style.fontFamily = 'Inter, sans-serif';
-
-const heading = document.createElement('h3');
-heading.textContent = 'DIGITAL INPUT';
-heading.style.cssText = 'margin:0 0 14px;color:var(--success,#3ecf5d);font-size:15px;letter-spacing:.03em;';
-container.appendChild(heading);
-
-function section(labelText) {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'margin-bottom:16px;';
-  if (labelText) {
-    const label = document.createElement('div');
-    label.textContent = labelText;
-    label.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin-bottom:6px;';
-    wrap.appendChild(label);
-  }
-  container.appendChild(wrap);
-  return wrap;
-}
-
-const fieldStyle = 'width:100%;padding:6px 8px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;box-sizing:border-box;';
-
-const pinSection = section('GPIO PIN');
-const pinSelect = document.createElement('select');
-pinSelect.style.cssText = fieldStyle;
-for (let i = 0; i <= 39; i += 1) {
-  const opt = document.createElement('option');
-  opt.value = String(i);
-  opt.textContent = 'GPIO ' + i;
-  pinSelect.appendChild(opt);
-}
-pinSelect.value = String(props.pin ?? 2);
-pinSelect.addEventListener('change', () => helpers.setProp('pin', Number(pinSelect.value)));
-pinSection.appendChild(pinSelect);
-
-const pinHint = document.createElement('p');
-pinHint.textContent = 'Input-only pins (34-39) cannot be used for output.';
-pinHint.style.cssText = 'margin:6px 0 0;font-size:11px;color:var(--text-muted);';
-pinSection.appendChild(pinHint);
-
-const emitSection = section('');
-const emitRow = document.createElement('label');
-emitRow.style.cssText = 'display:flex;align-items:flex-start;gap:8px;cursor:pointer;';
-const emitCheckbox = document.createElement('input');
-emitCheckbox.type = 'checkbox';
-emitCheckbox.checked = Boolean(props.emitOnChange);
-emitCheckbox.addEventListener('change', () => helpers.setProp('emitOnChange', emitCheckbox.checked));
-const emitText = document.createElement('div');
-const emitTitle = document.createElement('div');
-emitTitle.textContent = 'Emit signal when value changes';
-emitTitle.style.cssText = 'font-size:12px;font-weight:600;';
-const emitDesc = document.createElement('div');
-emitDesc.textContent = 'Fires 1 (rising) or 0 (falling) on the output when the GPIO state changes.';
-emitDesc.style.cssText = 'font-size:11px;color:var(--text-muted);margin-top:2px;';
-emitText.append(emitTitle, emitDesc);
-emitRow.append(emitCheckbox, emitText);
-emitSection.appendChild(emitRow);
-
-const rangeSection = section('DATA RANGE (SIM TEST VALUE)');
-const rangeRow = document.createElement('div');
-rangeRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
-const minBox = document.createElement('input');
-minBox.type = 'number';
-minBox.value = '0';
-minBox.disabled = true;
-minBox.style.cssText = 'width:48px;flex:none;' + fieldStyle;
-const slider = document.createElement('input');
-slider.type = 'range';
-slider.min = '0';
-slider.max = '1';
-slider.step = '1';
-slider.value = String(Number(props.value || 0));
-slider.style.flex = '1';
-const maxBox = document.createElement('input');
-maxBox.type = 'number';
-maxBox.value = '1';
-maxBox.disabled = true;
-maxBox.style.cssText = minBox.style.cssText;
-rangeRow.append(minBox, slider, maxBox);
-rangeSection.appendChild(rangeRow);
-
-const readoutCaption = document.createElement('p');
-readoutCaption.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';
-function describe(v) { return (Number(v) >= 1 ? '1 -> HIGH' : '0 -> LOW') + ' (bound to a digital pin)'; }
-readoutCaption.textContent = describe(props.value);
-slider.addEventListener('input', () => {
-  helpers.setProp('value', Number(slider.value));
-  readoutCaption.textContent = describe(slider.value);
-});
-rangeSection.appendChild(readoutCaption);
-
-const note = document.createElement('p');
-note.textContent = "Drives this block's simulated GPIO reading -- used whenever no physical pin is actually wired in.";
-note.style.cssText = 'margin:0;font-size:11px;color:var(--text-muted);';
-container.appendChild(note);
-`.trim();
-
-export function createDigitalInputBlock(nodigraph) {
-  const { x, y } = nextPosition(nodigraph);
-  const block = createBlock({ x, y, name: 'Digital Input' });
-  // Cleared right after creation, not passed as `name` above — createBlock
-  // treats an empty string the same as "not given" and falls back to "New
-  // Block" (see its own `name || 'New Block'`). Blank because nodigraph
-  // always draws a block's own name centered (see BlockRenderer.drawBlock),
-  // and with the html overlay having no background of its own (per
-  // instruction — nodigraph's own block fill shows through instead), that
-  // centered text would otherwise collide with the readout DIN_HTML draws
-  // in roughly the same spot. The "DIN" title inside DIN_HTML is this
-  // block's only label now — rename it in the Inspector if you want
-  // something else there.
-  block.name = '';
-  addNamedPort(block, 'out', 'out');
-  block.props.push({ id: generateId('prp'), name: 'pin', kind: 'value', value: 2 });
-  block.props.push({ id: generateId('prp'), name: 'value', kind: 'range', min: 0, max: 1, value: 0 });
-  block.props.push({ id: generateId('prp'), name: 'emitOnChange', kind: 'value', value: false });
-  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return { out: Number(props.value) >= 1 };' });
-  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: DIN_HTML });
-  block.props.push({ id: generateId('prp'), name: 'dialog', kind: 'value', value: DIN_DIALOG });
-  return finish(nodigraph, block);
-}
-
-// Like Bool (see createBoolBlock) but holds any value, not just 0/1 — a
+// Like Digital I/O's simulated mode but holds any value, not just 0/1 — a
 // plain constant "primitive". Its value is edited through the cog button
 // in the bottom-left selection FAB stack (select the block — see
 // window.nodigraphSelectionFab below), which opens this same `dialog` any
@@ -572,9 +556,10 @@ container.appendChild(dataHint);
 export function createWeatherBlock(nodigraph) {
   const { x, y } = nextPosition(nodigraph);
   const block = createBlock({ x, y, name: 'Weather' });
-  // See createDigitalInputBlock's own note on why: no background on the
-  // html card means nodigraph's own centered name would otherwise collide
-  // with this card's title/readout.
+  // No background on the html card means nodigraph's own centered name
+  // would otherwise collide with this card's own title/readout — cleared
+  // for the same reason DIN used to be, back when it was its own block
+  // (see git history) rather than a Digital I/O mode.
   block.name = '';
   addNamedPort(block, 'in', 'trigger');
   addNamedPort(block, 'out', 'json');
@@ -683,11 +668,10 @@ export function mountPalette(nodigraph, container) {
     return button;
   }
 
-  paletteButton('#4f8cff', 'Bool', () => createBoolBlock(nodigraph));
+  paletteButton('#3ecf5d', 'Digital I/O', () => createDigitalIOBlock(nodigraph));
   paletteButton('#4f8cff', 'Data', () => createStandaloneDataBlock(nodigraph));
   paletteButton('#c98a2f', 'AND gate', () => createAndBlock(nodigraph));
   paletteButton('#3ecf5d', 'LED', () => createLedBlock(nodigraph));
-  paletteButton('#3ecf5d', 'Digital Input', () => createDigitalInputBlock(nodigraph));
   paletteButton('#3ecf5d', 'Timer', () => createTimerBlock(nodigraph));
   paletteButton('#2f6fed', 'Weather', () => createWeatherBlock(nodigraph));
   paletteButton('#c98a2f', 'JSON Field', () => createJsonFieldBlock(nodigraph));

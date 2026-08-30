@@ -16,7 +16,7 @@ import { installDialogSystem } from './dialogSystem.js';
 // whole T_ON/T_OFF design *depends* on being a container). See
 // window.nodigraphCanEnter below and palette.js's own addKindProp calls
 // for where each one gets tagged.
-const NO_SUB_ARCHITECTURE_KINDS = ['bool', 'and', 'data'];
+const NO_SUB_ARCHITECTURE_KINDS = ['digital-io', 'and', 'data'];
 
 function waitForNodigraph() {
   return new Promise((resolve) => {

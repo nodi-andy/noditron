@@ -17,10 +17,11 @@
 //    htmlOverlay.js's own helpers);
 //  - a block with a `dialog` but no `html` gets a small gear drawn in its
 //    own top-left corner (drawBlock below), clickable the same
-//    capture-phase way canvasIndicators.js's Bool toggle is.
+//    capture-phase way canvasIndicators.js's own dot toggles are.
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { getLastResult } from './runtime.js';
 import * as serialFlash from './serialFlash.js';
+import * as deviceLink from './deviceLink.js';
 
 const HOST_ID = 'noditron-dialog-host';
 const GEAR_RADIUS = 8;
@@ -110,6 +111,19 @@ export function installDialogSystem(nodigraph) {
         nodigraph.renderLoop.requestRender();
         nodigraph.persist();
       },
+      // The live project, for a dialog doing something setProp can't —
+      // adding/removing a whole port (Digital I/O's own direction switch,
+      // for one), not just editing a value. Mirrors exactly what the
+      // Inspector's own port-delete button does: remove the logical port,
+      // then removeConnectionsForPort for each pin it took with it, so a
+      // wire that pointed at a now-gone pin doesn't linger as a dangling
+      // reference. refresh() is setProp's own render+persist tail end,
+      // split out for exactly this case — a mutation that isn't a prop.
+      project: nodigraph.project,
+      refresh() {
+        nodigraph.renderLoop.requestRender();
+        nodigraph.persist();
+      },
       // Generic Web Serial + esptool-js bridge (see serialFlash.js) — kept
       // as unspecial to any one block as fetchJson/fetchStatus already are
       // to `fn`: available to every dialog, meaningful only to whichever
@@ -126,6 +140,16 @@ export function installDialogSystem(nodigraph) {
         getSession: () => serialFlash.getSession(block.id),
         firmwarePresets: serialFlash.FIRMWARE_PRESETS,
         fetchPresetBytes: serialFlash.fetchPresetBytes,
+      },
+      // A separate bridge from `serial` above on purpose — this is WiFi/
+      // HTTP to a *booted* board's own logicMod firmware (see deviceLink.js),
+      // nothing to do with the Web Serial ROM-bootloader link flashing uses.
+      // Generic the same way `serial` is: meaningful only to whichever
+      // block's dialog actually calls it.
+      device: {
+        identify: deviceLink.identify,
+        sendDesign: deviceLink.sendDesign,
+        buildMinimalDesign: deviceLink.buildMinimalDesign,
       },
     };
 
