@@ -33,33 +33,79 @@ export function getSession(blockId) {
 // library.js/nodigraph's own GitHubConnectDialog (getStoredToken) rather
 // than a plain unauthenticated fetch — jsDelivr's CDN has no auth
 // mechanism at all and could never reach a private repo, token or not.
-// App-image-only (0x10000): flashing just the app over a board that
-// already has a bootloader and partition table (the common case — a
-// factory-fresh or previously-flashed ESP32 already does) reboots
-// straight into it; a truly wiped chip still needs a bootloader/
-// partitions file added as an ordinary manual row alongside this one.
+//
+// Each preset is a full bundle — bootloader + partition table + OTA
+// slot-selector + app — written together in one writeFlash() call, never
+// just the app image alone. That used to be app-only, on the assumption a
+// board already had a bootloader and partition table from some earlier
+// flash; a genuinely blank (or fully erased) chip has neither, so that
+// assumption bricked one — the ROM's own boot log loops "invalid header:
+// 0xffffffff" forever with no bootloader at 0x1000 to hand off to. conucon's
+// own installer hit and fixed the exact same bug once already (see its
+// server.js comment above FIRMWARE_TARGETS) — always writing the full set
+// is what it settled on, since rewriting an unchanged bootloader/partition
+// table on a board that already had one is a harmless no-op. boot_app0.bin
+// is chip-family-independent (just OTA slot-select metadata), so one copy
+// covers every target; bootloader.bin and partitions.bin are per chip
+// family (offsets, and on some cores their actual bytes, differ).
 const FIRMWARE_REPO = { owner: 'nodi-andy', repo: 'noditron', ref: 'main' };
+const BOOT_APP0 = { path: 'firmware-assets/boot_app0.bin', address: 0xe000 };
 export const FIRMWARE_PRESETS = [
-  { id: 'logic-esp32', label: 'Logic — ESP32 (classic)', chip: 'ESP32', path: 'firmware-assets/logic/esp32.bin', address: 0x10000 },
-  { id: 'logic-esp32-s3', label: 'Logic — ESP32-S3', chip: 'ESP32-S3', path: 'firmware-assets/logic/esp32-s3.bin', address: 0x10000 },
+  {
+    id: 'logic-esp32',
+    label: 'Logic — ESP32 (classic)',
+    chip: 'ESP32',
+    parts: [
+      { path: 'firmware-assets/logic/esp32-bootloader.bin', address: 0x1000 },
+      { path: 'firmware-assets/logic/esp32-partitions.bin', address: 0x8000 },
+      BOOT_APP0,
+      { path: 'firmware-assets/logic/esp32.bin', address: 0x10000 },
+    ],
+  },
+  {
+    id: 'logic-esp32-s3',
+    label: 'Logic — ESP32-S3',
+    chip: 'ESP32-S3',
+    // App-image-only for now — this core builds its own bootloader per
+    // target rather than shipping one project-wide (see conucon's own
+    // comment on why classic and S3 differ here), and nobody's hit this on
+    // an S3 board yet. Same risk as the classic preset used to carry:
+    // fine over a board that already has a bootloader/partition table,
+    // not yet a from-scratch blank-chip flash.
+    parts: [{ path: 'firmware-assets/logic/esp32-s3.bin', address: 0x10000 }],
+  },
 ];
 
-// The Contents API caps a readable file at 1MB (base64 included) — both
-// current presets (~830-885KB) fit; a future firmware big enough to blow
-// past that would need the Git Blobs API instead, not handled here yet.
-export async function fetchPresetBytes(preset, token = getStoredToken()) {
+// The Contents API caps a readable file at 1MB (base64 included) — every
+// part of every preset here (~830-905KB at the largest) fits; a future
+// firmware big enough to blow past that would need the Git Blobs API
+// instead, not handled here yet.
+async function fetchAssetBytes(path, label, token) {
   const { owner, repo, ref } = FIRMWARE_REPO;
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${preset.path}?ref=${encodeURIComponent(ref)}`;
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
   const headers = { Accept: 'application/vnd.github+json' };
   if (token) headers.Authorization = `token ${token}`;
   const res = await fetch(url, { cache: 'no-store', headers });
   if (!res.ok) {
     const body = await res.json().catch(() => null);
     const needsToken = (res.status === 401 || res.status === 404) && !token;
-    throw new Error(`${body?.message || `${res.status} ${res.statusText}`} fetching ${preset.label}${needsToken ? ' — this repo is private, add a GitHub token in the library dialog' : ''}`);
+    throw new Error(`${body?.message || `${res.status} ${res.statusText}`} fetching ${label}${needsToken ? ' — this repo is private, add a GitHub token in the library dialog' : ''}`);
   }
   const file = await res.json();
   return Uint8Array.from(atob(file.content.replace(/\n/g, '')), (c) => c.charCodeAt(0));
+}
+
+// Every part of a preset, ready to hand straight to flash() below — fetched
+// in parallel (they're independent GitHub Contents API requests), returned
+// in the same bootloader-first order the preset itself lists them in.
+export async function fetchPresetParts(preset, token = getStoredToken()) {
+  return Promise.all(
+    preset.parts.map(async (part) => ({
+      name: part.path.split('/').pop(),
+      address: part.address,
+      bytes: await fetchAssetBytes(part.path, `${preset.label} (${part.path.split('/').pop()})`, token),
+    })),
+  );
 }
 
 // A starting point only, for the standard Arduino-ESP32 partition layout —

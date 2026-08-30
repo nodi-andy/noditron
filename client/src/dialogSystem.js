@@ -139,7 +139,7 @@ export function installDialogSystem(nodigraph) {
         guessAddress: serialFlash.guessAddress,
         getSession: () => serialFlash.getSession(block.id),
         firmwarePresets: serialFlash.FIRMWARE_PRESETS,
-        fetchPresetBytes: serialFlash.fetchPresetBytes,
+        fetchPresetParts: serialFlash.fetchPresetParts,
       },
       // A separate bridge from `serial` above on purpose — this talks to a
       // *booted* board's own logicMod firmware over the plain-text console
