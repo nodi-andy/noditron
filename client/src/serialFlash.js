@@ -1,0 +1,103 @@
+// Web Serial + esptool-js — the only place noditron talks to real ESP32
+// hardware. esptool-js (vendored at ../vendor/esptool-js, see its own
+// README) is Espressif's own official in-browser flasher: it implements
+// the real ROM bootloader SLIP protocol (chip auto-detect, stub upload,
+// flash-download, MD5 verify), so nothing here reimplements that — this
+// file is just the thin bit gluing it to one noditron block's dialog.
+//
+// One session per block id, not one global session, so more than one ESP32
+// DevKit on canvas can each hold their own independent serial connection at
+// once. A session only ever lives as long as the page does — a reload
+// always drops it, same as any other Web Serial connection; nothing here
+// tries to work around that.
+import { ESPLoader, Transport } from '../vendor/esptool-js/esptool-js.bundle.js';
+
+const sessions = new Map(); // blockId -> { port, transport, esploader, chipName, bootloaderOffset }
+
+export function isSupported() {
+  return typeof navigator !== 'undefined' && 'serial' in navigator;
+}
+
+export function getSession(blockId) {
+  return sessions.get(blockId) || null;
+}
+
+// A starting point only, for the standard Arduino-ESP32 partition layout —
+// every row stays editable in the dialog. The one offset that genuinely
+// varies by chip (the bootloader's — 0x0 on S3/C3/C6, 0x1000 on classic
+// ESP32/S2, see esptool-js's own per-chip ROM classes) comes from the
+// detected chip itself once connected, never guessed from a filename.
+export function guessAddress(filename, bootloaderOffset) {
+  const lower = filename.toLowerCase();
+  if (lower.includes('bootloader')) return bootloaderOffset ?? 0x1000;
+  if (lower.includes('partition')) return 0x8000;
+  if (lower.includes('boot_app0')) return 0xe000;
+  return 0x10000; // firmware.bin / app.bin, or a merged single image's app part
+}
+
+function describePort(port) {
+  const info = port.getInfo?.() || {};
+  if (info.usbVendorId !== undefined) {
+    return `USB ${info.usbVendorId.toString(16).padStart(4, '0')}:${info.usbProductId.toString(16).padStart(4, '0')}`;
+  }
+  return 'serial port';
+}
+
+export async function connect(blockId, { onLog } = {}) {
+  const port = await navigator.serial.requestPort();
+  const transport = new Transport(port, true);
+  const session = { port, transport, esploader: null, chipName: null, bootloaderOffset: null };
+  sessions.set(blockId, session);
+  onLog?.(`Port selected: ${describePort(port)}`);
+  return session;
+}
+
+// Resets the board, syncs with its ROM bootloader, and identifies the chip
+// — this is what turns "a port is open" into "we know what's on the other
+// end," and is a precondition for writeFlash (it needs esploader.chip to
+// know per-chip flash timing/offsets).
+export async function detectChip(blockId, { onLog } = {}) {
+  const session = sessions.get(blockId);
+  if (!session) throw new Error('Not connected — pick a serial port first.');
+  const terminal = { clean() {}, writeLine: (line) => onLog?.(line), write: (line) => onLog?.(line) };
+  session.esploader = new ESPLoader({ transport: session.transport, baudrate: 115200, terminal });
+  session.chipName = await session.esploader.main();
+  session.bootloaderOffset = session.esploader.chip.BOOTLOADER_FLASH_OFFSET;
+  return { chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };
+}
+
+// `files`: [{ name, file: File, address: number }] — flashMode/Freq/Size
+// all "keep" (esptool-js/esptool's own sentinel for "read it off the
+// device, don't guess"), which is the right default for a board whose
+// flash chip might be anything; the dialog never asks the user to pick
+// those, only the per-file address.
+export async function flash(blockId, files, { eraseAll = false, onProgress, onLog } = {}) {
+  const session = sessions.get(blockId);
+  if (!session?.esploader) throw new Error('Detect the chip before flashing.');
+  const fileArray = [];
+  for (const f of files) {
+    fileArray.push({ data: new Uint8Array(await f.file.arrayBuffer()), address: f.address });
+  }
+  await session.esploader.writeFlash({
+    fileArray,
+    flashMode: 'keep',
+    flashFreq: 'keep',
+    flashSize: 'keep',
+    eraseAll,
+    compress: true,
+    reportProgress: (fileIndex, written, total) => onProgress?.(fileIndex, written, total),
+  });
+  await session.esploader.after('hard_reset');
+  onLog?.('Flash complete — device reset.');
+}
+
+export async function disconnect(blockId) {
+  const session = sessions.get(blockId);
+  if (!session) return;
+  sessions.delete(blockId);
+  try {
+    await session.transport.disconnect();
+  } catch {
+    // Already gone (unplugged, or never fully opened) — nothing left to close.
+  }
+}

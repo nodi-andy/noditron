@@ -13,7 +13,7 @@
 // doc on it).
 import { generateId } from '/nodigraph/src/model/Block.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
-import { pasteSelection, isClipboardPayload } from '/nodigraph/src/model/clipboard.js';
+import { pasteSelection, isClipboardPayload, serializeSelection } from '/nodigraph/src/model/clipboard.js';
 
 const GITHUB_API = 'https://api.github.com';
 const MODULE_TOPIC = 'noditron-module';
@@ -225,6 +225,22 @@ function statusLine(text, isError = false) {
   return p;
 }
 
+function slugify(name) {
+  return String(name || 'module').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'module';
+}
+
+// Triggers a plain browser file save — no server, no clipboard permission
+// needed, works the same way nodigraph's own "download" export options do.
+function downloadJson(filename, data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function installLibraryUI(nodigraph, onInstalled) {
   const host = ensureHost();
 
@@ -362,6 +378,43 @@ export function installLibraryUI(nodigraph, onInstalled) {
         resultsArea.appendChild(statusLine(`Search failed: ${err.message}`, true));
       }
     });
+
+    // Export — the authoring side of the loop: build a block by hand (its
+    // custom fn/render/html/dialog code included — see logicTab.js), select
+    // it, and turn it into a manifest ready to push to a public repo. No
+    // separate format to learn: the payload is exactly what nodigraph's own
+    // Ctrl+C would put on the clipboard for the same selection.
+    body.appendChild(sectionLabel('EXPORT SELECTED AS A MODULE'));
+    const selectedCount = nodigraph.selection.count;
+    if (!selectedCount) {
+      body.appendChild(statusLine('Select one or more blocks on canvas first.'));
+    } else {
+      const primary = nodigraph.project.getBlock(nodigraph.selection.selectedBlockId);
+      const { wrap: nameWrap, input: nameInput } = field('MODULE NAME (used in the file path, lowercase-hyphenated)', { value: slugify(primary?.name) });
+      const { wrap: displayWrap, input: displayInput } = field('DISPLAY NAME', { value: primary?.name || 'My Module' });
+      const { wrap: descWrap, input: descInput } = field('DESCRIPTION');
+      const { wrap: versionWrap, input: versionInput } = field('VERSION', { value: '0.1.0' });
+      body.append(nameWrap, displayWrap, descWrap, versionWrap);
+
+      const exportBtn = button(`Download noditron.module.json (${selectedCount} block${selectedCount === 1 ? '' : 's'})`, { primary: true });
+      exportBtn.addEventListener('click', () => {
+        const payload = serializeSelection(nodigraph.project, nodigraph.selection.list());
+        const manifestOut = {
+          noditronModule: 1,
+          name: slugify(nameInput.value),
+          displayName: displayInput.value.trim() || slugify(nameInput.value),
+          version: versionInput.value.trim() || '0.1.0',
+          description: descInput.value.trim(),
+          swatchColor: primary?.style?.color || '#8b93a3',
+          block: payload,
+        };
+        downloadJson('noditron.module.json', manifestOut);
+      });
+      body.appendChild(exportBtn);
+
+      const exportHint = statusLine('Push the downloaded file to a public GitHub repo as noditron.module.json, tag it with the topic "noditron-module", and it can be found and installed from here by anyone.');
+      body.appendChild(exportHint);
+    }
 
     // Installed — modules already added to this project, one click to add
     // another instance without searching again.

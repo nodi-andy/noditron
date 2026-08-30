@@ -20,6 +20,7 @@
 //    capture-phase way canvasIndicators.js's Bool toggle is.
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { getLastResult } from './runtime.js';
+import * as serialFlash from './serialFlash.js';
 
 const HOST_ID = 'noditron-dialog-host';
 const GEAR_RADIUS = 8;
@@ -108,6 +109,21 @@ export function installDialogSystem(nodigraph) {
         block.description = serializeBlockDescription(block);
         nodigraph.renderLoop.requestRender();
         nodigraph.persist();
+      },
+      // Generic Web Serial + esptool-js bridge (see serialFlash.js) — kept
+      // as unspecial to any one block as fetchJson/fetchStatus already are
+      // to `fn`: available to every dialog, meaningful only to whichever
+      // block actually calls it. One session per block.id, so a dialog
+      // reopened later (or a different ESP32-shaped block entirely) still
+      // reaches its own still-open connection rather than someone else's.
+      serial: {
+        isSupported: serialFlash.isSupported,
+        connect: (onLog) => serialFlash.connect(block.id, { onLog }),
+        detectChip: (onLog) => serialFlash.detectChip(block.id, { onLog }),
+        flash: (files, eraseAll, onProgress, onLog) => serialFlash.flash(block.id, files, { eraseAll, onProgress, onLog }),
+        disconnect: () => serialFlash.disconnect(block.id),
+        guessAddress: serialFlash.guessAddress,
+        getSession: () => serialFlash.getSession(block.id),
       },
     };
 
