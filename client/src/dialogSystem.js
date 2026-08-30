@@ -124,6 +124,8 @@ export function installDialogSystem(nodigraph) {
         disconnect: () => serialFlash.disconnect(block.id),
         guessAddress: serialFlash.guessAddress,
         getSession: () => serialFlash.getSession(block.id),
+        firmwarePresets: serialFlash.FIRMWARE_PRESETS,
+        fetchPresetBytes: serialFlash.fetchPresetBytes,
       },
     };
 

@@ -14,6 +14,7 @@
 import { generateId } from '/nodigraph/src/model/Block.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { pasteSelection, isClipboardPayload, serializeSelection } from '/nodigraph/src/model/clipboard.js';
+import { getStoredToken, setStoredToken } from '/nodigraph/src/model/githubSync.js';
 
 const GITHUB_API = 'https://api.github.com';
 const MODULE_TOPIC = 'noditron-module';
@@ -21,24 +22,52 @@ const DEFAULT_MANIFEST_PATH = 'noditron.module.json';
 const INSTALLED_PROP = 'noditronLibraryModules';
 const SOURCE_PROP = 'noditronModuleSource';
 
-function jsDelivrUrl(owner, repo, ref, path) {
-  return `https://cdn.jsdelivr.net/gh/${owner}/${repo}@${ref}/${path}`;
+// The GitHub Contents API, not jsDelivr's CDN — jsDelivr has no auth
+// mechanism at all, so it can only ever reach public repos. This app's own
+// repos (and plenty of real modules/firmware) are private, so anything
+// meant to actually work needs a real, optionally-authenticated GitHub API
+// call. Reuses nodigraph's own token storage (getStoredToken/setStoredToken
+// — same key, same "kept only in this browser, sent only to
+// api.github.com" posture as nodigraph's own GitHubConnectDialog) rather
+// than inventing a second credential for the same account: set a token
+// once, in either dialog, and both use it.
+function authedHeaders(token) {
+  const headers = { Accept: 'application/vnd.github+json' };
+  if (token) headers.Authorization = `token ${token}`;
+  return headers;
 }
 
-async function fetchJson(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`${res.status} ${res.statusText} fetching ${url}`);
+async function githubFetch(url, token) {
+  const res = await fetch(url, { cache: 'no-store', headers: authedHeaders(token) });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const err = new Error(body?.message || `GitHub API error (${res.status})`);
+    err.status = res.status;
+    throw err;
+  }
   return res.json();
 }
 
-// GitHub's public search, unauthenticated — fine for occasional manual
-// searches, not for polling. Anyone can be found this way just by tagging
-// their own public repo with the `noditron-module` topic; nothing here
-// registers or approves a module, so there is no server of ours in this
-// path at all.
-export async function searchModules(query) {
+function base64ToBytes(b64) {
+  return Uint8Array.from(atob(b64.replace(/\n/g, '')), (c) => c.charCodeAt(0));
+}
+
+function base64ToText(b64) {
+  return new TextDecoder().decode(base64ToBytes(b64));
+}
+
+function contentsUrl(owner, repo, path, ref) {
+  const base = `${GITHUB_API}/repos/${owner}/${repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`;
+  return ref ? `${base}?ref=${encodeURIComponent(ref)}` : base;
+}
+
+// GitHub's search API includes private repos the token's own account can
+// see, same as browsing github.com signed in — so a token also turns this
+// into "search my own private modules," not only the public ones anyone
+// can find.
+export async function searchModules(query, token = getStoredToken()) {
   const q = query && query.trim() ? `topic:${MODULE_TOPIC} ${query.trim()}` : `topic:${MODULE_TOPIC}`;
-  const data = await fetchJson(`${GITHUB_API}/search/repositories?q=${encodeURIComponent(q)}&per_page=20`);
+  const data = await githubFetch(`${GITHUB_API}/search/repositories?q=${encodeURIComponent(q)}&per_page=20`, token);
   return (data.items || []).map((repo) => ({
     owner: repo.owner.login,
     repo: repo.name,
@@ -53,10 +82,10 @@ export async function searchModules(query) {
 // the repo has any (a real release), else its default branch (a module
 // that hasn't cut a release yet still installs, just without a pinned
 // version).
-export async function resolveDefaultRef(owner, repo) {
-  const tags = await fetchJson(`${GITHUB_API}/repos/${owner}/${repo}/tags?per_page=1`).catch(() => []);
+export async function resolveDefaultRef(owner, repo, token = getStoredToken()) {
+  const tags = await githubFetch(`${GITHUB_API}/repos/${owner}/${repo}/tags?per_page=1`, token).catch(() => []);
   if (tags[0]?.name) return tags[0].name;
-  const info = await fetchJson(`${GITHUB_API}/repos/${owner}/${repo}`);
+  const info = await githubFetch(`${GITHUB_API}/repos/${owner}/${repo}`, token);
   return info.default_branch;
 }
 
@@ -67,8 +96,14 @@ function validateManifest(manifest) {
   return manifest;
 }
 
-export async function fetchManifest(owner, repo, ref, path = DEFAULT_MANIFEST_PATH) {
-  const manifest = await fetchJson(jsDelivrUrl(owner, repo, ref, path));
+// The Contents API caps a readable file at 1MB (base64 included) — plenty
+// for a block manifest, whatever its embedded fn/html/dialog code; a
+// module shipping something bigger than that inside its own JSON would
+// need a different transport, out of scope here.
+export async function fetchManifest(owner, repo, ref, path = DEFAULT_MANIFEST_PATH, token = getStoredToken()) {
+  const file = await githubFetch(contentsUrl(owner, repo, path, ref), token);
+  if (Array.isArray(file)) throw new Error(`${path} is a directory, not a file.`);
+  const manifest = JSON.parse(base64ToText(file.content));
   return validateManifest(manifest);
 }
 
@@ -273,6 +308,42 @@ export function installLibraryUI(nodigraph, onInstalled) {
     body.className = 'noditron-dialog-body';
     body.appendChild(heading('LIBRARY'));
 
+    // Shared with nodigraph's own "Open/Save to GitHub" — same storage key,
+    // so a token set in either place works in both. Collapsed behind a
+    // reveal link when nothing is stored yet (most modules people install
+    // from someone else are public and need no token at all); shown
+    // outright once one is on file, with its own "Forget" action.
+    const tokenField = document.createElement('div');
+    tokenField.style.cssText = 'margin-bottom:14px;';
+    const { wrap: tokenWrap, input: tokenInput } = field('GITHUB PERSONAL ACCESS TOKEN', { type: 'password', placeholder: 'ghp_…', value: getStoredToken() });
+    tokenWrap.style.marginBottom = '4px';
+    tokenField.appendChild(tokenWrap);
+    tokenInput.addEventListener('change', () => setStoredToken(tokenInput.value.trim()));
+    const tokenActions = document.createElement('div');
+    tokenActions.style.cssText = 'display:flex;align-items:center;gap:10px;';
+    tokenField.appendChild(tokenActions);
+    const revealBtn = button('Private repo? Add a token');
+    revealBtn.style.cssText += 'padding:2px 0;border:none;color:var(--text-muted);text-decoration:underline;';
+    revealBtn.addEventListener('click', () => {
+      tokenField.style.display = '';
+      tokenWrap.hidden = false;
+      revealBtn.hidden = true;
+    });
+    tokenActions.appendChild(revealBtn);
+    if (getStoredToken()) {
+      const forgetBtn = button('Forget this token');
+      forgetBtn.style.cssText += 'padding:2px 0;border:none;color:var(--text-muted);text-decoration:underline;';
+      forgetBtn.addEventListener('click', () => {
+        setStoredToken('');
+        tokenInput.value = '';
+        forgetBtn.remove();
+      });
+      tokenActions.appendChild(forgetBtn);
+    }
+    tokenWrap.hidden = !getStoredToken();
+    revealBtn.hidden = Boolean(getStoredToken());
+    body.appendChild(tokenField);
+
     // Manual add — the always-available path: type owner/repo (and
     // optionally pin a ref/path), fetch, preview, install. Search below is
     // just a shortcut to fill this in.
@@ -323,7 +394,12 @@ export function installLibraryUI(nodigraph, onInstalled) {
         previewArea.appendChild(preview);
       } catch (err) {
         previewArea.innerHTML = '';
-        previewArea.appendChild(statusLine(`Fetch failed: ${err.message}`, true));
+        const needsToken = (err.status === 401 || err.status === 404) && !tokenInput.value.trim();
+        previewArea.appendChild(statusLine(`Fetch failed: ${err.message}${needsToken ? ' — this repo may be private; add a token above.' : ''}`, true));
+        if (needsToken) {
+          tokenWrap.hidden = false;
+          revealBtn.hidden = true;
+        }
       }
     });
 
@@ -412,7 +488,7 @@ export function installLibraryUI(nodigraph, onInstalled) {
       });
       body.appendChild(exportBtn);
 
-      const exportHint = statusLine('Push the downloaded file to a public GitHub repo as noditron.module.json, tag it with the topic "noditron-module", and it can be found and installed from here by anyone.');
+      const exportHint = statusLine('Push the downloaded file to a GitHub repo as noditron.module.json. A public repo tagged with the topic "noditron-module" shows up in search for anyone; a private one installs too, for anyone with a token that can read it.');
       body.appendChild(exportHint);
     }
 

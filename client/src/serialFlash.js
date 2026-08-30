@@ -11,6 +11,7 @@
 // always drops it, same as any other Web Serial connection; nothing here
 // tries to work around that.
 import { ESPLoader, Transport } from '../vendor/esptool-js/esptool-js.bundle.js';
+import { getStoredToken } from '/nodigraph/src/model/githubSync.js';
 
 const sessions = new Map(); // blockId -> { port, transport, esploader, chipName, bootloaderOffset }
 
@@ -20,6 +21,42 @@ export function isSupported() {
 
 export function getSession(blockId) {
   return sessions.get(blockId) || null;
+}
+
+// Known, ready-to-flash firmware — conucon's own committed release
+// builds (see that repo's server.js FIRMWARE_TARGETS map, the source of
+// truth for these offsets). conucon is a private repo, so this goes
+// through the GitHub Contents API with the same shared token as
+// library.js/nodigraph's own GitHubConnectDialog (getStoredToken) rather
+// than a plain unauthenticated fetch — jsDelivr's CDN has no auth
+// mechanism at all and could never reach a private repo, token or not.
+// App-image-only (0x10000): flashing just the app over a board that
+// already has a bootloader and partition table (the common case — a
+// factory-fresh or previously-flashed ESP32 already does) reboots
+// straight into it; a truly wiped chip still needs a bootloader/
+// partitions file added as an ordinary manual row alongside this one.
+const FIRMWARE_REPO = { owner: 'nodi-andy', repo: 'conucon', ref: 'main' };
+export const FIRMWARE_PRESETS = [
+  { id: 'logic-esp32', label: 'Logic — ESP32 (classic)', chip: 'ESP32', path: 'firmware-assets/logic/esp32.bin', address: 0x10000 },
+  { id: 'logic-esp32-s3', label: 'Logic — ESP32-S3', chip: 'ESP32-S3', path: 'firmware-assets/logic/esp32-s3.bin', address: 0x10000 },
+];
+
+// The Contents API caps a readable file at 1MB (base64 included) — both
+// current presets (~830-885KB) fit; a future firmware big enough to blow
+// past that would need the Git Blobs API instead, not handled here yet.
+export async function fetchPresetBytes(preset, token = getStoredToken()) {
+  const { owner, repo, ref } = FIRMWARE_REPO;
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${preset.path}?ref=${encodeURIComponent(ref)}`;
+  const headers = { Accept: 'application/vnd.github+json' };
+  if (token) headers.Authorization = `token ${token}`;
+  const res = await fetch(url, { cache: 'no-store', headers });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    const needsToken = (res.status === 401 || res.status === 404) && !token;
+    throw new Error(`${body?.message || `${res.status} ${res.statusText}`} fetching ${preset.label}${needsToken ? ' — this repo is private, add a GitHub token in the library dialog' : ''}`);
+  }
+  const file = await res.json();
+  return Uint8Array.from(atob(file.content.replace(/\n/g, '')), (c) => c.charCodeAt(0));
 }
 
 // A starting point only, for the standard Arduino-ESP32 partition layout —
@@ -66,17 +103,20 @@ export async function detectChip(blockId, { onLog } = {}) {
   return { chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };
 }
 
-// `files`: [{ name, file: File, address: number }] — flashMode/Freq/Size
-// all "keep" (esptool-js/esptool's own sentinel for "read it off the
-// device, don't guess"), which is the right default for a board whose
-// flash chip might be anything; the dialog never asks the user to pick
-// those, only the per-file address.
+// `files`: [{ name, address, file: File }] for a manually-picked file, or
+// [{ name, address, bytes: Uint8Array }] for one fetched via a firmware
+// preset above — either shape flashes the same way from here on.
+// flashMode/Freq/Size all "keep" (esptool-js/esptool's own sentinel for
+// "read it off the device, don't guess"), which is the right default for
+// a board whose flash chip might be anything; the dialog never asks the
+// user to pick those, only the per-file address.
 export async function flash(blockId, files, { eraseAll = false, onProgress, onLog } = {}) {
   const session = sessions.get(blockId);
   if (!session?.esploader) throw new Error('Detect the chip before flashing.');
   const fileArray = [];
   for (const f of files) {
-    fileArray.push({ data: new Uint8Array(await f.file.arrayBuffer()), address: f.address });
+    const data = f.bytes ? f.bytes : new Uint8Array(await f.file.arrayBuffer());
+    fileArray.push({ data, address: f.address });
   }
   await session.esploader.writeFlash({
     fileArray,
