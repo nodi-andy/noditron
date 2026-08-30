@@ -92,6 +92,22 @@ export async function connect(blockId, { onLog } = {}) {
   return session;
 }
 
+// Most ESP32 boards' auto-reset circuit wires DTR/RTS straight into
+// GPIO0/EN (that's the whole mechanism esptool's own classicReset above
+// uses to force chip into the ROM bootloader) — and opening a Web Serial
+// port can leave both asserted by default, depending on the platform.
+// Left asserted after a plain (re)open, that reads as "select the
+// bootloader" on the very next reset, which is exactly what a freshly
+// flashed board's own boot-up is — so skipping this leaves a board that
+// flashed perfectly looping straight back into the bootloader forever
+// instead of ever running the app that was just written to it.
+// esptool-js's own classicReset (see esptool-js.bundle.js) ends its own
+// sequence the same way, on the same reasoning.
+async function releaseResetLines(transport) {
+  await transport.setDTR(false);
+  await transport.setRTS(false);
+}
+
 // Closes and reopens the same already-granted port with a brand new
 // Transport, at a plain baud rate — no ESPLoader, no SLIP framing. Needed
 // because ESPLoader's own connect (see detectChip below) starts a
@@ -110,9 +126,25 @@ export async function reopenPlain(blockId, baudrate = 115200) {
   }
   const transport = new Transport(session.port, true);
   await transport.connect(baudrate);
+  await releaseResetLines(transport);
   const fresh = { port: session.port, transport, esploader: null, chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };
   sessions.set(blockId, fresh);
   return fresh;
+}
+
+// The one place serialConsole.js should ever have to reach into serial
+// port mechanics from — everything about *how* a plain connection gets
+// opened (fresh vs. reopened after a bootloader session, and always with
+// the reset lines released) lives here instead of being duplicated there.
+export async function ensureOpenPlain(blockId, baudrate = 115200) {
+  const session = sessions.get(blockId);
+  if (!session) throw new Error('Not connected — pick a serial port first.');
+  if (session.esploader) return reopenPlain(blockId, baudrate);
+  if (!session.port.readable) {
+    await session.transport.connect(baudrate);
+    await releaseResetLines(session.transport);
+  }
+  return session;
 }
 
 // Resets the board, syncs with its ROM bootloader, and identifies the chip

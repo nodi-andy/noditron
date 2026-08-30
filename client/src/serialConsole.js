@@ -11,29 +11,21 @@
 // `device.writable` write bypasses Transport.write's own mandatory SLIP
 // framing (there is no raw-write it exposes directly) — both operate on
 // the exact same port serialFlash.js's session already holds open.
-import { getSession, reopenPlain } from './serialFlash.js';
+import { getSession, ensureOpenPlain } from './serialFlash.js';
 
 const consoles = new Map(); // blockId -> { queue: Uint8Array, waiters: [] }
 
-// Makes sure the port is actually open in plain mode before any read/write
-// here touches it. Three cases: never opened yet (open it plain, straight
-// off the port `serialFlash.connect()` already picked); already open and
-// plain (an earlier call already did this — leave it alone, re-opening a
-// port that's fine as-is would just be an extra, pointless DTR toggle,
-// which resets most ESP32 boards); or SLIP-tainted by a bootloader session
-// (`session.esploader` set — see serialFlash.js's own note on why that
-// can't be undone in place) — force the close/reopen cycle, and throw out
-// this blockId's console state since it was reading a transport that just
-// got replaced out from under it.
+// Makes sure the port is actually open in plain mode (see serialFlash.js's
+// own ensureOpenPlain for what that involves — a fresh open, a no-op if
+// it's already open and plain, or a full close/reopen if a bootloader
+// session tainted it) before any read/write here touches it. When that did
+// force a close/reopen, this blockId's own queue/reader is stale — it was
+// reading a transport that just got replaced out from under it — so throw
+// it out and let the next openConsole() call start clean.
 async function ensurePlain(blockId) {
-  const session = getSession(blockId);
-  if (!session) throw new Error('Not connected — pick a serial port first.');
-  if (session.esploader) {
-    await reopenPlain(blockId);
-    closeConsole(blockId);
-  } else if (!session.port.readable) {
-    await session.transport.connect(115200);
-  }
+  const before = getSession(blockId);
+  await ensureOpenPlain(blockId);
+  if (before?.esploader) closeConsole(blockId);
 }
 
 function appendBytes(state, chunk) {
