@@ -84,7 +84,6 @@ function changedExpr() {
 // dropping any wire that pointed at whichever port direction switching
 // away from.
 const DIGITAL_IO_HTML = `
-container.style.position = 'relative';
 container.style.display = 'flex';
 container.style.flexDirection = 'column';
 container.style.justifyContent = 'space-between';
@@ -464,7 +463,6 @@ return { json: helpers.fetchJson(url) };
 `.trim();
 
 const WEATHER_HTML = `
-container.style.position = 'relative';
 container.style.display = 'flex';
 container.style.flexDirection = 'column';
 container.style.justifyContent = 'space-between';
