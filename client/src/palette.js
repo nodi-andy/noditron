@@ -152,14 +152,44 @@ const direction = ((block.props.find((p) => p.name === 'direction') || {}).value
 badge.textContent = (pin === null || pin === undefined || pin === '' ? 'SIM' : 'GPIO' + pin) + ' · ' + direction.toUpperCase();
 
 const dot = container.querySelector('.dio-dot');
+
+// For a real input pin nested inside a connected, running ESP32 DevKit,
+// prefer the board's own live reading over the locally-computed value.
+// livePins.js is a shared poll cache (one poller per board, not one per
+// block, so several Input blocks reading the same board don't each run
+// their own readPins() loop against the same serial link) -- loaded lazily
+// and cached on window since this html script is recompiled and re-run
+// fresh every frame, with no other way to keep a reference across calls.
+let liveState = null;
+if (direction === 'input' && pin !== null && pin !== undefined && pin !== '') {
+  if (!window.__noditronLivePins) {
+    window.__noditronLivePins = { mod: null };
+    import('/src/livePins.js').then((m) => { window.__noditronLivePins.mod = m; });
+  }
+  const livePins = window.__noditronLivePins.mod;
+  if (livePins) {
+    const parent = window.nodigraph?.project?.getContainerBlock?.();
+    const parentKind = parent && (parent.props || []).find((p) => p.name === 'noditronKind')?.value;
+    const parentState = parent && (parent.props || []).find((p) => p.name === 'connectionState')?.value;
+    if (parentKind === 'esp32-devkit' && parentState === 'connected:running') {
+      livePins.ensurePolling(parent.id);
+      const cached = livePins.getCachedPins(parent.id);
+      const match = cached && cached.find((p) => Number(p.gpio) === Number(pin));
+      if (match) liveState = Boolean(match.state);
+    }
+  }
+}
+
 // Output shows the wired-in value when something actually feeds its 'in'
 // port, else falls back to its own manually-set value prop (the "acts as
 // a manual constant when unwired" case the click handler above writes to).
 const outputWired = inputs.value !== undefined;
 const currentValueProp = block.props.find((p) => p.name === 'value');
-const on = direction === 'input'
-  ? Boolean(outputs.value)
-  : (outputWired ? Boolean(inputs.value) : Number(currentValueProp && currentValueProp.value) >= 1);
+const on = liveState !== null
+  ? liveState
+  : direction === 'input'
+    ? Boolean(outputs.value)
+    : (outputWired ? Boolean(inputs.value) : Number(currentValueProp && currentValueProp.value) >= 1);
 dot.style.background = on ? '#3ecf5d' : 'transparent';
 dot.style.borderColor = on ? '#3ecf5d' : 'var(--border)';
 dot.style.cursor = direction === 'output' ? 'pointer' : 'default';
