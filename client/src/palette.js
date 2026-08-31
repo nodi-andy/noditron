@@ -156,22 +156,26 @@ const dot = container.querySelector('.dio-dot');
 const currentValueProp = block.props.find((p) => p.name === 'value');
 const currentOn = Number(currentValueProp && currentValueProp.value) >= 1;
 
-// For a real input pin nested inside a connected, running ESP32 DevKit,
-// prefer the board's own live reading over the locally-computed value --
-// AND write it back into props.value (not just the on-canvas dot), so
-// nodigraph's own runtime actually carries it out through a wire from
-// this block's own port. Without that write-back, a wire from this
-// block to another Bool block would keep forwarding whatever props.value
-// last happened to be, never what the board is actually reading right
-// now -- the exact "connected them and the signal is not forwarded" gap.
-// livePins.js is a shared poll cache (one poller per board, not one per
-// block, so several Input blocks reading the same board don't each run
-// their own readPins() loop against the same serial link) -- loaded
-// lazily and cached on window since this html script is recompiled and
-// re-run fresh every frame, with no other way to keep a reference across
-// calls.
+// Pure observation, not control: a connected, running ESP32 DevKit
+// actually runs din->dout forwarding itself now (see buildMinimalDesign
+// in serialConsole.js, which compiles a wire between two Bool blocks into
+// real conucon belts) -- the board no longer needs this browser tab open
+// to keep an Output pin following a wired Input; it runs the loop on its
+// own, at its own loop() speed, observer or not. This block reading a
+// real pin, of either direction, just shows the board's own live state
+// here (and writes it back into props.value so this block's own wire, if
+// any, and its next "Save changes to device" snapshot both stay honest
+// about it) -- it deliberately does NOT push a wired Output's value back
+// to the board; doing that from here as well as running it in firmware
+// would just be two clocks racing to set the same pin, one of them
+// always slightly behind the other. livePins.js is a shared poll cache
+// (one poller per board, not one per block, so several Bool blocks
+// reading the same board don't each run their own readPins() loop
+// against the same serial link) -- loaded lazily and cached on window
+// since this html script is recompiled and re-run fresh every frame,
+// with no other way to keep a reference across calls.
 let liveState = null;
-if (direction === 'input' && pin !== null && pin !== undefined && pin !== '') {
+if (pin !== null && pin !== undefined && pin !== '') {
   if (!window.__noditronLivePins) {
     window.__noditronLivePins = { mod: null };
     import('/src/livePins.js').then((m) => { window.__noditronLivePins.mod = m; });
@@ -191,35 +195,11 @@ if (direction === 'input' && pin !== null && pin !== undefined && pin !== '') {
   if (liveState !== null && liveState !== currentOn) helpers.setProp('value', liveState ? 1 : 0);
 }
 
-// Output shows the wired-in value when something actually feeds its 'in'
-// port, else falls back to its own manually-set value prop (the "acts as
-// a manual constant when unwired" case the click handler above writes
-// to). A change in the wired value -- typically another Bool block's own
-// live-updated Input reading, see the write-back just above -- also
-// pushes live to real hardware here: the wire itself is the "belt" in
-// this picture, carried over the same serial link direct pin control
-// already uses, rather than needing conucon's own belt/signal-routing
-// format translated (see buildMinimalDesign's own doc on why that
-// doesn't exist) -- sidesteps needing that entirely for the direct
-// pin-to-pin case a wire between two Bool blocks actually is.
+// Falls back to the wired-in value when nothing live is available yet
+// (not connected, or this frame's poll hasn't landed), else to its own
+// manually-set value prop (the "acts as a manual constant when unwired"
+// case the click handler above writes to).
 const outputWired = inputs.value !== undefined;
-if (direction === 'output' && outputWired) {
-  const wiredOn = Boolean(inputs.value);
-  if (wiredOn !== currentOn) {
-    helpers.setProp('value', wiredOn ? 1 : 0);
-    if (pin !== null && pin !== undefined && pin !== '') {
-      const parent = window.nodigraph?.project?.getContainerBlock?.();
-      const parentKind = parent && (parent.props || []).find((p) => p.name === 'noditronKind')?.value;
-      const parentState = parent && (parent.props || []).find((p) => p.name === 'connectionState')?.value;
-      if (parentKind === 'esp32-devkit' && parentState === 'connected:running') {
-        import('/src/serialConsole.js')
-          .then((m) => m.setPin(parent.id, Number(pin), wiredOn))
-          .catch((err) => console.warn('[Bool] Wired live push failed:', err.message));
-      }
-    }
-  }
-}
-
 const on = liveState !== null
   ? liveState
   : direction === 'input'

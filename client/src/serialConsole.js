@@ -176,25 +176,88 @@ export async function readDesign(blockId, { timeoutMs = 4000 } = {}) {
   return text ? JSON.parse(text) : { blocks: [] };
 }
 
-// Deliberately not a general graph compiler — esp32_logic's own circuit
-// model is belts on a grid (Factorio-style signal routing), nodigraph's is
-// named ports and point-to-point wires between arbitrary blocks; actually
-// translating connections between the two is real, separate work. All
-// this does is declare the pins themselves: one din/dout per Digital I/O
-// child that has a real pin set, laid out on an unconnected row.
-export function buildMinimalDesign(childBlocks) {
+// Not a general graph compiler — esp32_logic's own circuit model is belts
+// on a grid (Factorio-style signal routing), nodigraph's is named ports and
+// point-to-point wires between arbitrary blocks — but the one shape that
+// actually matters here (a wire straight from one Bool's Input to another
+// Bool's Output, both real pins) has a direct, mechanical translation: one
+// din, one belt, one dout, exactly three grid cells wide, since a belt only
+// has to land somewhere inside the destination block's own footprint to
+// deliver (see esp32_logic's deliverToBlocks/circuitFireAll — it checks the
+// whole bounding box, not a specific port cell). That's the whole reason a
+// connected board can run din->dout forwarding completely on its own now,
+// no browser required to keep pushing values across — see this block's own
+// html prop (DIGITAL_IO_HTML in palette.js) for the client-side half of
+// that story, which now only *observes* a live pin rather than driving one
+// from a wire.
+//
+// Each wired pair gets its own row (gy = row*3) specifically so two
+// unrelated pairs' belts can never cross through a third block's own
+// footprint — din/dout each default to a 2x2 cell, "row*3" leaves exactly
+// one empty row between pairs, same margin the single belt cell already
+// uses horizontally (din@col0, belt@col+2, dout@col+3). A pin that's part
+// of more than one connection (fan-out/fan-in) only gets its first pairing
+// routed this way; every occurrence after that still gets declared (see
+// the unconnected-pins pass below) but without a second belt, since this
+// simple per-row layout has no way to route two different partners to the
+// same fixed position without risking a collision.
+export function buildMinimalDesign(childBlocks, connections = []) {
   const blocks = [];
   let nextBlockId = 1;
-  let col = 0;
-  for (const child of childBlocks) {
-    if ((child.props || []).find((p) => p.name === 'noditronKind')?.value !== 'digital-io') continue;
-    const pin = (child.props || []).find((p) => p.name === 'pin')?.value;
-    if (pin === null || pin === undefined || pin === '') continue;
+
+  const pinChildren = childBlocks.filter((c) => {
+    if ((c.props || []).find((p) => p.name === 'noditronKind')?.value !== 'digital-io') return false;
+    const pin = (c.props || []).find((p) => p.name === 'pin')?.value;
+    return pin !== null && pin !== undefined && pin !== '';
+  });
+
+  const idByChildId = new Map(); // nodigraph child block id -> conucon block id
+  function placeChild(child, col, row) {
+    if (idByChildId.has(child.id)) return idByChildId.get(child.id);
+    const pin = Number((child.props || []).find((p) => p.name === 'pin')?.value);
     const direction = (child.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'dout' : 'din';
-    blocks.push({ id: nextBlockId, type: direction, gx: col * 3, gy: 0, data: { gpio: Number(pin) } });
+    const id = nextBlockId;
     nextBlockId += 1;
+    idByChildId.set(child.id, id);
+    blocks.push({
+      id,
+      type: direction,
+      gx: col * 3,
+      gy: row * 3,
+      data: direction === 'din' ? { gpio: pin, emitOnChange: true } : { gpio: pin },
+    });
+    return id;
+  }
+
+  let row = 0;
+  for (const conn of connections) {
+    const source = pinChildren.find((c) => c.id === conn.sourceBlockId);
+    const target = pinChildren.find((c) => c.id === conn.targetBlockId);
+    if (!source || !target) continue;
+    const sourceDir = (source.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
+    const targetDir = (target.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
+    // Only an Input -> Output pin-to-pin wire has firmware meaning; anything
+    // else this dialog can't reach anyway (both ports live on Digital I/O
+    // children of this same container).
+    if (sourceDir !== 'input' || targetDir !== 'output') continue;
+    if (idByChildId.has(source.id) || idByChildId.has(target.id)) continue; // see fan-out/fan-in note above
+    placeChild(source, 0, row);
+    placeChild(target, 1, row);
+    blocks.push({ id: nextBlockId, type: 'belt', gx: 2, gy: row * 3, data: { dir: 'E' } });
+    nextBlockId += 1;
+    row += 1;
+  }
+
+  // Anything left unwired (or a repeat occurrence of an already-wired pin,
+  // per the fan-out/fan-in note above) still gets declared on its own row,
+  // exactly like this always did before wiring existed at all.
+  let col = 0;
+  for (const child of pinChildren) {
+    if (idByChildId.has(child.id)) continue;
+    placeChild(child, col, row);
     col += 1;
   }
+
   return { blocks, nextId: nextBlockId };
 }
 

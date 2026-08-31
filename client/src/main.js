@@ -108,9 +108,22 @@ async function boot() {
       if (!serialFlash.getSession(esp.id)) continue;
       if ((esp.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running') continue;
       const children = esp.children ? Array.from(esp.children.blocks.values()) : [];
-      const design = serialConsole.buildMinimalDesign(children);
+      const connections = esp.children ? Array.from(esp.children.connections.values()) : [];
+      const design = serialConsole.buildMinimalDesign(children, connections);
       if (!design.blocks.length) continue;
-      const snapshot = JSON.stringify(children.map((c) => ({ id: c.id, props: c.props })));
+      // Same shape as the ESP32 DevKit dialog's own childSnapshot() (see
+      // modules/esp32-devkit's dialog prop) -- connections included, not
+      // just the blocks' own props, so rewiring alone (no other prop
+      // change) is still detected as dirty here too. Keeping this an
+      // identical shape to the dialog's own version matters: whichever
+      // path saves first writes lastSentSnapshot, and the other path needs
+      // to recognize that same string as "already up to date," not
+      // mismatch on format and resend on every single trigger.
+      const blocksSnap = children.map((c) => ({ id: c.id, props: c.props }));
+      const connsSnap = connections.map((cn) => ({
+        s: cn.sourceBlockId, sp: cn.sourcePortId, t: cn.targetBlockId, tp: cn.targetPortId,
+      }));
+      const snapshot = JSON.stringify({ blocksSnap, connsSnap });
       const lastSentProp = esp.props.find((p) => p.name === 'lastSentSnapshot');
       if (snapshot === (lastSentProp?.value || '')) continue;
       try {
