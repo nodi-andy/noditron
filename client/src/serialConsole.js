@@ -198,6 +198,37 @@ export function buildMinimalDesign(childBlocks) {
   return { blocks, nextId: nextBlockId };
 }
 
+// Direct hardware override of one output pin — serial mirror of the
+// WebSocket {"type":"io",...} message esp32_logic's own browser circuit
+// editor already sends for live control (see `io <gpio> <0|1>`, added
+// alongside this file). Bypasses circuit logic entirely, same as that
+// message does; not a substitute for sendDesign, which only ever declares
+// pins, never drives them.
+export async function setPin(blockId, gpio, state, { timeoutMs = 2000 } = {}) {
+  await ensurePlain(blockId);
+  const consoleState = openConsole(blockId);
+  await writeLine(blockId, `io ${gpio} ${state ? 1 : 0}`);
+  const reply = await readLine(consoleState, timeoutMs);
+  if (!/^\[IO] gpio=/.test(reply)) throw new Error(reply || 'Set pin failed.');
+  return reply;
+}
+
+// Current gpio/output/state for every pin the board's loaded circuit
+// declared — serial mirror of broadcastIO()'s WebSocket payload (see `pins`).
+export async function readPins(blockId, { timeoutMs = 2000 } = {}) {
+  await ensurePlain(blockId);
+  const consoleState = openConsole(blockId);
+  await writeLine(blockId, 'pins');
+  const line = await readLine(consoleState, timeoutMs);
+  let doc;
+  try {
+    doc = JSON.parse(line);
+  } catch {
+    throw new Error(`Unexpected response: ${line}`);
+  }
+  return Array.isArray(doc.pins) ? doc.pins : [];
+}
+
 export async function sendDesign(blockId, design, { timeoutMs = 5000 } = {}) {
   await ensurePlain(blockId);
   const state = openConsole(blockId);

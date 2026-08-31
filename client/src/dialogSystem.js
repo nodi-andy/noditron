@@ -153,6 +153,8 @@ export function installDialogSystem(nodigraph) {
         readDesign: (opts) => serialConsole.readDesign(block.id, opts),
         sendDesign: (design, opts) => serialConsole.sendDesign(block.id, design, opts),
         buildMinimalDesign: serialConsole.buildMinimalDesign,
+        setPin: (gpio, state, opts) => serialConsole.setPin(block.id, gpio, state, opts),
+        readPins: (opts) => serialConsole.readPins(block.id, opts),
         close: () => serialConsole.closeConsole(block.id),
       },
     };
