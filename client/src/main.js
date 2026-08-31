@@ -10,6 +10,8 @@ import { startRuntime, kindOf } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
 import { installHtmlOverlay } from './htmlOverlay.js';
 import { installDialogSystem } from './dialogSystem.js';
+import * as serialFlash from './serialFlash.js';
+import * as serialConsole from './serialConsole.js';
 
 // noditron's own "primitive" kinds — plain value/logic leaves with no
 // business growing a sub-architecture of their own (unlike Timer, whose
@@ -76,6 +78,53 @@ async function boot() {
   // (nodigraph's own doc on it), so setting it here — after nodigraph's
   // own bootstrap has already run — still works.
   window.nodigraphCanEnter = (block) => !NO_SUB_ARCHITECTURE_KINDS.includes(kindOf(block));
+
+  // Pushes any connected+running ESP32 DevKit's pending circuit changes to
+  // its device whenever the user does an explicit project Save (see
+  // nodigraph's own main.js — window.nodigraphAfterSave, a new host hook
+  // alongside window.nodigraphDrawBlock etc.) — previously the *only* way
+  // to sync a board was opening its own dialog and clicking "Save changes
+  // to device" by hand. Walks the whole block tree, not just the current
+  // level, since the device you're editing may not be the one you're
+  // looking at right now. Deliberately not wired to persist()/autosave —
+  // that fires after every single edit (a drag, a prop tweak), which would
+  // spam the serial link; an explicit Save is a deliberate, occasional
+  // action, the same one the dialog's own button already represents.
+  function collectEsp32DevkitBlocks(level, out = []) {
+    if (!level) return out;
+    for (const block of level.blocks.values()) {
+      if (kindOf(block) === 'esp32-devkit') out.push(block);
+      if (block.children) collectEsp32DevkitBlocks(block.children, out);
+    }
+    return out;
+  }
+  window.nodigraphAfterSave = async () => {
+    const devkits = collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children);
+    let changed = false;
+    for (const esp of devkits) {
+      // No live session for this block right now (never connected this
+      // page load, or the connectionState prop is stale from before a
+      // reload) -- nothing to push to, silently skip rather than error.
+      if (!serialFlash.getSession(esp.id)) continue;
+      if ((esp.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running') continue;
+      const children = esp.children ? Array.from(esp.children.blocks.values()) : [];
+      const design = serialConsole.buildMinimalDesign(children);
+      if (!design.blocks.length) continue;
+      const snapshot = JSON.stringify(children.map((c) => ({ id: c.id, props: c.props })));
+      const lastSentProp = esp.props.find((p) => p.name === 'lastSentSnapshot');
+      if (snapshot === (lastSentProp?.value || '')) continue;
+      try {
+        await serialConsole.sendDesign(esp.id, design);
+        if (lastSentProp) lastSentProp.value = snapshot;
+        const bd = await import('/nodigraph/src/model/BlockDescription.js');
+        esp.description = bd.serializeBlockDescription(esp);
+        changed = true;
+      } catch (err) {
+        console.warn(`[noditron] Save-triggered device push failed for "${esp.name}":`, err.message);
+      }
+    }
+    if (changed) nodigraph.persist();
+  };
 
   // Still the "global timer" for block *values* — runtime.js's own
   // getLastResult() is what canvasIndicators.js/htmlOverlay.js read each

@@ -114,11 +114,33 @@ if (!badge) {
   dot.type = 'button';
   dot.className = 'dio-dot';
   dot.style.cssText = 'width:18px;height:18px;padding:0;border-radius:50%;border:2px solid var(--border);background:none;box-sizing:border-box;';
-  dot.addEventListener('click', () => {
+  dot.addEventListener('click', async () => {
     const dir = (block.props.find((p) => p.name === 'direction') || {}).value || 'input';
-    if (dir !== 'input') return;
+    // Output is the settable direction (drives a real GPIO or stands in as
+    // a manual constant when unwired) -- input is a read-only reflection of
+    // whatever feeds it (a wire, or a connected board's own live reading).
+    if (dir !== 'output') return;
     const current = block.props.find((p) => p.name === 'value');
-    helpers.setProp('value', Number(current && current.value) >= 1 ? 0 : 1);
+    const next = Number(current && current.value) >= 1 ? 0 : 1;
+    helpers.setProp('value', next);
+
+    // Best-effort live hardware push -- only when this block sits directly
+    // inside a connected+running ESP32 DevKit with a real pin set. A silent
+    // no-op otherwise (pure simulation, not connected, or genuinely no pin
+    // picked). Convenience alongside the parent's own "Live Pins" panel
+    // (see modules/esp32-devkit's dialog), not a replacement for it.
+    const pinProp = block.props.find((p) => p.name === 'pin');
+    const pin = pinProp ? pinProp.value : null;
+    if (pin === null || pin === undefined || pin === '') return;
+    const parent = window.nodigraph?.project?.getContainerBlock?.();
+    if (!parent || (parent.props || []).find((p) => p.name === 'noditronKind')?.value !== 'esp32-devkit') return;
+    if ((parent.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running') return;
+    try {
+      const serialConsole = await import('/src/serialConsole.js');
+      await serialConsole.setPin(parent.id, Number(pin), next);
+    } catch (err) {
+      console.warn('[Digital I/O] Live hardware set failed:', err.message);
+    }
   });
 
   container.append(badge, gear, dot);
@@ -130,10 +152,17 @@ const direction = ((block.props.find((p) => p.name === 'direction') || {}).value
 badge.textContent = (pin === null || pin === undefined || pin === '' ? 'SIM' : 'GPIO' + pin) + ' · ' + direction.toUpperCase();
 
 const dot = container.querySelector('.dio-dot');
-const on = direction === 'input' ? Boolean(outputs.value) : Boolean(inputs.value);
+// Output shows the wired-in value when something actually feeds its 'in'
+// port, else falls back to its own manually-set value prop (the "acts as
+// a manual constant when unwired" case the click handler above writes to).
+const outputWired = inputs.value !== undefined;
+const currentValueProp = block.props.find((p) => p.name === 'value');
+const on = direction === 'input'
+  ? Boolean(outputs.value)
+  : (outputWired ? Boolean(inputs.value) : Number(currentValueProp && currentValueProp.value) >= 1);
 dot.style.background = on ? '#3ecf5d' : 'transparent';
 dot.style.borderColor = on ? '#3ecf5d' : 'var(--border)';
-dot.style.cursor = direction === 'input' ? 'pointer' : 'default';
+dot.style.cursor = direction === 'output' ? 'pointer' : 'default';
 `.trim();
 
 const DIGITAL_IO_DIALOG = `
@@ -187,11 +216,11 @@ pinSelect.addEventListener('change', () => helpers.setProp('pin', pinSelect.valu
 pinSection.appendChild(pinSelect);
 
 const pinHint = document.createElement('p');
-pinHint.textContent = 'A pin is metadata for when this circuit is sent to a real board -- it always simulates locally via the value below, connected or not.';
+pinHint.textContent = 'The value below always simulates locally too, connected or not. If this block sits directly inside a connected, running ESP32 DevKit and has a real pin set, an Output also drives the real GPIO live.';
 pinHint.style.cssText = 'margin:6px 0 0;font-size:11px;color:var(--text-muted);';
 pinSection.appendChild(pinHint);
 
-const valueSection = section('SIMULATED VALUE');
+const valueSection = section('VALUE');
 const valueRow = document.createElement('div');
 valueRow.style.cssText = 'display:flex;align-items:center;gap:8px;';
 const slider = document.createElement('input');
@@ -201,22 +230,38 @@ slider.max = '1';
 slider.step = '1';
 slider.value = String(Number(props.value || 0));
 slider.style.flex = '1';
-slider.disabled = dirSelect.value === 'output';
+// Output is the settable direction (drives a real GPIO, or stands in as a
+// manual constant when unwired) -- input is read-only, a reflection of
+// whatever feeds it. See this block's own html prop (DIGITAL_IO_HTML) for
+// the matching on-canvas dot, which follows the same rule.
+slider.disabled = dirSelect.value === 'input';
 const readout = document.createElement('span');
 readout.style.cssText = 'font-size:12px;color:var(--text-muted);min-width:34px;';
 function describe(v) { return Number(v) >= 1 ? 'HIGH' : 'LOW'; }
 readout.textContent = describe(props.value);
-slider.addEventListener('input', () => {
-  helpers.setProp('value', Number(slider.value));
+slider.addEventListener('input', async () => {
+  const next = Number(slider.value);
+  helpers.setProp('value', next);
   readout.textContent = describe(slider.value);
+  if (dirSelect.value !== 'output') return;
+  if (props.pin === null || props.pin === undefined || props.pin === '') return;
+  const parent = window.nodigraph?.project?.getContainerBlock?.();
+  if (!parent || (parent.props || []).find((p) => p.name === 'noditronKind')?.value !== 'esp32-devkit') return;
+  if ((parent.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running') return;
+  try {
+    const serialConsole = await import('/src/serialConsole.js');
+    await serialConsole.setPin(parent.id, Number(props.pin), next);
+  } catch (err) {
+    console.warn('[Digital I/O] Live hardware set failed:', err.message);
+  }
 });
 valueRow.append(slider, readout);
 valueSection.appendChild(valueRow);
-if (dirSelect.value === 'output') {
-  const outHint = document.createElement('p');
-  outHint.textContent = 'Driven by whatever is wired into this block -- not directly editable while set to Output.';
-  outHint.style.cssText = 'margin:6px 0 0;font-size:11px;color:var(--text-muted);';
-  valueSection.appendChild(outHint);
+if (dirSelect.value === 'input') {
+  const inHint = document.createElement('p');
+  inHint.textContent = 'Read-only -- an input reflects whatever is wired into it, or the connected board\'s own live reading. Switch to Output to set it by hand.';
+  inHint.style.cssText = 'margin:6px 0 0;font-size:11px;color:var(--text-muted);';
+  valueSection.appendChild(inHint);
 }
 
 dirSelect.addEventListener('change', async () => {
