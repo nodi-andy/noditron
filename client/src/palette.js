@@ -161,50 +161,21 @@ const currentOn = Number(currentValueProp && currentValueProp.value) >= 1;
 // in serialConsole.js, which compiles a wire between two Bool blocks into
 // real conucon belts) -- the board no longer needs this browser tab open
 // to keep an Output pin following a wired Input; it runs the loop on its
-// own, at its own loop() speed, observer or not. This block reading a
-// real pin, of either direction, just shows the board's own live state
-// here (and writes it back into props.value so this block's own wire, if
-// any, and its next "Save changes to device" snapshot both stay honest
-// about it) -- it deliberately does NOT push a wired Output's value back
-// to the board; doing that from here as well as running it in firmware
-// would just be two clocks racing to set the same pin, one of them
-// always slightly behind the other. livePins.js is a shared poll cache
-// (one poller per board, not one per block, so several Bool blocks
-// reading the same board don't each run their own readPins() loop
-// against the same serial link) -- loaded lazily and cached on window
-// since this html script is recompiled and re-run fresh every frame,
-// with no other way to keep a reference across calls.
-let liveState = null;
-if (pin !== null && pin !== undefined && pin !== '') {
-  if (!window.__noditronLivePins) {
-    window.__noditronLivePins = { mod: null };
-    import('/src/livePins.js').then((m) => { window.__noditronLivePins.mod = m; });
-  }
-  const livePins = window.__noditronLivePins.mod;
-  if (livePins) {
-    const parent = window.nodigraph?.project?.getContainerBlock?.();
-    const parentKind = parent && (parent.props || []).find((p) => p.name === 'noditronKind')?.value;
-    const parentState = parent && (parent.props || []).find((p) => p.name === 'connectionState')?.value;
-    if (parentKind === 'esp32-devkit' && parentState === 'connected:running') {
-      livePins.ensurePolling(parent.id);
-      const cached = livePins.getCachedPins(parent.id);
-      const match = cached && cached.find((p) => Number(p.gpio) === Number(pin));
-      if (match) liveState = Boolean(match.state);
-    }
-  }
-  if (liveState !== null && liveState !== currentOn) helpers.setProp('value', liveState ? 1 : 0);
-}
-
-// Falls back to the wired-in value when nothing live is available yet
-// (not connected, or this frame's poll hasn't landed), else to its own
-// manually-set value prop (the "acts as a manual constant when unwired"
-// case the click handler above writes to).
+// own, at its own loop() speed, observer or not.
+//
+// props.value itself is kept fresh from the board's own live reading
+// regardless of whether this specific block is even being drawn right
+// now -- see main.js's own syncLiveDigitalIO, a runtime.js beforeLevel
+// hook that runs once per tick for every level in the whole tree, not
+// just whatever's on screen. This html script used to do that sync
+// itself, which meant it only ever ran while this exact block was being
+// looked at directly -- fine for its own on-canvas dot, useless the
+// moment the value needed to reach anywhere else (a wire out through the
+// container's own boundary port, say). Now this only ever *reads*
+// props.value (via outputs.value, direction=input's own fn output) --
+// always already live, wired to anything else or not.
 const outputWired = inputs.value !== undefined;
-const on = liveState !== null
-  ? liveState
-  : direction === 'input'
-    ? Boolean(outputs.value)
-    : (outputWired ? Boolean(inputs.value) : currentOn);
+const on = direction === 'input' ? Boolean(outputs.value) : (outputWired ? Boolean(inputs.value) : currentOn);
 dot.style.background = on ? '#3ecf5d' : 'transparent';
 dot.style.borderColor = on ? '#3ecf5d' : 'var(--border)';
 dot.style.cursor = direction === 'output' ? 'pointer' : 'default';

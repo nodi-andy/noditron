@@ -6,12 +6,13 @@
 // file needing to know anything about nodigraph's internal timing.
 import { mountPalette } from './palette.js';
 import { mountLibrary } from './library.js';
-import { startRuntime, kindOf } from './runtime.js';
+import { startRuntime, kindOf, getLastResult, getBoundaryOutput } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
 import { installHtmlOverlay } from './htmlOverlay.js';
 import { installDialogSystem } from './dialogSystem.js';
 import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
+import * as livePins from './livePins.js';
 
 // noditron's own "primitive" kinds — plain value/logic leaves with no
 // business growing a sub-architecture of their own (unlike Timer, whose
@@ -79,6 +80,28 @@ async function boot() {
   // own bootstrap has already run — still works.
   window.nodigraphCanEnter = (block) => !NO_SUB_ARCHITECTURE_KINDS.includes(kindOf(block));
 
+  // Colors a wire by whatever boolean value it's actually carrying right
+  // now — green while true/high, dim gray while false/low — read straight
+  // from the same per-tick evaluation everything else here already relies
+  // on (see runtime.js's own startRuntime doc). getLastResult().outputValue
+  // covers same-level wires directly; getBoundaryOutput (also runtime.js's
+  // own) covers one whose source lives on a different level, the same
+  // fallback inputsFor() itself already uses internally. Deliberately
+  // leaves entry.connection.color completely untouched (see
+  // SceneRenderer.js's own doc on why this hook exists instead of just
+  // writing that prop directly) — a non-boolean value (a string, a number,
+  // still-undefined because nothing's fired through this wire yet) falls
+  // through to null, which SceneRenderer.js then falls back from to the
+  // wire's own stored color or the plain default blue, exactly as if this
+  // hook didn't exist for that wire at all.
+  window.nodigraphConnectionColor = (connection) => {
+    const key = `${connection.sourceBlockId}:${connection.sourcePortId}`;
+    const direct = getLastResult().outputValue?.get(key);
+    const value = direct !== undefined ? direct : getBoundaryOutput(connection.sourceBlockId, connection.sourcePortId);
+    if (typeof value !== 'boolean') return null;
+    return value ? '#3ecf5d' : '#4a5568';
+  };
+
   // Pushes any connected+running ESP32 DevKit's pending circuit changes to
   // its device whenever the user does an explicit project Save (see
   // nodigraph's own main.js — window.nodigraphAfterSave, a new host hook
@@ -139,6 +162,46 @@ async function boot() {
     if (changed) nodigraph.persist();
   };
 
+  // Keeps every Digital I/O (Bool) child's own props.value in sync with
+  // its connected board's live GPIO state, regardless of which level is
+  // currently on screen — runtime.js's own beforeLevel hook (see its own
+  // doc), called once per container right before that container's own
+  // children get evaluated, so this tick's `fn` runs (and anything reading
+  // this value through a boundary port two levels up, say) see the fresh
+  // reading, not a stale one from whenever this container was last looked
+  // at directly. Previously this lived inside DIGITAL_IO_HTML (palette.js)
+  // itself, which only runs while a block is actually being *drawn* — the
+  // exact level-gating that made a board's own Input pin readable from
+  // its own dialog but frozen the moment you looked anywhere else instead
+  // (reported: "created an output to parent but can not read the value").
+  // Only ever *reads* hardware state here, never writes it back to a real
+  // pin — an Output's own live push still only ever happens from an actual
+  // user click (see DIGITAL_IO_HTML's own click handler) or conucon's own
+  // belt-routed circuit running on the board itself, never from a tick.
+  function syncLiveDigitalIO(container, blocks) {
+    if (kindOf(container) !== 'esp32-devkit') return;
+    if ((container.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running') return;
+    if (!serialFlash.getSession(container.id)) return; // never connected this page load, or stale prop from before a reload
+    livePins.ensurePolling(container.id);
+    const cached = livePins.getCachedPins(container.id);
+    if (!cached) return;
+    let changed = false;
+    for (const child of blocks) {
+      if (kindOf(child) !== 'digital-io') continue;
+      const pin = (child.props || []).find((p) => p.name === 'pin')?.value;
+      if (pin === null || pin === undefined || pin === '') continue;
+      const live = cached.find((p) => Number(p.gpio) === Number(pin));
+      if (!live) continue;
+      const valueProp = child.props.find((p) => p.name === 'value');
+      const wantValue = live.state ? 1 : 0;
+      if (valueProp && Number(valueProp.value) !== wantValue) {
+        valueProp.value = wantValue;
+        changed = true;
+      }
+    }
+    if (changed) nodigraph.persist();
+  }
+
   // Still the "global timer" for block *values* — runtime.js's own
   // getLastResult() is what canvasIndicators.js/htmlOverlay.js read each
   // paint. Also where htmlOverlay's own container cleanup happens (see its
@@ -150,18 +213,23 @@ async function boot() {
   // project.path against what it was last tick, which is already ticking
   // here at a rate no navigation could outrun.
   let lastPathJson = JSON.stringify(nodigraph.project.path);
-  startRuntime(nodigraph, () => {
-    const byId = new Map(nodigraph.project.listBlocks().map((b) => [b.id, b]));
-    htmlOverlay.prune(byId);
-    nodigraph.renderLoop.requestRender();
+  startRuntime(
+    nodigraph,
+    () => {
+      const byId = new Map(nodigraph.project.listBlocks().map((b) => [b.id, b]));
+      htmlOverlay.prune(byId);
+      nodigraph.renderLoop.requestRender();
 
-    const pathJson = JSON.stringify(nodigraph.project.path);
-    if (pathJson !== lastPathJson) {
-      lastPathJson = pathJson;
-      palette.refresh();
-      library.refresh();
-    }
-  });
+      const pathJson = JSON.stringify(nodigraph.project.path);
+      if (pathJson !== lastPathJson) {
+        lastPathJson = pathJson;
+        palette.refresh();
+        library.refresh();
+      }
+    },
+    100,
+    syncLiveDigitalIO,
+  );
 }
 
 boot();

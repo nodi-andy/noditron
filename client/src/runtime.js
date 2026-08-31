@@ -292,10 +292,25 @@ export function evaluateLevel(project) {
 // result matches `currentLevelBlock` (===, real object identity — every
 // block reference here comes straight from the live project tree, never a
 // copy), for startRuntime's own return value below.
-function evaluateSubtree(container, currentLevelBlock, results) {
+//
+// `beforeLevel(container, blocks)`, if given, runs right before this
+// level's own blocks get evaluated — a host's one chance to mutate a
+// block's own props (a live sensor reading, say) so THIS tick's `fn` runs
+// actually see it, not next tick. This file has no idea what that means
+// for any specific block (see this file's own top-of-file doc: it "never
+// touches nodigraph's source" and knows nothing domain-specific) — main.js
+// is what supplies one, to keep a Bool block's own props.value in sync
+// with a connected board's live GPIO state regardless of which level is
+// currently on screen (a per-block html script, like DIGITAL_IO_HTML used
+// to do this in, only ever runs while its own container is actually being
+// *drawn* — exactly the level-gating this whole-tree walk exists to get
+// away from).
+function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
   if (!container.children) return;
   const blocks = [...container.children.blocks.values()];
-  for (const block of blocks) evaluateSubtree(block, currentLevelBlock, results);
+  for (const block of blocks) evaluateSubtree(block, currentLevelBlock, results, beforeLevel);
+
+  if (beforeLevel) beforeLevel(container, blocks);
 
   const connections = [...container.children.connections.values()];
   const result = evaluateBlocksAndConnections(blocks, connections);
@@ -314,13 +329,13 @@ export function getLastResult() {
   return lastResult;
 }
 
-export function startRuntime(nodigraph, onTick, intervalMs = 100) {
+export function startRuntime(nodigraph, onTick, intervalMs = 100, beforeLevel) {
   const timer = setInterval(() => {
     const results = {};
     // rootBlock stands in as the top-level "container" — Project.js's own
     // doc: "the whole product is itself a Block" — so evaluating from here
     // covers every level uniformly, root included, with no special case.
-    evaluateSubtree(nodigraph.project.rootBlock, nodigraph.project.getContainerBlock(), results);
+    evaluateSubtree(nodigraph.project.rootBlock, nodigraph.project.getContainerBlock(), results, beforeLevel);
     lastResult = results.current || lastResult;
     onTick(lastResult);
   }, intervalMs);
