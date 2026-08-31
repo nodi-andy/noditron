@@ -153,14 +153,23 @@ const direction = ((block.props.find((p) => p.name === 'direction') || {}).value
 badge.textContent = (pin === null || pin === undefined || pin === '' ? 'SIM' : 'GPIO' + pin) + ' · ' + direction.toUpperCase();
 
 const dot = container.querySelector('.dio-dot');
+const currentValueProp = block.props.find((p) => p.name === 'value');
+const currentOn = Number(currentValueProp && currentValueProp.value) >= 1;
 
 // For a real input pin nested inside a connected, running ESP32 DevKit,
-// prefer the board's own live reading over the locally-computed value.
+// prefer the board's own live reading over the locally-computed value --
+// AND write it back into props.value (not just the on-canvas dot), so
+// nodigraph's own runtime actually carries it out through a wire from
+// this block's own port. Without that write-back, a wire from this
+// block to another Bool block would keep forwarding whatever props.value
+// last happened to be, never what the board is actually reading right
+// now -- the exact "connected them and the signal is not forwarded" gap.
 // livePins.js is a shared poll cache (one poller per board, not one per
 // block, so several Input blocks reading the same board don't each run
-// their own readPins() loop against the same serial link) -- loaded lazily
-// and cached on window since this html script is recompiled and re-run
-// fresh every frame, with no other way to keep a reference across calls.
+// their own readPins() loop against the same serial link) -- loaded
+// lazily and cached on window since this html script is recompiled and
+// re-run fresh every frame, with no other way to keep a reference across
+// calls.
 let liveState = null;
 if (direction === 'input' && pin !== null && pin !== undefined && pin !== '') {
   if (!window.__noditronLivePins) {
@@ -179,18 +188,43 @@ if (direction === 'input' && pin !== null && pin !== undefined && pin !== '') {
       if (match) liveState = Boolean(match.state);
     }
   }
+  if (liveState !== null && liveState !== currentOn) helpers.setProp('value', liveState ? 1 : 0);
 }
 
 // Output shows the wired-in value when something actually feeds its 'in'
 // port, else falls back to its own manually-set value prop (the "acts as
-// a manual constant when unwired" case the click handler above writes to).
+// a manual constant when unwired" case the click handler above writes
+// to). A change in the wired value -- typically another Bool block's own
+// live-updated Input reading, see the write-back just above -- also
+// pushes live to real hardware here: the wire itself is the "belt" in
+// this picture, carried over the same serial link direct pin control
+// already uses, rather than needing conucon's own belt/signal-routing
+// format translated (see buildMinimalDesign's own doc on why that
+// doesn't exist) -- sidesteps needing that entirely for the direct
+// pin-to-pin case a wire between two Bool blocks actually is.
 const outputWired = inputs.value !== undefined;
-const currentValueProp = block.props.find((p) => p.name === 'value');
+if (direction === 'output' && outputWired) {
+  const wiredOn = Boolean(inputs.value);
+  if (wiredOn !== currentOn) {
+    helpers.setProp('value', wiredOn ? 1 : 0);
+    if (pin !== null && pin !== undefined && pin !== '') {
+      const parent = window.nodigraph?.project?.getContainerBlock?.();
+      const parentKind = parent && (parent.props || []).find((p) => p.name === 'noditronKind')?.value;
+      const parentState = parent && (parent.props || []).find((p) => p.name === 'connectionState')?.value;
+      if (parentKind === 'esp32-devkit' && parentState === 'connected:running') {
+        import('/src/serialConsole.js')
+          .then((m) => m.setPin(parent.id, Number(pin), wiredOn))
+          .catch((err) => console.warn('[Bool] Wired live push failed:', err.message));
+      }
+    }
+  }
+}
+
 const on = liveState !== null
   ? liveState
   : direction === 'input'
     ? Boolean(outputs.value)
-    : (outputWired ? Boolean(inputs.value) : Number(currentValueProp && currentValueProp.value) >= 1);
+    : (outputWired ? Boolean(inputs.value) : currentOn);
 dot.style.background = on ? '#3ecf5d' : 'transparent';
 dot.style.borderColor = on ? '#3ecf5d' : 'var(--border)';
 dot.style.cursor = direction === 'output' ? 'pointer' : 'default';
