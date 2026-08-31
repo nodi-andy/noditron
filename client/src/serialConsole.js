@@ -215,10 +215,21 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     return pin !== null && pin !== undefined && pin !== '';
   });
   const timerChildren = childBlocks.filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'timer');
+  const andChildren = childBlocks.filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'and');
+
+  // A connection only carries block ids/port ids, not the logical port name
+  // ('a' vs 'b' vs 'out') -- resolved the same way runtime.js's own
+  // logicalName() does: the port object's logicalId looked up in the
+  // block's own logicalPorts.
+  function portName(block, portId) {
+    const pin = (block.ports || []).find((p) => p.id === portId);
+    const lp = pin && (block.logicalPorts || []).find((l) => l.id === pin.logicalId);
+    return lp ? lp.name : null;
+  }
 
   const idByChildId = new Map(); // nodigraph child block id -> conucon block id
 
-  function placeBool(child, col, row) {
+  function placeBool(child, gx, gy) {
     if (idByChildId.has(child.id)) return idByChildId.get(child.id);
     const pin = Number((child.props || []).find((p) => p.name === 'pin')?.value);
     const direction = (child.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'dout' : 'din';
@@ -228,8 +239,8 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     blocks.push({
       id,
       type: direction,
-      gx: col * 3,
-      gy: row * 3,
+      gx,
+      gy,
       data: direction === 'din' ? { gpio: pin, emitOnChange: true } : { gpio: pin },
     });
     return id;
@@ -240,7 +251,7 @@ export function buildMinimalDesign(childBlocks, connections = []) {
   // same two child Data blocks, same 500ms default each, so a Timer's
   // simulated on-screen behavior and what actually runs on the board once
   // wired agree on the same interval.
-  function placeTimer(child, col, row) {
+  function placeTimer(child, gx, gy) {
     if (idByChildId.has(child.id)) return idByChildId.get(child.id);
     const kids = child.children ? Array.from(child.children.blocks.values()) : [];
     const onTime = Number(kids.find((k) => k.name === 'T_ON')?.props?.find((p) => p.name === 'value')?.value) || 500;
@@ -248,11 +259,78 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     const id = nextBlockId;
     nextBlockId += 1;
     idByChildId.set(child.id, id);
-    blocks.push({ id, type: 'timer', gx: col * 3, gy: row * 3, data: { onTime, offTime, mode: 'periodic' } });
+    blocks.push({ id, type: 'timer', gx, gy, data: { onTime, offTime, mode: 'periodic' } });
     return id;
   }
 
+  // Places whichever of the two kinds this container's allowedChildKinds
+  // actually permits as a signal source (Bool Input or Timer); returns
+  // false if `child` is neither, or is already placed elsewhere.
+  function placeSource(child, gx, gy) {
+    if (!child || idByChildId.has(child.id)) return false;
+    if (pinChildren.includes(child)) {
+      const dir = (child.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
+      if (dir !== 'input') return false; // an Output pin can't be a source
+      placeBool(child, gx, gy);
+      return true;
+    }
+    if (timerChildren.includes(child)) {
+      placeTimer(child, gx, gy);
+      return true;
+    }
+    return false;
+  }
+
   let row = 0;
+
+  // AND: two inputs need two separate source blocks landing on two
+  // different rows of its own 2-tall footprint (conucon's own `and` block
+  // type — see esp32_logic's deliverToBlocks) — a fixed, hand-traced
+  // 5-row-tall, 8-column-wide layout, not the general single-row-pitch
+  // packer the simple pairs below use. Traced cell-by-cell against
+  // circuitFireAll/deliverToBlocks to confirm no belt here ever sits
+  // inside another block's own perimeter-scan zone (which would make that
+  // *other* block's firing spuriously re-trigger this belt too):
+  //   sourceA @ (0,0)      -- feeds 'a' via belt (2,0) dir E
+  //   sourceB @ (0,3)      -- feeds 'b' via belts (2,3) N -> (2,2) E -> (3,2) N
+  //   and     @ (3,0)      -- inputs at (3,0)='a', (3,1)='b'; output edge col 5
+  //   dout    @ (6,0)      -- fed via belt (5,0) dir E
+  // Each AND group consumes 2 row-slots (row*3 pitch, 6 rows) so the next
+  // slot always leaves at least one empty row below this shape's own
+  // 5 rows, same margin every other group already keeps.
+  for (const andChild of andChildren) {
+    if (idByChildId.has(andChild.id)) continue;
+    const outConn = connections.find((c) => c.sourceBlockId === andChild.id && portName(andChild, c.sourcePortId) === 'out');
+    if (!outConn) continue; // nothing listening to this AND's output -- nothing to compile
+    const target = pinChildren.find((c) => c.id === outConn.targetBlockId);
+    if (!target) continue;
+    const targetDir = (target.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
+    if (targetDir !== 'output' || idByChildId.has(target.id)) continue;
+
+    const aConn = connections.find((c) => c.targetBlockId === andChild.id && portName(andChild, c.targetPortId) === 'a');
+    const bConn = connections.find((c) => c.targetBlockId === andChild.id && portName(andChild, c.targetPortId) === 'b');
+    const aSource = aConn && (pinChildren.find((c) => c.id === aConn.sourceBlockId) || timerChildren.find((c) => c.id === aConn.sourceBlockId));
+    const bSource = bConn && (pinChildren.find((c) => c.id === bConn.sourceBlockId) || timerChildren.find((c) => c.id === bConn.sourceBlockId));
+
+    const base = row * 3;
+    const gotA = placeSource(aSource, 0, base);
+    const gotB = placeSource(bSource, 0, base + 3);
+    const andId = nextBlockId;
+    nextBlockId += 1;
+    idByChildId.set(andChild.id, andId);
+    blocks.push({ id: andId, type: 'and', gx: 3, gy: base });
+    if (gotA) { blocks.push({ id: nextBlockId, type: 'belt', gx: 2, gy: base, data: { dir: 'E' } }); nextBlockId += 1; }
+    if (gotB) {
+      blocks.push({ id: nextBlockId, type: 'belt', gx: 2, gy: base + 3, data: { dir: 'N' } }); nextBlockId += 1;
+      blocks.push({ id: nextBlockId, type: 'belt', gx: 2, gy: base + 2, data: { dir: 'E' } }); nextBlockId += 1;
+      blocks.push({ id: nextBlockId, type: 'belt', gx: 3, gy: base + 2, data: { dir: 'N' } }); nextBlockId += 1;
+    }
+    placeBool(target, 6, base);
+    blocks.push({ id: nextBlockId, type: 'belt', gx: 5, gy: base, data: { dir: 'E' } });
+    nextBlockId += 1;
+    row += 2;
+  }
+
   for (const conn of connections) {
     const boolSource = pinChildren.find((c) => c.id === conn.sourceBlockId);
     const timerSource = timerChildren.find((c) => c.id === conn.sourceBlockId);
@@ -266,14 +344,14 @@ export function buildMinimalDesign(childBlocks, connections = []) {
       const sourceDir = (boolSource.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
       if (sourceDir !== 'input') continue; // Bool source has to be an Input, i.e. the wire is din -> dout
       if (idByChildId.has(boolSource.id)) continue;
-      placeBool(boolSource, 0, row);
+      placeBool(boolSource, 0, row * 3);
     } else if (timerSource) {
       if (idByChildId.has(timerSource.id)) continue;
-      placeTimer(timerSource, 0, row);
+      placeTimer(timerSource, 0, row * 3);
     } else {
-      continue;
+      continue; // e.g. an AND's own output wire, already handled above
     }
-    placeBool(target, 1, row);
+    placeBool(target, 3, row * 3);
     blocks.push({ id: nextBlockId, type: 'belt', gx: 2, gy: row * 3, data: { dir: 'E' } });
     nextBlockId += 1;
     row += 1;
@@ -281,13 +359,13 @@ export function buildMinimalDesign(childBlocks, connections = []) {
 
   // Anything left unwired (or a repeat occurrence of an already-wired pin,
   // per the fan-out/fan-in note above) still gets declared on its own row,
-  // exactly like this always did before wiring existed at all. Timers
-  // aren't included here -- one with nothing wired to it drives nothing,
-  // so there's no reason to spend a block slot declaring it.
+  // exactly like this always did before wiring existed at all. Timers and
+  // ANDs aren't included here -- one with nothing wired to it drives
+  // nothing, so there's no reason to spend a block slot declaring it.
   let col = 0;
   for (const child of pinChildren) {
     if (idByChildId.has(child.id)) continue;
-    placeBool(child, col, row);
+    placeBool(child, col * 3, row * 3);
     col += 1;
   }
 
