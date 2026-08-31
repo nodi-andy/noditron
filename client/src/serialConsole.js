@@ -178,29 +178,33 @@ export async function readDesign(blockId, { timeoutMs = 4000 } = {}) {
 
 // Not a general graph compiler — esp32_logic's own circuit model is belts
 // on a grid (Factorio-style signal routing), nodigraph's is named ports and
-// point-to-point wires between arbitrary blocks — but the one shape that
-// actually matters here (a wire straight from one Bool's Input to another
-// Bool's Output, both real pins) has a direct, mechanical translation: one
-// din, one belt, one dout, exactly three grid cells wide, since a belt only
-// has to land somewhere inside the destination block's own footprint to
-// deliver (see esp32_logic's deliverToBlocks/circuitFireAll — it checks the
-// whole bounding box, not a specific port cell). That's the whole reason a
-// connected board can run din->dout forwarding completely on its own now,
-// no browser required to keep pushing values across — see this block's own
+// point-to-point wires between arbitrary blocks — but the two shapes this
+// container's own allowedChildKinds actually permits (see
+// containerRestrictions.js and modules/esp32-devkit's own prop: only
+// digital-io and timer children are addable inside an ESP32 DevKit at all)
+// both have a direct, mechanical translation into one din/timer, one belt,
+// one dout, exactly three grid cells wide — a belt only has to land
+// somewhere inside the destination block's own footprint to deliver (see
+// esp32_logic's deliverToBlocks/circuitFireAll — it checks the whole
+// bounding box, not a specific port cell). That's the whole reason a
+// connected board can run this forwarding completely on its own now, no
+// browser required to keep pushing values across — see this block's own
 // html prop (DIGITAL_IO_HTML in palette.js) for the client-side half of
 // that story, which now only *observes* a live pin rather than driving one
 // from a wire.
 //
 // Each wired pair gets its own row (gy = row*3) specifically so two
 // unrelated pairs' belts can never cross through a third block's own
-// footprint — din/dout each default to a 2x2 cell, "row*3" leaves exactly
-// one empty row between pairs, same margin the single belt cell already
-// uses horizontally (din@col0, belt@col+2, dout@col+3). A pin that's part
-// of more than one connection (fan-out/fan-in) only gets its first pairing
-// routed this way; every occurrence after that still gets declared (see
-// the unconnected-pins pass below) but without a second belt, since this
-// simple per-row layout has no way to route two different partners to the
-// same fixed position without risking a collision.
+// footprint — din/dout/timer all default to a 2x2 cell, "row*3" leaves
+// exactly one empty row between pairs, same margin the single belt cell
+// already uses horizontally (source@col0, belt@col+2, dout@col+3). A pin
+// or timer that's part of more than one connection (fan-out/fan-in) only
+// gets its first pairing routed this way; every other occurrence still
+// gets declared (see the unconnected-pins pass below, Bool children only —
+// an unwired Timer drives nothing, so it's simply skipped) but without a
+// second belt, since this simple per-row layout has no way to route two
+// different partners to the same fixed position without risking a
+// collision.
 export function buildMinimalDesign(childBlocks, connections = []) {
   const blocks = [];
   let nextBlockId = 1;
@@ -210,9 +214,11 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     const pin = (c.props || []).find((p) => p.name === 'pin')?.value;
     return pin !== null && pin !== undefined && pin !== '';
   });
+  const timerChildren = childBlocks.filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'timer');
 
   const idByChildId = new Map(); // nodigraph child block id -> conucon block id
-  function placeChild(child, col, row) {
+
+  function placeBool(child, col, row) {
     if (idByChildId.has(child.id)) return idByChildId.get(child.id);
     const pin = Number((child.props || []).find((p) => p.name === 'pin')?.value);
     const direction = (child.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'dout' : 'din';
@@ -229,20 +235,45 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     return id;
   }
 
+  // Reads T_ON/T_OFF exactly the way this block's own fn prop does locally
+  // (see TIMER_FN in palette.js: helpers.childValue('T_ON')/('T_OFF')) —
+  // same two child Data blocks, same 500ms default each, so a Timer's
+  // simulated on-screen behavior and what actually runs on the board once
+  // wired agree on the same interval.
+  function placeTimer(child, col, row) {
+    if (idByChildId.has(child.id)) return idByChildId.get(child.id);
+    const kids = child.children ? Array.from(child.children.blocks.values()) : [];
+    const onTime = Number(kids.find((k) => k.name === 'T_ON')?.props?.find((p) => p.name === 'value')?.value) || 500;
+    const offTime = Number(kids.find((k) => k.name === 'T_OFF')?.props?.find((p) => p.name === 'value')?.value) || 500;
+    const id = nextBlockId;
+    nextBlockId += 1;
+    idByChildId.set(child.id, id);
+    blocks.push({ id, type: 'timer', gx: col * 3, gy: row * 3, data: { onTime, offTime, mode: 'periodic' } });
+    return id;
+  }
+
   let row = 0;
   for (const conn of connections) {
-    const source = pinChildren.find((c) => c.id === conn.sourceBlockId);
+    const boolSource = pinChildren.find((c) => c.id === conn.sourceBlockId);
+    const timerSource = timerChildren.find((c) => c.id === conn.sourceBlockId);
     const target = pinChildren.find((c) => c.id === conn.targetBlockId);
-    if (!source || !target) continue;
-    const sourceDir = (source.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
+    if (!target) continue;
     const targetDir = (target.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
-    // Only an Input -> Output pin-to-pin wire has firmware meaning; anything
-    // else this dialog can't reach anyway (both ports live on Digital I/O
-    // children of this same container).
-    if (sourceDir !== 'input' || targetDir !== 'output') continue;
-    if (idByChildId.has(source.id) || idByChildId.has(target.id)) continue; // see fan-out/fan-in note above
-    placeChild(source, 0, row);
-    placeChild(target, 1, row);
+    if (targetDir !== 'output') continue; // only driving a real Output pin has firmware meaning
+    if (idByChildId.has(target.id)) continue; // see fan-out/fan-in note above
+
+    if (boolSource) {
+      const sourceDir = (boolSource.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
+      if (sourceDir !== 'input') continue; // Bool source has to be an Input, i.e. the wire is din -> dout
+      if (idByChildId.has(boolSource.id)) continue;
+      placeBool(boolSource, 0, row);
+    } else if (timerSource) {
+      if (idByChildId.has(timerSource.id)) continue;
+      placeTimer(timerSource, 0, row);
+    } else {
+      continue;
+    }
+    placeBool(target, 1, row);
     blocks.push({ id: nextBlockId, type: 'belt', gx: 2, gy: row * 3, data: { dir: 'E' } });
     nextBlockId += 1;
     row += 1;
@@ -250,11 +281,13 @@ export function buildMinimalDesign(childBlocks, connections = []) {
 
   // Anything left unwired (or a repeat occurrence of an already-wired pin,
   // per the fan-out/fan-in note above) still gets declared on its own row,
-  // exactly like this always did before wiring existed at all.
+  // exactly like this always did before wiring existed at all. Timers
+  // aren't included here -- one with nothing wired to it drives nothing,
+  // so there's no reason to spend a block slot declaring it.
   let col = 0;
   for (const child of pinChildren) {
     if (idByChildId.has(child.id)) continue;
-    placeChild(child, col, row);
+    placeBool(child, col, row);
     col += 1;
   }
 
