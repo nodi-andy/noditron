@@ -130,6 +130,17 @@ const INFO_RE = /^\[INFO] LogicMod v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \|
 // sitting in the queue from before this call are irrelevant noise, not a
 // stale answer to *this* ping (nothing here could have asked before now),
 // so they're discarded up front rather than risking a match against them.
+// Every other command function below does the same for the same reason —
+// esp32_logic can print an unsolicited line at any time with nothing here
+// having asked for it (a delayed "[CIRCUIT] Load failed, retrying in
+// 500ms" from a design load that finishes 500ms after the upload that
+// triggered it, an [SSID]/[SYSTEM] line, a [WS] connect/disconnect notice,
+// ...) — readLine() has no way to tell "this line answers my own request"
+// from "this line was already sitting here," so a command that doesn't
+// clear the queue first can end up reading some earlier command's leftover
+// unsolicited output as if it were its own reply (confirmed live: this is
+// exactly what turned a save-design's own READY check into "Unexpected
+// response: [CIRCUIT] Load failed, retrying in 500ms").
 export async function identify(blockId, { timeoutMs = 3000 } = {}) {
   await ensurePlain(blockId);
   const state = openConsole(blockId);
@@ -164,6 +175,7 @@ export async function identify(blockId, { timeoutMs = 3000 } = {}) {
 export async function readDesign(blockId, { timeoutMs = 4000 } = {}) {
   await ensurePlain(blockId);
   const state = openConsole(blockId);
+  state.queue = new Uint8Array(0); // see identify()'s own doc on why
   await writeLine(blockId, 'design');
   const begin = await readLine(state, timeoutMs);
   const m = begin.match(/^\[DESIGN] BEGIN (\d+)/);
@@ -381,6 +393,7 @@ export function buildMinimalDesign(childBlocks, connections = []) {
 export async function setPin(blockId, gpio, state, { timeoutMs = 2000 } = {}) {
   await ensurePlain(blockId);
   const consoleState = openConsole(blockId);
+  consoleState.queue = new Uint8Array(0); // see identify()'s own doc on why
   await writeLine(blockId, `io ${gpio} ${state ? 1 : 0}`);
   const reply = await readLine(consoleState, timeoutMs);
   if (!/^\[IO] gpio=/.test(reply)) throw new Error(reply || 'Set pin failed.');
@@ -392,6 +405,7 @@ export async function setPin(blockId, gpio, state, { timeoutMs = 2000 } = {}) {
 export async function readPins(blockId, { timeoutMs = 2000 } = {}) {
   await ensurePlain(blockId);
   const consoleState = openConsole(blockId);
+  consoleState.queue = new Uint8Array(0); // see identify()'s own doc on why
   await writeLine(blockId, 'pins');
   const line = await readLine(consoleState, timeoutMs);
   let doc;
@@ -406,6 +420,7 @@ export async function readPins(blockId, { timeoutMs = 2000 } = {}) {
 export async function sendDesign(blockId, design, { timeoutMs = 5000 } = {}) {
   await ensurePlain(blockId);
   const state = openConsole(blockId);
+  state.queue = new Uint8Array(0); // see identify()'s own doc on why
   const bytes = new TextEncoder().encode(JSON.stringify(design));
   await writeLine(blockId, `save-design ${bytes.length}`);
   const ready = await readLine(state, timeoutMs);
