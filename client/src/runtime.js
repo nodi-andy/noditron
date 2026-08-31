@@ -120,14 +120,39 @@ function compiledFn(blockId, source) {
   return fn;
 }
 
-// Evaluates every block with an `fn` prop at whatever level `project` is
-// currently viewing — deliberately just the blocks visible right now, not
-// a recursive walk of the whole tree, so wiring a bool to an AND-gate a
-// level deep works exactly like it does at the top.
-export function evaluateLevel(project) {
-  const blocks = project.listBlocks();
-  const connections = project.listConnections();
+// A container's own boundary port, fed from *inside* it by an ordinary
+// wire (AND.out -> the container's own port, say) — computed once per tick
+// by evaluateSubtree()'s whole-tree walk below, independent of whatever
+// level is actually being *viewed* right now. Read by inputsFor()'s own
+// fallback below when a wire's source lives on a different level than the
+// block receiving it: this is what lets a value computed three levels deep
+// reach something wired to it two levels up, without that outer level
+// needing to be the one currently on screen. Keyed by (containerId,
+// portId) rather than just containerId, since a container can expose more
+// than one boundary port.
+const boundaryOutputCache = new Map(); // containerId -> Map(portId -> value)
+export function getBoundaryOutput(containerId, portId) {
+  return boundaryOutputCache.get(containerId)?.get(portId);
+}
 
+function computeBoundaryOutputs(container, innerConnections, outputValueMap) {
+  const out = new Map();
+  for (const conn of innerConnections) {
+    if (conn.targetBlockId !== container.id) continue;
+    const val = outputValueMap.get(`${conn.sourceBlockId}:${conn.sourcePortId}`);
+    if (val !== undefined) out.set(conn.targetPortId, val);
+  }
+  return out;
+}
+
+// The actual per-level evaluator — factored out so evaluateSubtree()'s own
+// whole-tree walk (see below) can run it once per level directly against
+// that level's own blocks/connections, without needing a live
+// nodigraph.project pointed at that specific level: project.path is a
+// single, current-view-only pointer, and a level three containers away
+// from whatever's on screen right now has no path that would resolve to
+// it without disturbing the user's own navigation.
+function evaluateBlocksAndConnections(blocks, connections) {
   const outputValue = new Map(); // `${blockId}:${pinId}` -> value
   const inputsByBlock = new Map();
   const outputsByBlock = new Map();
@@ -139,7 +164,20 @@ export function evaluateLevel(project) {
     const obj = {};
     for (const { name, pin } of ins) {
       const wire = connections.find((c) => c.targetBlockId === block.id && c.targetPortId === pin.id);
-      obj[name] = wire ? outputValue.get(`${wire.sourceBlockId}:${wire.sourcePortId}`) : undefined;
+      if (!wire) { obj[name] = undefined; continue; }
+      const direct = outputValue.get(`${wire.sourceBlockId}:${wire.sourcePortId}`);
+      // A wire whose source isn't one of this level's own blocks — it
+      // crosses in from further out, through a container's boundary port
+      // one or more levels away — never gets a same-pass value here (this
+      // level's own outputValue only ever holds blocks actually run this
+      // pass). getBoundaryOutput reads whatever that outer container's own
+      // subtree already computed for it this same tick (see evaluateSubtree
+      // below) instead. This is a different, more general mechanism than
+      // childValue()'s own inbound two-hop lookup just below — that one's
+      // scoped to a container reading one specific *named child* by value;
+      // this is the generic "any wire, any depth" case any ordinary `in`
+      // port already goes through.
+      obj[name] = direct !== undefined ? direct : getBoundaryOutput(wire.sourceBlockId, wire.sourcePortId);
     }
     return obj;
   }
@@ -233,7 +271,36 @@ export function evaluateLevel(project) {
   // inside changed() itself.
   for (const [key, value] of pendingChanges) changeTracker.set(key, value);
 
-  return { blocks, inputsByBlock, outputsByBlock, errors };
+  return { blocks, inputsByBlock, outputsByBlock, errors, outputValue };
+}
+
+// Public single-level entry point — unchanged shape from before
+// boundaryOutputCache existed; nothing outside startRuntime's own tick
+// calls this today, but kept as the obvious "just evaluate this one level"
+// API rather than making every caller reach into evaluateSubtree's own
+// whole-tree machinery for a single answer.
+export function evaluateLevel(project) {
+  return evaluateBlocksAndConnections(project.listBlocks(), project.listConnections());
+}
+
+// Walks the *whole* block tree every tick, not just whatever's on screen —
+// post-order (every level's own children fully evaluated, including their
+// own further-nested children, before that level itself runs), so a
+// container's boundaryOutputCache entry is always populated before
+// anything shallower tries to read it this same tick, all the way out
+// to the root. `results.current` ends up holding whichever level's own
+// result matches `currentLevelBlock` (===, real object identity — every
+// block reference here comes straight from the live project tree, never a
+// copy), for startRuntime's own return value below.
+function evaluateSubtree(container, currentLevelBlock, results) {
+  if (!container.children) return;
+  const blocks = [...container.children.blocks.values()];
+  for (const block of blocks) evaluateSubtree(block, currentLevelBlock, results);
+
+  const connections = [...container.children.connections.values()];
+  const result = evaluateBlocksAndConnections(blocks, connections);
+  boundaryOutputCache.set(container.id, computeBoundaryOutputs(container, connections, result.outputValue));
+  if (container === currentLevelBlock) results.current = result;
 }
 
 // The "global timer" — re-evaluates on a plain interval rather than
@@ -249,7 +316,12 @@ export function getLastResult() {
 
 export function startRuntime(nodigraph, onTick, intervalMs = 100) {
   const timer = setInterval(() => {
-    lastResult = evaluateLevel(nodigraph.project);
+    const results = {};
+    // rootBlock stands in as the top-level "container" — Project.js's own
+    // doc: "the whole product is itself a Block" — so evaluating from here
+    // covers every level uniformly, root included, with no special case.
+    evaluateSubtree(nodigraph.project.rootBlock, nodigraph.project.getContainerBlock(), results);
+    lastResult = results.current || lastResult;
     onTick(lastResult);
   }, intervalMs);
   return () => clearInterval(timer);
