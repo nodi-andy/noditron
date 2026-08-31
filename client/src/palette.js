@@ -259,7 +259,7 @@ valueRow.append(slider, readout);
 valueSection.appendChild(valueRow);
 if (dirSelect.value === 'input') {
   const inHint = document.createElement('p');
-  inHint.textContent = 'Read-only -- an input reflects whatever is wired into it, or the connected board\'s own live reading. Switch to Output to set it by hand.';
+  inHint.textContent = 'Read-only -- an input reflects whatever is wired into it, or the live reading from a connected board. Switch to Output to set it by hand.';
   inHint.style.cssText = 'margin:6px 0 0;font-size:11px;color:var(--text-muted);';
   valueSection.appendChild(inHint);
 }
