@@ -7,6 +7,7 @@
 import { createBlock, generateId } from '/nodigraph/src/model/Block.js';
 import { addPort, logicalPortOf, serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { KIND_PROP } from './runtime.js';
+import { getAllowedChildKinds } from './containerRestrictions.js';
 
 function addNamedPort(block, direction, name) {
   const pin = addPort(block, { direction });
@@ -139,7 +140,7 @@ if (!badge) {
       const serialConsole = await import('/src/serialConsole.js');
       await serialConsole.setPin(parent.id, Number(pin), next);
     } catch (err) {
-      console.warn('[Digital I/O] Live hardware set failed:', err.message);
+      console.warn('[Bool] Live hardware set failed:', err.message);
     }
   });
 
@@ -199,7 +200,7 @@ const DIGITAL_IO_DIALOG = `
 container.style.fontFamily = 'Inter, sans-serif';
 
 const heading = document.createElement('h3');
-heading.textContent = String(block.name || 'DIGITAL I/O').toUpperCase();
+heading.textContent = String(block.name || 'BOOL').toUpperCase();
 heading.style.cssText = 'margin:0 0 14px;color:var(--success,#3ecf5d);font-size:15px;letter-spacing:.03em;';
 container.appendChild(heading);
 
@@ -282,7 +283,7 @@ slider.addEventListener('input', async () => {
     const serialConsole = await import('/src/serialConsole.js');
     await serialConsole.setPin(parent.id, Number(props.pin), next);
   } catch (err) {
-    console.warn('[Digital I/O] Live hardware set failed:', err.message);
+    console.warn('[Bool] Live hardware set failed:', err.message);
   }
 });
 valueRow.append(slider, readout);
@@ -313,7 +314,7 @@ dirSelect.addEventListener('change', async () => {
 
 export function createDigitalIOBlock(nodigraph) {
   const { x, y } = nextPosition(nodigraph);
-  const block = createBlock({ x, y, name: 'Digital I/O' });
+  const block = createBlock({ x, y, name: 'Bool' });
   addNamedPort(block, 'out', 'value');
   block.props.push({ id: generateId('prp'), name: 'pin', kind: 'value', value: null });
   block.props.push({ id: generateId('prp'), name: 'direction', kind: 'value', value: 'input' });
@@ -483,6 +484,7 @@ export function createTimerBlock(nodigraph) {
   addNamedPort(block, 'out', 'out');
   block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: TIMER_FN });
   block.props.push({ id: generateId('prp'), name: 'render', kind: 'value', value: "helpers.dot(Boolean(outputs.out), '#3ecf5d');" });
+  addKindProp(block, 'timer');
 
   block.hasChildren = true;
   block.boundaryGeometry = { x: 0, y: 0, width: 400, height: 220 };
@@ -643,6 +645,7 @@ export function createWeatherBlock(nodigraph) {
   block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: WEATHER_FN });
   block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: WEATHER_HTML });
   block.props.push({ id: generateId('prp'), name: 'dialog', kind: 'value', value: WEATHER_DIALOG });
+  addKindProp(block, 'weather');
   return finish(nodigraph, block);
 }
 
@@ -712,6 +715,7 @@ export function createJsonFieldBlock(nodigraph) {
   addNamedPort(block, 'out', 'value');
   block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: JSON_FIELD_FN });
   block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: JSON_FIELD_HTML });
+  addKindProp(block, 'json-field');
 
   block.hasChildren = true;
   block.boundaryGeometry = { x: 0, y: 0, width: 240, height: 180 };
@@ -727,7 +731,12 @@ export function mountPalette(nodigraph, container) {
   label.textContent = 'Add block';
   container.appendChild(label);
 
-  function paletteButton(swatchColor, text, onClick) {
+  // { el, kind } for every button -- kept around so refresh() (see below)
+  // can show/hide by kind against whatever the current container allows,
+  // without rebuilding the whole palette (and losing click listeners,
+  // scroll position, etc.) every time the user navigates a level.
+  const buttons = [];
+  function paletteButton(swatchColor, text, kind, onClick) {
     const button = document.createElement('button');
     button.type = 'button';
     const swatch = document.createElement('span');
@@ -738,14 +747,32 @@ export function mountPalette(nodigraph, container) {
     button.append(swatch, label_);
     button.addEventListener('click', onClick);
     container.appendChild(button);
+    buttons.push({ el: button, kind });
     return button;
   }
 
-  paletteButton('#3ecf5d', 'Digital I/O', () => createDigitalIOBlock(nodigraph));
-  paletteButton('#4f8cff', 'Data', () => createStandaloneDataBlock(nodigraph));
-  paletteButton('#c98a2f', 'AND gate', () => createAndBlock(nodigraph));
-  paletteButton('#3ecf5d', 'LED', () => createLedBlock(nodigraph));
-  paletteButton('#3ecf5d', 'Timer', () => createTimerBlock(nodigraph));
-  paletteButton('#2f6fed', 'Weather', () => createWeatherBlock(nodigraph));
-  paletteButton('#c98a2f', 'JSON Field', () => createJsonFieldBlock(nodigraph));
+  paletteButton('#3ecf5d', 'Bool', 'digital-io', () => createDigitalIOBlock(nodigraph));
+  paletteButton('#4f8cff', 'Data', 'data', () => createStandaloneDataBlock(nodigraph));
+  paletteButton('#c98a2f', 'AND gate', 'and', () => createAndBlock(nodigraph));
+  paletteButton('#3ecf5d', 'LED', 'led', () => createLedBlock(nodigraph));
+  paletteButton('#3ecf5d', 'Timer', 'timer', () => createTimerBlock(nodigraph));
+  paletteButton('#2f6fed', 'Weather', 'weather', () => createWeatherBlock(nodigraph));
+  paletteButton('#c98a2f', 'JSON Field', 'json-field', () => createJsonFieldBlock(nodigraph));
+
+  // Called on every navigation (see main.js's own level-change poll) --
+  // hides any button whose kind isn't in the current container's own
+  // allowedChildKinds, if it declares one (see containerRestrictions.js).
+  // Unrestricted containers (no prop set -- the ordinary case) show every
+  // primitive, exactly as before this existed.
+  function refresh() {
+    const allowed = getAllowedChildKinds(nodigraph);
+    for (const { el, kind } of buttons) {
+      // Not el.hidden -- #noditron-palette button's own display:flex rule
+      // (id+element, higher specificity than the UA [hidden]{display:none}
+      // default) would silently win and leave it visible anyway.
+      el.style.display = allowed !== null && !allowed.includes(kind) ? 'none' : '';
+    }
+  }
+  refresh();
+  return { refresh };
 }

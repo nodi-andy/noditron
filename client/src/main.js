@@ -33,8 +33,8 @@ function waitForNodigraph() {
 async function boot() {
   const nodigraph = await waitForNodigraph();
 
-  mountPalette(nodigraph, document.getElementById('noditron-palette'));
-  mountLibrary(nodigraph, document.getElementById('noditron-palette'));
+  const palette = mountPalette(nodigraph, document.getElementById('noditron-palette'));
+  const library = mountLibrary(nodigraph, document.getElementById('noditron-palette'));
 
   // Three independent draw contributors, composed into the single
   // window.nodigraphDrawBlock hook nodigraph calls once per block per
@@ -129,11 +129,25 @@ async function boot() {
   // Still the "global timer" for block *values* — runtime.js's own
   // getLastResult() is what canvasIndicators.js/htmlOverlay.js read each
   // paint. Also where htmlOverlay's own container cleanup happens (see its
-  // own doc on why that's fine to leave off the per-frame path).
+  // own doc on why that's fine to leave off the per-frame path), and where
+  // the palette/library re-filter themselves against whichever container's
+  // now current (see palette.js/library.js's own refresh() and
+  // containerRestrictions.js) — nodigraph has no "you just entered a
+  // different block" event of its own to hook, so this just compares
+  // project.path against what it was last tick, which is already ticking
+  // here at a rate no navigation could outrun.
+  let lastPathJson = JSON.stringify(nodigraph.project.path);
   startRuntime(nodigraph, () => {
     const byId = new Map(nodigraph.project.listBlocks().map((b) => [b.id, b]));
     htmlOverlay.prune(byId);
     nodigraph.renderLoop.requestRender();
+
+    const pathJson = JSON.stringify(nodigraph.project.path);
+    if (pathJson !== lastPathJson) {
+      lastPathJson = pathJson;
+      palette.refresh();
+      library.refresh();
+    }
   });
 }
 

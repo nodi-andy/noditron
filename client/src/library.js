@@ -21,6 +21,7 @@ import { generateId } from '/nodigraph/src/model/Block.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { pasteSelection, isClipboardPayload, serializeSelection } from '/nodigraph/src/model/clipboard.js';
 import { getStoredToken, setStoredToken } from '/nodigraph/src/model/githubSync.js';
+import { getAllowedChildKinds } from './containerRestrictions.js';
 
 const GITHUB_API = 'https://api.github.com';
 const MODULE_TOPIC = 'noditron-module';
@@ -736,4 +737,32 @@ export function mountLibrary(nodigraph, container) {
   }
 
   refreshInstalledButtons();
+
+  // Called on every navigation (see main.js's own level-change poll).
+  // Library modules are arbitrary/user-authored -- unlike the built-in
+  // palette primitives (see palette.js's own refresh()), there's no cheap
+  // way to kind-check one against an allowedChildKinds list without
+  // fetching it first, so a restricted container just can't add library
+  // modules at all (this is exactly what keeps another ESP32 DevKit from
+  // being installed inside an ESP32 DevKit -- see that module's own
+  // allowedChildKinds prop). Unrestricted containers show this section
+  // exactly as before.
+  function refresh() {
+    const restricted = getAllowedChildKinds(nodigraph) !== null;
+    // Not .hidden -- openBtn (a button inside #noditron-palette) and
+    // installedGroup (its own inline display:flex) both have a display
+    // rule that would out-specificity the UA [hidden]{display:none}
+    // default and leave them visible anyway (see palette.js's own note).
+    // Clearing back to '' (rather than a hardcoded 'flex') lets openBtn
+    // and divider fall back to whatever their own CSS already says;
+    // installedGroup has no stylesheet rule of its own (only the inline
+    // display:flex set when it was created above) so it needs its shown
+    // value spelled out explicitly, or clearing to '' would default it to
+    // a plain block and break its own row layout.
+    divider.style.display = restricted ? 'none' : '';
+    openBtn.style.display = restricted ? 'none' : '';
+    installedGroup.style.display = restricted ? 'none' : 'flex';
+  }
+  refresh();
+  return { refresh };
 }
