@@ -135,6 +135,35 @@ export function getBoundaryOutput(containerId, portId) {
   return boundaryOutputCache.get(containerId)?.get(portId);
 }
 
+// The mirror image of boundaryOutputCache above, for the direction that
+// used to have no path through this file at all: a container's own
+// boundary *input* — fed from *outside* it — reaching an internal child
+// that's wired to `self.<port>` from the inside. runOnce below fills this
+// in for every hasChildren block, container or not, using whatever's
+// currently wired into its own input ports one level up; evaluateSubtree
+// reads it back to seed a container's own children level before their
+// relaxation runs.
+//
+// Necessarily one tick behind, not same-tick: a container's own inputs
+// are only known once its *parent* level's own relaxation has run
+// runOnce() on it, but evaluateSubtree's whole-tree walk processes a
+// container's children *before* that parent level (post-order, so a
+// container's own boundary *outputs* — computed from its already-settled
+// children — are ready by the time anything outside reads them same-tick,
+// see boundaryOutputCache above). Feeding a child the value its own
+// container carried one level up on the very same tick would need that
+// parent level evaluated first, which would then need *its* own parent's
+// same-tick value in turn, all the way up — asking for a same-tick answer
+// to a question that has no fixed order to settle in for a tree walked
+// this way. One tick of latency here (~100ms) sidesteps that entirely: by
+// the time a container's children level runs, boundaryInputCache already
+// holds whatever its own inputs were as of last tick's parent-level
+// relaxation, so there's nothing left to resolve out of order. One
+// runtime interval (~100ms) of lag on a signal crossing into a container
+// is not something anyone clicking a button or watching a wire will ever
+// notice.
+const boundaryInputCache = new Map(); // containerId -> Map(pinId -> value)
+
 function computeBoundaryOutputs(container, innerConnections, outputValueMap) {
   const out = new Map();
   for (const conn of innerConnections) {
@@ -152,12 +181,26 @@ function computeBoundaryOutputs(container, innerConnections, outputValueMap) {
 // single, current-view-only pointer, and a level three containers away
 // from whatever's on screen right now has no path that would resolve to
 // it without disturbing the user's own navigation.
-function evaluateBlocksAndConnections(blocks, connections) {
-  const outputValue = new Map(); // `${blockId}:${pinId}` -> value
+// `outputValue` is normally seeded fresh per call (evaluateLevel's own
+// one-shot use, e.g. logicTab.js's "Test" button) -- but evaluateSubtree
+// below passes in the SAME Map every tick for a given container, kept
+// alive across calls, specifically so a cyclic wire loop keeps whatever
+// value it last settled on instead of being re-derived from a blank slate
+// every 100ms. That persistence is the only thing that makes a feedback
+// loop able to hold state at all (a cross-coupled Gate+NOT latch, say):
+// with a fresh Map every tick, pass 0 sees every looped wire as undefined
+// again, so the relaxation has no memory of which state it was just in and
+// can land on a different, sometimes wrong, answer purely from the current
+// tick's pass order -- confirmed by hand-simulating this exact algorithm
+// against a real cross-coupled latch: identical wiring holds correctly
+// with a persisted Map and does not with a fresh one.
+function evaluateBlocksAndConnections(blocks, connections, outputValue = new Map()) {
+  // `${blockId}:${pinId}` -> value
   const inputsByBlock = new Map();
   const outputsByBlock = new Map();
   const errors = new Map();
   const pendingChanges = new Map(); // this tick's own helpers.changed() calls — see changed()'s own doc
+  const pendingPersist = new Map(); // `${blockId}:${propName}` -> value, see runOnce's own __persist doc
 
   function inputsFor(block) {
     const { ins } = portsBySide(block);
@@ -232,10 +275,36 @@ function evaluateBlocksAndConnections(blocks, connections) {
     return child.props?.find((p) => p.name === 'value')?.value;
   }
 
+  // A container's own CURRENT input values, regardless of whether it has
+  // an `fn` of its own — see evaluateSubtree's own doc on
+  // boundaryInputCache for what consumes this and why. `overrides`, when
+  // given, is that same container's own just-computed `outputs` — an `fn`
+  // is free to return a key matching one of its own *input* port names
+  // (not just its output ports, which is all the ordinary outputValue
+  // write below ever looks at) to reshape what its children actually see
+  // for that one port, e.g. turning a plain held level into a proper one-
+  // tick pulse the same way ownOutput()+changed() already does for an
+  // output (see palette.js's own createStateBlock, `transIn`) — any input
+  // name `fn` doesn't mention just falls back to the raw wire value, same
+  // as a block with no `fn` at all gets for every one of its inputs.
+  function captureBoundaryInputs(block, inputs, overrides) {
+    const { ins } = portsBySide(block);
+    const map = new Map();
+    for (const { name, pin } of ins) {
+      const val = overrides && overrides[name] !== undefined ? overrides[name] : inputs[name];
+      map.set(pin.id, val);
+    }
+    boundaryInputCache.set(block.id, map);
+  }
+
   function runOnce(block) {
-    const fnSource = block.props?.find((p) => p.name === 'fn')?.value;
-    if (!fnSource) return;
     const inputs = inputsFor(block);
+    const fnSource = block.props?.find((p) => p.name === 'fn')?.value;
+    if (!fnSource) {
+      if (block.hasChildren) captureBoundaryInputs(block, inputs, null);
+      inputsByBlock.set(block.id, inputs);
+      return;
+    }
     const props = propsObject(block);
     const helpers = {
       fetchJson,
@@ -243,6 +312,25 @@ function evaluateBlocksAndConnections(blocks, connections) {
       childValue: (name) => childValue(block, name),
       changed: (key, value) => changed(pendingChanges, block.id, key, value),
       portsSignature: () => wiringSignature(block, connections),
+      // This container's OWN boundary output, already fresh for this same
+      // tick (see evaluateSubtree's post-order walk — a container's
+      // children, and so its own boundaryOutputCache entry, are always
+      // settled before its own fn ever runs). Exists for the rare case a
+      // container's `fn` needs to react to what its *own* internal wiring
+      // just produced — a momentary pulse born and consumed within the
+      // same tick's relaxation (see palette.js's own createStateBlock,
+      // `transOut`) has no other way to survive being read from outside:
+      // by the time a same-tick feedback loop settles to its final,
+      // recorded value, the pulse that caused the settling is already
+      // gone, the same reason __persist above has to defer its own commit.
+      // Watching that settled boundary value's own edge here, and turning
+      // it back into a proper one-tick pulse via changed()+__persist,
+      // sidesteps that without needing the loop itself to change at all.
+      ownOutput: (name) => {
+        const { outs } = portsBySide(block);
+        const p = outs.find((o) => o.name === name);
+        return p ? getBoundaryOutput(block.id, p.pin.id) : undefined;
+      },
     };
     let outputs = {};
     try {
@@ -252,6 +340,31 @@ function evaluateBlocksAndConnections(blocks, connections) {
     } catch (err) {
       errors.set(block.id, err.message);
     }
+    if (block.hasChildren) captureBoundaryInputs(block, inputs, outputs);
+
+    // The one way an `fn` can hold a value across ticks instead of only
+    // reacting to whatever's on its wires *this* instant — everything
+    // else about `fn` (inputs/props/outputs) is recomputed from scratch
+    // every single call, same as before. Recorded here, not written onto
+    // `block.props` yet — see the commit step below (same two-step shape
+    // as `changed()`'s own pendingChanges, and for the identical reason:
+    // a block whose *own* newly-written prop flips what it would compute
+    // next pass — e.g. a momentary pulse output computed alongside "turn
+    // my own latch off" — would only get to pulse true on pass 1, then
+    // silently correct itself back to false by the final pass once its
+    // own prop write took hold, erasing the very pulse this tick was
+    // supposed to record). Committing once, only after every pass this
+    // tick has already run against the SAME still-unwritten prop value,
+    // is what keeps that pulse showing up in this tick's actual recorded
+    // output — see palette.js's own createStateBlock for the block this
+    // was built for.
+    if (outputs.__persist && typeof outputs.__persist === 'object') {
+      for (const [propName, value] of Object.entries(outputs.__persist)) {
+        if (!block.props?.find((p) => p.name === propName)) continue; // never fabricates a new prop
+        pendingPersist.set(`${block.id}:${propName}`, value);
+      }
+    }
+
     inputsByBlock.set(block.id, inputs);
     outputsByBlock.set(block.id, outputs);
     const { outs } = portsBySide(block);
@@ -270,6 +383,16 @@ function evaluateBlocksAndConnections(blocks, connections) {
   // settled — see changed()'s own doc on why this can't just happen inline
   // inside changed() itself.
   for (const [key, value] of pendingChanges) changeTracker.set(key, value);
+
+  // Same deferred-commit reasoning as changed() above, for __persist — see
+  // runOnce's own doc on why writing straight onto block.props mid-pass
+  // would erase a same-tick pulse before it ever got recorded.
+  for (const [key, value] of pendingPersist) {
+    const [blockId, propName] = [key.slice(0, key.indexOf(':')), key.slice(key.indexOf(':') + 1)];
+    const block = blocks.find((b) => b.id === blockId);
+    const prop = block?.props?.find((p) => p.name === propName);
+    if (prop) prop.value = value;
+  }
 
   return { blocks, inputsByBlock, outputsByBlock, errors, outputValue };
 }
@@ -305,6 +428,13 @@ export function evaluateLevel(project) {
 // to do this in, only ever runs while its own container is actually being
 // *drawn* — exactly the level-gating this whole-tree walk exists to get
 // away from).
+// One persisted outputValue Map per container, reused tick after tick —
+// see evaluateBlocksAndConnections's own doc on why this specific
+// cross-tick survival is what lets a cyclic wire loop hold state at all.
+// Keyed by container id, same lifetime/leak profile as boundaryOutputCache
+// just above (a deleted container's entry just sits unused, no different
+// from changeTracker/compiledCache elsewhere in this file).
+const levelOutputValueCache = new Map(); // containerId -> outputValue Map
 function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
   if (!container.children) return;
   const blocks = [...container.children.blocks.values()];
@@ -312,8 +442,21 @@ function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
 
   if (beforeLevel) beforeLevel(container, blocks);
 
+  let outputValue = levelOutputValueCache.get(container.id);
+  if (!outputValue) {
+    outputValue = new Map();
+    levelOutputValueCache.set(container.id, outputValue);
+  }
+  // See boundaryInputCache's own doc above -- this container's current
+  // boundary input values, one tick behind, made available to its own
+  // children the same way any ordinary same-level wire already resolves
+  // (inputsFor()'s own outputValue.get lookup, no separate code path).
+  const boundaryIn = boundaryInputCache.get(container.id);
+  if (boundaryIn) {
+    for (const [pinId, value] of boundaryIn) outputValue.set(`${container.id}:${pinId}`, value);
+  }
   const connections = [...container.children.connections.values()];
-  const result = evaluateBlocksAndConnections(blocks, connections);
+  const result = evaluateBlocksAndConnections(blocks, connections, outputValue);
   boundaryOutputCache.set(container.id, computeBoundaryOutputs(container, connections, result.outputValue));
   if (container === currentLevelBlock) results.current = result;
 }

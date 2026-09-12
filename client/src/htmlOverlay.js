@@ -15,6 +15,7 @@
 // (removing a container for a deleted block, or one whose `html` prop got
 // cleared) is cheap enough to leave on that slower timer — see prune().
 import { getLastResult } from './runtime.js';
+import * as devkitCircuit from './devkitCircuit.js';
 
 const LAYER_ID = 'noditron-html-layer';
 
@@ -87,6 +88,11 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
     // that already have DOM to work with.
     const helpers = {
       openDialog: () => openDialogFor(block),
+      devkit: {
+        buildDesign: () => devkitCircuit.buildDevkitDesign(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
+        snapshot: () => devkitCircuit.devkitSnapshot(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
+        summary: (design) => devkitCircuit.summarizeDesign(design),
+      },
       setProp(name, value) {
         const prop = block.props.find((p) => p.name === name);
         if (prop) {

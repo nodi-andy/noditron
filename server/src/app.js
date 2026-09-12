@@ -19,6 +19,7 @@ import { WebSocketServer } from 'ws';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIR = path.join(here, '..', '..', 'client');
+const MODULES_DIR = path.join(here, '..', '..', 'modules');
 // A sibling checkout, not a copy — overridable in case nodigraph lives
 // somewhere else on this machine.
 const NODIGRAPH_CLIENT_DIR = process.env.NODIGRAPH_CLIENT_DIR || path.join(here, '..', '..', '..', 'nodigraph', 'client');
@@ -79,6 +80,54 @@ function serveFrom(root, urlPath, res) {
 // its persistence were disabled (see nodigraph's own PERSISTENCE_DISABLED).
 let savedProject = null;
 
+function readBundledModule(name) {
+  if (!/^[a-z0-9-]+$/i.test(name)) return null;
+  const filePath = path.join(MODULES_DIR, name, 'noditron.module.json');
+  if (!filePath.startsWith(MODULES_DIR)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch {
+    return null;
+  }
+}
+
+function handleListModules(res) {
+  let names = [];
+  try {
+    names = fs
+      .readdirSync(MODULES_DIR, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name);
+  } catch {
+    names = [];
+  }
+
+  const modules = names
+    .map((name) => ({ name, manifest: readBundledModule(name) }))
+    .filter((entry) => entry.manifest && entry.manifest.noditronModule === 1)
+    .map(({ name, manifest }) => ({
+      owner: 'local',
+      repo: 'bundled',
+      ref: 'local',
+      path: `modules/${name}/noditron.module.json`,
+      manifest,
+    }));
+
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(modules));
+}
+
+function handleGetModule(name, res) {
+  const manifest = readBundledModule(name);
+  if (!manifest || manifest.noditronModule !== 1) {
+    res.writeHead(404);
+    res.end('Module not found');
+    return;
+  }
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(manifest));
+}
+
 function handleGetProject(res) {
   if (PERSISTENCE_DISABLED) {
     // Same shape as "nothing saved yet" below — nodigraph's own client
@@ -128,6 +177,14 @@ const server = http.createServer((req, res) => {
   }
   if (urlPath === '/api/project' && req.method === 'PUT') {
     handlePutProject(req, res);
+    return;
+  }
+  if (urlPath === '/api/modules' && req.method === 'GET') {
+    handleListModules(res);
+    return;
+  }
+  if (urlPath.startsWith('/api/modules/') && req.method === 'GET') {
+    handleGetModule(decodeURIComponent(urlPath.slice('/api/modules/'.length)), res);
     return;
   }
   if (req.method !== 'GET') {

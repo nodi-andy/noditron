@@ -22,6 +22,7 @@ import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription
 import { pasteSelection, isClipboardPayload, serializeSelection } from '/nodigraph/src/model/clipboard.js';
 import { getStoredToken, setStoredToken } from '/nodigraph/src/model/githubSync.js';
 import { getAllowedChildKinds } from './containerRestrictions.js';
+import { rehydrateKindLogic } from './palette.js';
 
 const GITHUB_API = 'https://api.github.com';
 const MODULE_TOPIC = 'noditron-module';
@@ -29,15 +30,20 @@ const DEFAULT_MANIFEST_PATH = 'noditron.module.json';
 const MODULES_DIR = 'modules';
 const INSTALLED_PROP = 'noditronLibraryModules';
 const SOURCE_PROP = 'noditronModuleSource';
+const LOCAL_OWNER = 'local';
+const LOCAL_REPO = 'bundled';
+const LOCAL_REF = 'local';
 
 // Always part of the catalog, whether or not it's tagged noditron-module —
 // this repo already carries a modules/ catalog of its own (see
-// modules/esp32-devkit/, modules/esp32-s3-devkit/), and topic search can't
-// find it until someone adds that tag by hand in GitHub's own repo settings
-// (no API this project's tools reach). Being private, it still needs a
-// token to actually resolve — same as any other private repo, no special
-// case, just always attempted.
-const DEFAULT_REPOS = [{ owner: 'nodi-andy', repo: 'noditron' }];
+// modules/esp32-devkit/, modules/esp32-s3-devkit/). Only the local/bundled
+// entry is listed here, not also 'nodi-andy/noditron' over the GitHub API —
+// that's the exact same repo's exact same modules/ folder, so both used to
+// discover and list every bundled module twice. local/bundled reads it
+// straight off this server's own disk (see discoverModules below), no
+// token or network round-trip needed, so it's a strict improvement, not
+// just a dedup.
+const DEFAULT_REPOS = [{ owner: LOCAL_OWNER, repo: LOCAL_REPO, defaultBranch: LOCAL_REF }];
 
 // The GitHub Contents API, not jsDelivr's CDN — jsDelivr has no auth
 // mechanism at all, so it can only ever reach public repos. This app's own
@@ -100,6 +106,7 @@ export async function searchModules(query, token = getStoredToken()) {
 // that hasn't cut a release yet still installs, just without a pinned
 // version).
 export async function resolveDefaultRef(owner, repo, token = getStoredToken()) {
+  if (owner === LOCAL_OWNER && repo === LOCAL_REPO) return LOCAL_REF;
   const tags = await githubFetch(`${GITHUB_API}/repos/${owner}/${repo}/tags?per_page=1`, token).catch(() => []);
   if (tags[0]?.name) return tags[0].name;
   const info = await githubFetch(`${GITHUB_API}/repos/${owner}/${repo}`, token);
@@ -113,11 +120,30 @@ function validateManifest(manifest) {
   return manifest;
 }
 
+function bundledModuleName(path) {
+  const match = String(path || '').match(/^modules\/([^/]+)\/noditron\.module\.json$/);
+  return match ? match[1] : null;
+}
+
+async function fetchBundledManifest(path) {
+  const name = bundledModuleName(path);
+  if (!name) throw new Error(`Unsupported bundled module path: ${path}`);
+  const res = await fetch(`/api/modules/${encodeURIComponent(name)}`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Bundled module not found (${res.status})`);
+  return validateManifest(await res.json());
+}
+
 // The Contents API caps a readable file at 1MB (base64 included) — plenty
 // for a block manifest, whatever its embedded fn/html/dialog code; a
 // module shipping something bigger than that inside its own JSON would
 // need a different transport, out of scope here.
 export async function fetchManifest(owner, repo, ref, path = DEFAULT_MANIFEST_PATH, token = getStoredToken()) {
+  if (owner === LOCAL_OWNER && repo === LOCAL_REPO) {
+    return fetchBundledManifest(path);
+  }
+  if (owner === 'nodi-andy' && repo === 'noditron' && bundledModuleName(path)) {
+    return fetchBundledManifest(path);
+  }
   const file = await githubFetch(contentsUrl(owner, repo, path, ref), token);
   if (Array.isArray(file)) throw new Error(`${path} is a directory, not a file.`);
   const manifest = JSON.parse(base64ToText(file.content));
@@ -133,6 +159,19 @@ export async function fetchManifest(owner, repo, ref, path = DEFAULT_MANIFEST_PA
 // failing the whole repo's listing, since one broken module shouldn't hide
 // every other one a large catalog carries.
 export async function discoverModules(owner, repo, ref, token = getStoredToken()) {
+  if (owner === LOCAL_OWNER && repo === LOCAL_REPO) {
+    const res = await fetch('/api/modules', { cache: 'no-store' });
+    if (!res.ok) throw new Error(`Couldn't load bundled modules (${res.status})`);
+    const entries = await res.json();
+    return (Array.isArray(entries) ? entries : []).map((entry) => ({
+      owner: LOCAL_OWNER,
+      repo: LOCAL_REPO,
+      ref: LOCAL_REF,
+      path: entry.path,
+      manifest: validateManifest(entry.manifest),
+    }));
+  }
+
   const found = [];
 
   await fetchManifest(owner, repo, ref, DEFAULT_MANIFEST_PATH, token)
@@ -184,6 +223,26 @@ function recordInstalledModule(nodigraph, source) {
   writeInstalledModules(nodigraph, list);
 }
 
+function removeInstalledModule(nodigraph, source) {
+  const key = `${source.owner}/${source.repo}/${source.path}`;
+  writeInstalledModules(
+    nodigraph,
+    readInstalledModules(nodigraph).filter((m) => `${m.owner}/${m.repo}/${m.path}` !== key),
+  );
+}
+
+function registerLibraryModule(nodigraph, manifest, source) {
+  recordInstalledModule(nodigraph, {
+    ...source,
+    name: manifest.name,
+    displayName: manifest.displayName || manifest.name,
+    version: manifest.version || null,
+    swatchColor: manifest.swatchColor || source.swatchColor || '#8b93a3',
+  });
+  nodigraph.renderLoop.requestRender();
+  nodigraph.persist();
+}
+
 export function getInstalledModules(nodigraph) {
   return readInstalledModules(nodigraph);
 }
@@ -199,13 +258,13 @@ function viewCenter(nodigraph) {
 }
 
 // Pastes the manifest's block payload into the level currently being
-// viewed (pasteSelection already regenerates every id, so installing the
-// same module twice in one project never collides — see clipboard.js's own
-// doc on why that matters), re-centers the result under the current view,
-// tags each new top-level block with where it came from, and records the
-// module on the project itself so re-opening this project shows it as
-// already installed.
-export function installModule(nodigraph, manifest, source) {
+// viewed (pasteSelection already regenerates every id, so adding the same
+// module twice in one project never collides — see clipboard.js's own doc
+// on why that matters), re-centers the result under the current view, and
+// tags each new top-level block with where it came from. Installing a
+// library module is separate: registerLibraryModule records it in the
+// palette without placing an instance.
+export function addModuleBlock(nodigraph, manifest, source) {
   const newIds = pasteSelection(nodigraph.project, manifest.block, 0);
   if (!newIds.length) throw new Error('Nothing to install — the manifest had no blocks.');
 
@@ -218,14 +277,21 @@ export function installModule(nodigraph, manifest, source) {
   const dx = center.x - (minX + maxX) / 2;
   const dy = center.y - (minY + maxY) / 2;
 
+  function hydrateNoditronLogic(block) {
+    rehydrateKindLogic(block);
+    if (block.children) {
+      for (const child of block.children.blocks.values()) hydrateNoditronLogic(child);
+    }
+  }
+
   for (const block of blocks) {
+    hydrateNoditronLogic(block);
     block.geometry.x += dx;
     block.geometry.y += dy;
     block.props.push({ id: generateId('prp'), name: SOURCE_PROP, kind: 'value', value: JSON.stringify(source) });
     block.description = serializeBlockDescription(block);
   }
 
-  recordInstalledModule(nodigraph, source);
   nodigraph.selection.select(blocks[0].id);
   nodigraph.renderLoop.requestRender();
   nodigraph.persist();
@@ -245,7 +311,8 @@ export async function installFromRepo(nodigraph, { owner, repo, ref, path = DEFA
     version: manifest.version || null,
     swatchColor: manifest.swatchColor || '#8b93a3',
   };
-  return { blocks: installModule(nodigraph, manifest, source), manifest, source };
+  registerLibraryModule(nodigraph, manifest, source);
+  return { manifest, source };
 }
 
 // --- UI ---
@@ -433,11 +500,11 @@ export function installLibraryUI(nodigraph, onInstalled) {
         const desc = document.createElement('div');
         desc.textContent = manifest.description || '';
         desc.style.cssText = 'font-size:12px;color:var(--text-muted);margin:4px 0 8px;';
-        const installBtn = button('Install', { primary: true });
+        const installBtn = button('Add to library', { primary: true });
         installBtn.addEventListener('click', async () => {
           try {
             const source = { owner, repo, ref: resolvedRef, path, name: manifest.name, displayName: manifest.displayName || manifest.name, version: manifest.version || null, swatchColor: manifest.swatchColor || '#8b93a3' };
-            installModule(nodigraph, manifest, source);
+            registerLibraryModule(nodigraph, manifest, source);
             onInstalled?.();
             closeImport();
             close();
@@ -518,11 +585,11 @@ export function installLibraryUI(nodigraph, onInstalled) {
       sub.textContent = `${manifest.description || ''}${manifest.description ? ' — ' : ''}${entry.owner}/${entry.repo}`;
       sub.style.cssText = 'font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
       text.append(name, sub);
-      const installBtn = button('Install', { primary: true });
+      const installBtn = button('Add to library', { primary: true });
       installBtn.addEventListener('click', () => {
         try {
           const source = { owner: entry.owner, repo: entry.repo, ref: entry.ref, path: entry.path, name: manifest.name, displayName: manifest.displayName || manifest.name, version: manifest.version || null, swatchColor: manifest.swatchColor || '#8b93a3' };
-          installModule(nodigraph, manifest, source);
+          registerLibraryModule(nodigraph, manifest, source);
           onInstalled?.();
           close();
         } catch (err) {
@@ -655,8 +722,9 @@ export function installLibraryUI(nodigraph, onInstalled) {
       body.appendChild(exportHint);
     }
 
-    // Installed — modules already added to this project, one click to add
-    // another instance without searching again.
+    // Installed — module definitions already added to this project. Adding
+    // an instance happens from the palette; this dialog manages the
+    // definitions themselves.
     const installed = getInstalledModules(nodigraph);
     if (installed.length) {
       body.appendChild(sectionLabel('INSTALLED IN THIS PROJECT'));
@@ -664,20 +732,30 @@ export function installLibraryUI(nodigraph, onInstalled) {
         const row = document.createElement('div');
         row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);';
         const name = document.createElement('div');
-        name.textContent = `${mod.displayName} (${mod.owner}/${mod.repo})`;
+        name.textContent = `${mod.displayName} v${mod.version || '?'} (${mod.owner}/${mod.repo})`;
         name.style.cssText = 'font-size:12px;';
-        const addBtn = button('Add another');
-        addBtn.addEventListener('click', async () => {
+        const actions = document.createElement('div');
+        actions.style.cssText = 'display:flex;gap:6px;flex:none;';
+        const updateBtn = button('Update');
+        updateBtn.addEventListener('click', async () => {
           try {
-            const manifest = await fetchManifest(mod.owner, mod.repo, mod.ref, mod.path);
-            installModule(nodigraph, manifest, mod);
+            const ref = await resolveDefaultRef(mod.owner, mod.repo);
+            const manifest = await fetchManifest(mod.owner, mod.repo, ref, mod.path);
+            registerLibraryModule(nodigraph, manifest, { ...mod, ref });
             onInstalled?.();
-            close();
+            open();
           } catch (err) {
             row.appendChild(statusLine(`Failed: ${err.message}`, true));
           }
         });
-        row.append(name, addBtn);
+        const removeBtn = button('Remove');
+        removeBtn.addEventListener('click', () => {
+          removeInstalledModule(nodigraph, mod);
+          onInstalled?.();
+          open();
+        });
+        actions.append(updateBtn, removeBtn);
+        row.append(name, actions);
         body.appendChild(row);
       }
     }
@@ -726,7 +804,7 @@ export function mountLibrary(nodigraph, container) {
       btn.addEventListener('click', async () => {
         try {
           const manifest = await fetchManifest(mod.owner, mod.repo, mod.ref, mod.path);
-          installModule(nodigraph, manifest, mod);
+          addModuleBlock(nodigraph, manifest, mod);
         } catch (err) {
           // eslint-disable-next-line no-alert
           alert(`Couldn't add ${mod.displayName}: ${err.message}`);

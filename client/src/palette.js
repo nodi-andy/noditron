@@ -6,6 +6,7 @@
 // up front. Nothing here is special-cased inside nodigraph itself.
 import { createBlock, generateId } from '/nodigraph/src/model/Block.js';
 import { addPort, logicalPortOf, serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
+import { createConnection } from '/nodigraph/src/model/Connection.js';
 import { KIND_PROP } from './runtime.js';
 import { getAllowedChildKinds } from './containerRestrictions.js';
 
@@ -57,19 +58,6 @@ function nextPosition(nodigraph) {
   return { x: Math.round((center.x - 80 + offset) / 10) * 10, y: Math.round((center.y - 40 + offset) / 10) * 10 };
 }
 
-// `changed` (see runtime.js's own helpers.changed/portsSignature) pulses
-// true for exactly one tick whenever this block's own value is edited
-// (the slider, the on-canvas toggle, its dialog — anything that touches
-// `props.value`) or its port gets rewired to something else — a separate
-// port from `out` on purpose, since `out` has to keep carrying the actual
-// value every tick for whatever reads it; a momentary pulse living on the
-// same port would corrupt that. Wire `changed` into something that wants
-// to react only *when* a primitive is touched rather than poll it
-// continuously — Weather's own `trigger`, for instance.
-function changedExpr() {
-  return "helpers.changed('state', { value: props.value, wiring: helpers.portsSignature() })";
-}
-
 // Digital I/O replaces what used to be two separate primitives — Bool (a
 // plain manual toggle, no pin) and Digital Input (a fixed, input-only GPIO
 // reading) — with one block that covers both plus the output direction
@@ -117,10 +105,16 @@ if (!badge) {
   dot.style.cssText = 'width:18px;height:18px;padding:0;border-radius:50%;border:2px solid var(--border);background:none;box-sizing:border-box;';
   dot.addEventListener('click', async () => {
     const dir = (block.props.find((p) => p.name === 'direction') || {}).value || 'input';
+    const pinNow = (block.props.find((p) => p.name === 'pin') || {}).value;
+    const simulatedNow = pinNow === null || pinNow === undefined || pinNow === '';
     // Output is the settable direction (drives a real GPIO or stands in as
     // a manual constant when unwired) -- input is a read-only reflection of
     // whatever feeds it (a wire, or a connected board's own live reading).
-    if (dir !== 'output') return;
+    // Simulated (no real pin) skips this restriction entirely -- there's no
+    // real hardware direction to respect, so it's always click-settable; a
+    // wire into "in", if present, still wins each tick regardless (see this
+    // block's own fn).
+    if (!simulatedNow && dir !== 'output') return;
     const current = block.props.find((p) => p.name === 'value');
     const next = Number(current && current.value) >= 1 ? 0 : 1;
     helpers.setProp('value', next);
@@ -149,12 +143,13 @@ if (!badge) {
 
 const pinProp = block.props.find((p) => p.name === 'pin');
 const pin = pinProp ? pinProp.value : null;
+const simulated = pin === null || pin === undefined || pin === '';
 const direction = ((block.props.find((p) => p.name === 'direction') || {}).value) === 'output' ? 'output' : 'input';
-badge.textContent = (pin === null || pin === undefined || pin === '' ? 'SIM' : 'GPIO' + pin) + ' · ' + direction.toUpperCase();
+// Simulated is bidirectional (see this block's own fn) -- no direction
+// suffix, since none applies.
+badge.textContent = simulated ? 'SIM' : 'GPIO' + pin + ' · ' + direction.toUpperCase();
 
 const dot = container.querySelector('.dio-dot');
-const currentValueProp = block.props.find((p) => p.name === 'value');
-const currentOn = Number(currentValueProp && currentValueProp.value) >= 1;
 
 // Pure observation, not control: a connected, running ESP32 DevKit
 // actually runs din->dout forwarding itself now (see buildMinimalDesign
@@ -167,18 +162,17 @@ const currentOn = Number(currentValueProp && currentValueProp.value) >= 1;
 // regardless of whether this specific block is even being drawn right
 // now -- see main.js's own syncLiveDigitalIO, a runtime.js beforeLevel
 // hook that runs once per tick for every level in the whole tree, not
-// just whatever's on screen. This html script used to do that sync
-// itself, which meant it only ever ran while this exact block was being
-// looked at directly -- fine for its own on-canvas dot, useless the
-// moment the value needed to reach anywhere else (a wire out through the
-// container's own boundary port, say). Now this only ever *reads*
-// props.value (via outputs.value, direction=input's own fn output) --
-// always already live, wired to anything else or not.
-const outputWired = inputs.value !== undefined;
-const on = direction === 'input' ? Boolean(outputs.value) : (outputWired ? Boolean(inputs.value) : currentOn);
+// just whatever's on screen.
+//
+// This block's own fn always returns both "value" and "out" carrying the
+// same computed boolean (see createDigitalIOBlock), regardless of which
+// port(s) actually exist right now -- so this can just read outputs.out
+// unconditionally instead of picking between outputs.value/inputs.value/
+// a locally-tracked "current" value by hand.
+const on = Boolean(outputs.out);
 dot.style.background = on ? '#3ecf5d' : 'transparent';
 dot.style.borderColor = on ? '#3ecf5d' : 'var(--border)';
-dot.style.cursor = direction === 'output' ? 'pointer' : 'default';
+dot.style.cursor = (simulated || direction === 'output') ? 'pointer' : 'default';
 `.trim();
 
 const DIGITAL_IO_DIALOG = `
@@ -202,17 +196,27 @@ function section(labelText) {
 
 const fieldStyle = 'width:100%;padding:6px 8px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;box-sizing:border-box;';
 
-const dirSection = section('DIRECTION');
-const dirSelect = document.createElement('select');
-dirSelect.style.cssText = fieldStyle;
-[['input', 'Input (reads a signal)'], ['output', 'Output (drives a signal)']].forEach(([value, label]) => {
-  const opt = document.createElement('option');
-  opt.value = value;
-  opt.textContent = label;
-  dirSelect.appendChild(opt);
-});
-dirSelect.value = props.direction === 'output' ? 'output' : 'input';
-dirSection.appendChild(dirSelect);
+const simulated = props.pin === null || props.pin === undefined || props.pin === '';
+
+// A real hardware direction only means something once there's a real pin
+// to respect -- Simulated is a bidirectional test point (both "in" and
+// "out" ports at once, see createDigitalIOBlock), so this section simply
+// doesn't exist while Simulated rather than showing a control with no
+// effect on anything.
+let dirSelect = null;
+if (!simulated) {
+  const dirSection = section('DIRECTION');
+  dirSelect = document.createElement('select');
+  dirSelect.style.cssText = fieldStyle;
+  [['input', 'Input (reads a signal)'], ['output', 'Output (drives a signal)']].forEach(([value, label]) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = label;
+    dirSelect.appendChild(opt);
+  });
+  dirSelect.value = props.direction === 'output' ? 'output' : 'input';
+  dirSection.appendChild(dirSelect);
+}
 
 const pinSection = section('PIN');
 const pinSelect = document.createElement('select');
@@ -228,11 +232,12 @@ for (let i = 0; i <= 39; i += 1) {
   pinSelect.appendChild(opt);
 }
 pinSelect.value = props.pin === null || props.pin === undefined ? '' : String(props.pin);
-pinSelect.addEventListener('change', () => helpers.setProp('pin', pinSelect.value === '' ? null : Number(pinSelect.value)));
 pinSection.appendChild(pinSelect);
 
 const pinHint = document.createElement('p');
-pinHint.textContent = 'The value below always simulates locally too, connected or not. If this block sits directly inside a connected, running ESP32 DevKit and has a real pin set, an Output also drives the real GPIO live.';
+pinHint.textContent = simulated
+  ? 'No pin -- a plain test point. It has both an input and an output port for its value at once, and stays click-settable on canvas regardless of wiring: a wire into it, if present, wins over the last click each tick (unwire it and the last click applies again).'
+  : 'The value below always simulates locally too, connected or not. If this block sits directly inside a connected, running ESP32 DevKit and has a real pin set, an Output also drives the real GPIO live.';
 pinHint.style.cssText = 'margin:6px 0 0;font-size:11px;color:var(--text-muted);';
 pinSection.appendChild(pinHint);
 
@@ -246,11 +251,13 @@ slider.max = '1';
 slider.step = '1';
 slider.value = String(Number(props.value || 0));
 slider.style.flex = '1';
-// Output is the settable direction (drives a real GPIO, or stands in as a
-// manual constant when unwired) -- input is read-only, a reflection of
-// whatever feeds it. See this block's own html prop (DIGITAL_IO_HTML) for
-// the matching on-canvas dot, which follows the same rule.
-slider.disabled = dirSelect.value === 'input';
+// Settable whenever there's no real hardware direction to respect
+// (Simulated) or the real direction is Output (drives a real GPIO, or
+// stands in as a manual constant when unwired) -- a real Input pin is the
+// only case this stays read-only. See this block's own html prop
+// (DIGITAL_IO_HTML) for the matching on-canvas dot, which follows the
+// same rule.
+slider.disabled = !simulated && dirSelect.value === 'input';
 const readout = document.createElement('span');
 readout.style.cssText = 'font-size:12px;color:var(--text-muted);min-width:34px;';
 function describe(v) { return Number(v) >= 1 ? 'HIGH' : 'LOW'; }
@@ -259,6 +266,7 @@ slider.addEventListener('input', async () => {
   const next = Number(slider.value);
   helpers.setProp('value', next);
   readout.textContent = describe(slider.value);
+  if (simulated) return;
   if (dirSelect.value !== 'output') return;
   if (props.pin === null || props.pin === undefined || props.pin === '') return;
   const parent = window.nodigraph?.project?.getContainerBlock?.();
@@ -273,41 +281,82 @@ slider.addEventListener('input', async () => {
 });
 valueRow.append(slider, readout);
 valueSection.appendChild(valueRow);
-if (dirSelect.value === 'input') {
+if (!simulated && dirSelect.value === 'input') {
   const inHint = document.createElement('p');
   inHint.textContent = 'Read-only -- an input reflects whatever is wired into it, or the live reading from a connected board. Switch to Output to set it by hand.';
   inHint.style.cssText = 'margin:6px 0 0;font-size:11px;color:var(--text-muted);';
   valueSection.appendChild(inHint);
 }
 
-dirSelect.addEventListener('change', async () => {
-  const dir = dirSelect.value;
-  helpers.setProp('direction', dir);
+// Both a Simulated<->real-pin swap and a direction change on an already-
+// real pin go through the same remove-then-add-port dance the Inspector's
+// own port list uses, including dropping any wire that pointed at
+// whichever port went away. Picking a *different* real GPIO number is a
+// no-op here (same desired shape as what's already there), so the current
+// ports are simply left alone rather than torn down and rebuilt for
+// nothing.
+async function syncPorts(pinValue, dirValue) {
+  const nowSimulated = pinValue === '';
+  const desired = nowSimulated ? [['in', 'in'], ['out', 'out']] : [[dirValue === 'output' ? 'in' : 'out', 'value']];
+  const current = (block.logicalPorts || [])
+    .map((lp) => {
+      const pin = (block.ports || []).find((p) => p.logicalId === lp.id);
+      return (pin ? lp.direction : '?') + ':' + lp.name;
+    })
+    .sort()
+    .join(',');
+  const desiredKey = desired.map(([d, n]) => d + ':' + n).sort().join(',');
+  if (current === desiredKey) return false;
   const bd = await import('/nodigraph/src/model/BlockDescription.js');
   for (const lp of [...(block.logicalPorts || [])]) {
     const removedPinIds = bd.removeLogicalPort(block, lp.id);
     for (const pinId of removedPinIds) helpers.project.removeConnectionsForPort(pinId);
   }
-  bd.addPort(block, { direction: dir === 'output' ? 'in' : 'out' });
-  const newLogical = block.logicalPorts[block.logicalPorts.length - 1];
-  if (newLogical) newLogical.name = 'value';
+  for (const [direction, name] of desired) {
+    bd.addPort(block, { direction });
+    const newLogical = block.logicalPorts[block.logicalPorts.length - 1];
+    if (newLogical) newLogical.name = name;
+  }
   block.description = bd.serializeBlockDescription(block);
+  return true;
+}
+
+pinSelect.addEventListener('change', async () => {
+  helpers.setProp('pin', pinSelect.value === '' ? null : Number(pinSelect.value));
+  const dirNow = (block.props.find((p) => p.name === 'direction') || {}).value || 'input';
+  const portsChanged = await syncPorts(pinSelect.value, dirNow);
   helpers.refresh();
-  helpers.close();
+  if (portsChanged) helpers.close();
 });
+
+if (dirSelect) {
+  dirSelect.addEventListener('change', async () => {
+    helpers.setProp('direction', dirSelect.value);
+    const portsChanged = await syncPorts(pinSelect.value, dirSelect.value);
+    helpers.refresh();
+    if (portsChanged) helpers.close();
+  });
+}
 `.trim();
 
 export function createDigitalIOBlock(nodigraph) {
   const { x, y } = nextPosition(nodigraph);
   const block = createBlock({ x, y, name: 'Bool' });
-  addNamedPort(block, 'out', 'value');
+  // No real pin yet (Simulated) -- starts with both ports at once, `in`
+  // and `out`, rather than the single direction-swapped `value` port a
+  // real GPIO gets (see DIGITAL_IO_DIALOG's own syncPorts): with no actual
+  // hardware direction to respect, there's no reason to pick one. A wire
+  // into `in`, if present, wins over the manual value each tick (see this
+  // block's own fn) -- same in-overrides-constant rule Data already uses.
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'out', 'out');
   block.props.push({ id: generateId('prp'), name: 'pin', kind: 'value', value: null });
   block.props.push({ id: generateId('prp'), name: 'direction', kind: 'value', value: 'input' });
   block.props.push({ id: generateId('prp'), name: 'value', kind: 'range', min: 0, max: 1, value: 0 });
   addKindProp(block, 'digital-io');
   addLogicProps(
     block,
-    `return { value: Number(props.value) >= 1, changed: ${changedExpr()} };`,
+    `const simulated = props.pin === null || props.pin === undefined || props.pin === ''; const v = simulated ? (inputs.in !== undefined ? Boolean(inputs.in) : Number(props.value) >= 1) : Number(props.value) >= 1; return { value: v, out: v };`,
     '// No canvas indicator dot here -- see this block\'s html prop for its on-canvas card instead.',
   );
   block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: DIGITAL_IO_HTML });
@@ -327,6 +376,187 @@ export function createAndBlock(nodigraph) {
     'return { out: Boolean(inputs.a) && Boolean(inputs.b) };',
     '// No indicator by default -- uncomment for one:\n// helpers.dot(Boolean(outputs.out));',
   );
+  return finish(nodigraph, block);
+}
+
+export function createOrBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'OR' });
+  addNamedPort(block, 'in', 'a');
+  addNamedPort(block, 'in', 'b');
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'or');
+  addLogicProps(
+    block,
+    'return { out: Boolean(inputs.a) || Boolean(inputs.b) };',
+    '// No indicator by default -- uncomment for one:\n// helpers.dot(Boolean(outputs.out));',
+  );
+  return finish(nodigraph, block);
+}
+
+// The "transistor" primitive: `sig` passes straight through to `out`
+// while `ctrl` is high, and is blocked (out = false) while `ctrl` is low —
+// same truth table as AND (see createAndBlock just above), but named and
+// ported for the *gating* mental model rather than the boolean-logic one:
+// a signal path with a control pin, not "two equal inputs". This is the
+// building block a hand-built state machine gates its "only the active
+// state reacts to a button press" logic through, without needing a
+// dedicated State primitive.
+export function createGateBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Gate' });
+  addNamedPort(block, 'in', 'sig');
+  addNamedPort(block, 'in', 'ctrl');
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'gate');
+  addLogicProps(
+    block,
+    'return { out: Boolean(inputs.ctrl) && Boolean(inputs.sig) };',
+    "helpers.dot(Boolean(outputs.out));",
+  );
+  return finish(nodigraph, block);
+}
+
+// Straight inversion -- `out` is always the opposite of `in`, no control
+// pin (unlike Gate just above). The other half of the pair Gate needs for
+// an "only on falling edge"/"forward unless active" kind of wiring: run a
+// signal through a NOT first to invert it, then into a Gate's own `ctrl`.
+export function createNotBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'NOT' });
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'not');
+  addLogicProps(block, 'return { out: !Boolean(inputs.in) };', 'helpers.dot(Boolean(outputs.out));');
+  return finish(nodigraph, block);
+}
+
+// A state in a hand-built state machine — a real container (enterable,
+// double-click in and its actual circuit is right there: seven ordinary
+// Gate/NOT children, wired to each other and to this block's own `set`/
+// `transIn`/`transOut`/`on` ports exactly the way a person would wire them
+// by hand from the palette. Nothing about this circuit is special-cased —
+// it's real enough that a from-scratch copy, built with nothing but the
+// palette and nodigraph's own port/wire tools, works identically, and can
+// be packaged and shared the same way any hand-built block can (see this
+// project's own README, "Authoring one": select it, "Add from library…" →
+// "Export selected as a module"). That's only possible because a
+// container's boundary *input* now has a real path to an internal child
+// (see runtime.js's own boundaryInputCache doc) — before that fix this had
+// to be a single hand-written `fn` instead (see git history), which
+// worked but hid the actual mechanism behind code nobody could see by
+// entering the block.
+//
+// The circuit is a cross-coupled NAND latch (NAND = Gate + NOT, see
+// Gate's own doc) — Gate1/Q and Gate2/Q-bar cross-feeding each other's
+// `ctrl` — plus one more Gate+NOT pair (GateTrig/NotTrig) gating `transIn`
+// by the latch's own current `on` state before it's allowed to reset
+// anything: `set` (active-high) turns the latch on; `transIn` (also
+// active-high), but *only* while already on, turns it back off — "only
+// the active state reacts, and turns itself off on the way out," the
+// self-clearing ring behavior a hand-wired chain of these needs, no
+// separate reset signal required. `on` is `Q` itself, crossing straight
+// out to this block's own boundary port the ordinary wired way (Q's own
+// on-canvas dot shows the same thing once you enter the block).
+//
+// `transOut`, alone, is *not* wired the same way — GateTrig.out (the
+// moment `transIn` actually gets through) fires and self-clears within
+// the very same tick that resets Q, since Q feeding GateTrig's own `ctrl`
+// is exactly what makes it self-clearing in the first place: by the
+// relaxation's last, recorded pass this same tick, GateTrig has already
+// un-fired right along with Q, so nothing outside this container could
+// ever see that pulse over an ordinary wire — this isn't a bug in the
+// latch, it's what "the pulse and the thing that consumes it live in the
+// same feedback loop" necessarily means for a same-tick relaxation. The
+// one line of `fn` below is what actually produces `transOut`: it watches
+// this container's own already-settled `on` (via helpers.ownOutput — see
+// runtime.js's own doc on it) and turns *that* value's high-to-low edge
+// into a proper one-tick pulse with helpers.changed(), the same primitive
+// every other edge-triggered signal in this file already relies on.
+// Everything that actually decides *whether and when* to transition is
+// still the visible Gate/NOT circuit above; this only relays its result
+// across a tick boundary a same-tick wire can't cross.
+//
+// `transIn` gets the same edge treatment, the other direction — GateTrig
+// only *gates* transIn by Q, it doesn't itself notice a held-high level
+// from one already-passed transition versus a genuinely new one, so a
+// signal source that stays high for more than a tick (an ordinary Bool
+// left at 1, not released the instant it's clicked) would otherwise walk
+// this state's own successor straight into resetting itself again the
+// very next tick, cascading through however much of a hand-wired chain
+// stays high that long. Turning transIn into a one-tick pulse here, the
+// same way transOut becomes one, is what makes "one press, one step"
+// hold regardless of how long the source actually stays high — see
+// runtime.js's own captureBoundaryInputs doc for how returning a key
+// matching an *input* port's name reshapes what the circuit inside
+// actually receives on that port, transparently to the wiring itself.
+const STATE_FN = `
+const onNow = Boolean(helpers.ownOutput('on'));
+const transOut = helpers.changed('on', onNow) && !onNow;
+const transIn = helpers.changed('transIn', Boolean(inputs.transIn)) && Boolean(inputs.transIn);
+return { transOut, transIn };
+`.trim();
+function wireInternal(block, source, sourcePort, target, targetPort) {
+  const port = (b, name) => {
+    const lp = (b.logicalPorts || []).find((l) => l.name === name);
+    return (b.ports || []).find((p) => p.logicalId === lp.id).id;
+  };
+  const src = source === 'self' ? block : source;
+  const tgt = target === 'self' ? block : target;
+  const conn = createConnection({
+    sourceBlockId: src.id,
+    sourcePortId: port(src, sourcePort),
+    targetBlockId: tgt.id,
+    targetPortId: port(tgt, targetPort),
+  });
+  block.children.connections.set(conn.id, conn);
+}
+
+export function createStateBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'State' });
+  addNamedPort(block, 'in', 'set');
+  addNamedPort(block, 'in', 'transIn');
+  addNamedPort(block, 'out', 'transOut');
+  addNamedPort(block, 'out', 'on');
+  addKindProp(block, 'state');
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: STATE_FN });
+
+  block.hasChildren = true;
+  block.boundaryGeometry = { x: 0, y: 0, width: 560, height: 420 };
+
+  const stub = stubNodigraph();
+  const notSet = createNotBlock(stub);
+  const gate1 = createGateBlock(stub);
+  const notQ = createNotBlock(stub);
+  const gate2 = createGateBlock(stub);
+  const notQbar = createNotBlock(stub);
+  const gateTrig = createGateBlock(stub);
+  const notTrig = createNotBlock(stub);
+
+  notSet.name = 'NotSet'; Object.assign(notSet.geometry, { x: 40, y: 20 });
+  gate1.name = 'Gate1'; Object.assign(gate1.geometry, { x: 220, y: 20 });
+  notQ.name = 'Q'; Object.assign(notQ.geometry, { x: 400, y: 20 });
+  gate2.name = 'Gate2'; Object.assign(gate2.geometry, { x: 220, y: 180 });
+  notQbar.name = 'Q-bar'; Object.assign(notQbar.geometry, { x: 400, y: 180 });
+  gateTrig.name = 'GateTrig'; Object.assign(gateTrig.geometry, { x: 40, y: 320 });
+  notTrig.name = 'NotTrig'; Object.assign(notTrig.geometry, { x: 220, y: 320 });
+
+  const children = [notSet, gate1, notQ, gate2, notQbar, gateTrig, notTrig];
+  block.children = { blocks: new Map(children.map((c) => [c.id, c])), connections: new Map() };
+
+  wireInternal(block, 'self', 'set', notSet, 'in');
+  wireInternal(block, notSet, 'out', gate1, 'sig');
+  wireInternal(block, notQbar, 'out', gate1, 'ctrl');
+  wireInternal(block, gate1, 'out', notQ, 'in');
+  wireInternal(block, notQ, 'out', gate2, 'ctrl');
+  wireInternal(block, 'self', 'transIn', gateTrig, 'sig');
+  wireInternal(block, notQ, 'out', gateTrig, 'ctrl');
+  wireInternal(block, gateTrig, 'out', notTrig, 'in');
+  wireInternal(block, notTrig, 'out', gate2, 'sig');
+  wireInternal(block, gate2, 'out', notQbar, 'in');
+  wireInternal(block, notQ, 'out', 'self', 'on');
+
   return finish(nodigraph, block);
 }
 
@@ -709,6 +939,93 @@ export function createJsonFieldBlock(nodigraph) {
   return finish(nodigraph, block);
 }
 
+// nodigraph's own slim YAML format (model/slimFormat.js over there) is
+// generic — built before noditron existed, with no idea `fn`/`render`/
+// `html`/`dialog`/`noditronKind` mean anything, so it never wrote them out
+// (see that file's own doc on what it deliberately drops). A block pasted
+// or imported from that format arrives with its plain-data props restored
+// (pin, direction, value, noditronKind, ...) but with no logic behind it
+// at all — nothing here special-cased inside nodigraph, so nodigraph
+// instead calls this back through an optional host hook (see main.js's
+// own window.nodigraphRehydrateBlock, same pattern as
+// window.nodigraphDrawBlock/nodigraphCanEnter elsewhere) once per restored
+// block, and this is what actually fills the gap back in.
+//
+// Reuses the real createXBlock functions above rather than a second,
+// hand-maintained copy of each kind's fn/render/html/dialog strings —
+// building one against a no-op stand-in for `nodigraph` (nothing here
+// actually wants a block added to any project, selected, or persisted;
+// only the fresh block object itself, to copy its logic props off of) is
+// exactly this file's own single source of truth for what each kind's
+// default logic is, so the two can never quietly drift apart.
+function stubNodigraph() {
+  return {
+    // nextPosition (see above) reads nodigraph.camera to place a freshly
+    // palette-created block on screen -- irrelevant here (only the
+    // template's fn/render/html/dialog props ever get read back out), but
+    // still has to resolve without throwing.
+    camera: { screenToWorld: () => ({ x: 0, y: 0 }) },
+    project: { addBlock() {} },
+    selection: { select() {} },
+    renderLoop: { requestRender() {} },
+    persist() {},
+  };
+}
+
+const CREATE_BY_KIND = {
+  'digital-io': createDigitalIOBlock,
+  and: createAndBlock,
+  or: createOrBlock,
+  gate: createGateBlock,
+  not: createNotBlock,
+  led: createLedBlock,
+  state: createStateBlock,
+  timer: createTimerBlock,
+  weather: createWeatherBlock,
+  'json-field': createJsonFieldBlock,
+};
+
+const CODE_PROP_NAMES = ['fn', 'render', 'html', 'dialog'];
+
+function setProp(block, name, value) {
+  const existing = (block.props || []).find((p) => p.name === name);
+  if (existing) existing.value = value;
+  else block.props.push({ id: generateId('prp'), name, kind: 'value', value });
+}
+
+// Only ever fills in what's actually missing — a block that already has
+// real `fn` content (hand-customized via the Logic tab, or arrived through
+// a full-fidelity path like nodigraph's own JSON clipboard/file format,
+// which never had this gap to begin with) is left completely alone. That
+// makes this safe to call unconditionally on every block a generic
+// nodigraph import produces, never just the ones known to need it.
+export function rehydrateKindLogic(block) {
+  if ((block.props || []).find((p) => p.name === 'fn')?.value) return;
+  const kind = (block.props || []).find((p) => p.name === KIND_PROP)?.value;
+
+  // The one kind whose fn genuinely depends on the instance rather than
+  // being a fixed template — see createDataBlock's own doc on withPort: a
+  // standalone Data block has real in/out ports, one living as a settings
+  // child (Timer's T_ON/T_OFF, JSON Field's KEY) has none, and slim YAML
+  // already restores ports faithfully, so that's read straight off the
+  // block being rehydrated rather than needing its own stub.
+  if (kind === 'data') {
+    const withPort = (block.ports || []).length > 0;
+    setProp(block, 'fn', withPort ? 'return { out: inputs.in !== undefined ? inputs.in : props.value };' : 'return { out: props.value };');
+    setProp(block, 'html', DATA_HTML);
+    setProp(block, 'dialog', DATA_DIALOG);
+    return;
+  }
+
+  const create = CREATE_BY_KIND[kind];
+  if (!create) return; // Not one of noditron's own kinds (or no kind at all) -- nothing this file knows how to rebuild.
+  const template = create(stubNodigraph());
+  for (const name of CODE_PROP_NAMES) {
+    const src = template.props.find((p) => p.name === name);
+    if (src) setProp(block, name, src.value);
+  }
+}
+
 export function mountPalette(nodigraph, container) {
   container.innerHTML = '';
   const label = document.createElement('div');
@@ -739,6 +1056,10 @@ export function mountPalette(nodigraph, container) {
   paletteButton('#3ecf5d', 'Bool', 'digital-io', () => createDigitalIOBlock(nodigraph));
   paletteButton('#4f8cff', 'Data', 'data', () => createStandaloneDataBlock(nodigraph));
   paletteButton('#c98a2f', 'AND gate', 'and', () => createAndBlock(nodigraph));
+  paletteButton('#c98a2f', 'OR gate', 'or', () => createOrBlock(nodigraph));
+  paletteButton('#c98a2f', 'Gate', 'gate', () => createGateBlock(nodigraph));
+  paletteButton('#c98a2f', 'NOT gate', 'not', () => createNotBlock(nodigraph));
+  paletteButton('#7c5cff', 'State', 'state', () => createStateBlock(nodigraph));
   paletteButton('#3ecf5d', 'LED', 'led', () => createLedBlock(nodigraph));
   paletteButton('#3ecf5d', 'Timer', 'timer', () => createTimerBlock(nodigraph));
   paletteButton('#2f6fed', 'Weather', 'weather', () => createWeatherBlock(nodigraph));

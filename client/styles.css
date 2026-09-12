@@ -15,7 +15,7 @@
    way (see the body.inspector-open rule below). */
 #noditron-palette {
   position: fixed;
-  top: calc(var(--topbar-height, 52px) + 12px);
+  top: calc(var(--topbar-height, 44px) + 22px);
   right: 12px;
   z-index: 30;
   display: flex;
@@ -27,6 +27,8 @@
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
   transition: right 0.22s ease;
+  max-height: calc(100dvh - var(--topbar-height, 44px) - 104px);
+  overflow: auto;
 }
 
 @media (min-width: 769px) {
@@ -68,6 +70,33 @@
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  #noditron-palette {
+    top: auto;
+    left: 12px;
+    right: 12px;
+    bottom: calc(78px + env(safe-area-inset-bottom, 0px));
+    flex-direction: row;
+    align-items: center;
+    max-height: none;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 6px;
+    border-radius: 22px;
+  }
+
+  #noditron-palette .noditron-palette-label,
+  #noditron-palette > div:not(:has(.noditron-swatch)) {
+    display: none;
+  }
+
+  #noditron-palette button {
+    flex: 0 0 auto;
+    padding: 7px 10px;
+    white-space: nowrap;
+  }
 }
 
 /* The Inspector's "Logic" tab (see src/logicTab.js) — rendered inside

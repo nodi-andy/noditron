@@ -22,6 +22,7 @@ import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription
 import { getLastResult } from './runtime.js';
 import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
+import * as devkitCircuit from './devkitCircuit.js';
 
 const HOST_ID = 'noditron-dialog-host';
 const GEAR_RADIUS = 8;
@@ -92,7 +93,13 @@ export function installDialogSystem(nodigraph) {
     closeBtn.className = 'noditron-dialog-close';
     closeBtn.setAttribute('aria-label', 'Close');
     closeBtn.textContent = '×';
-    closeBtn.addEventListener('click', close);
+    closeBtn.addEventListener('pointerdown', (event) => {
+      event.stopPropagation();
+    });
+    closeBtn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      close();
+    });
 
     const body = document.createElement('div');
     body.className = 'noditron-dialog-body';
@@ -153,6 +160,14 @@ export function installDialogSystem(nodigraph) {
         readDesign: (opts) => serialConsole.readDesign(block.id, opts),
         sendDesign: (design, opts) => serialConsole.sendDesign(block.id, design, opts),
         buildMinimalDesign: serialConsole.buildMinimalDesign,
+        buildDevkitDesign: () => devkitCircuit.buildDevkitDesign(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
+        devkitSnapshot: () => devkitCircuit.devkitSnapshot(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
+        designSummary: (design) => devkitCircuit.summarizeDesign(design),
+        markDevkitSent: (snapshot) => {
+          devkitCircuit.markDevkitSent(block, snapshot);
+          nodigraph.renderLoop.requestRender();
+          nodigraph.persist();
+        },
         setPin: (gpio, state, opts) => serialConsole.setPin(block.id, gpio, state, opts),
         readPins: (opts) => serialConsole.readPins(block.id, opts),
         close: () => serialConsole.closeConsole(block.id),

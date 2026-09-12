@@ -4,7 +4,8 @@
 // so window.nodigraph (see that file's own comment) may not exist the
 // instant this module starts; a short poll covers that gap without this
 // file needing to know anything about nodigraph's internal timing.
-import { mountPalette } from './palette.js';
+import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
+import { mountPalette, rehydrateKindLogic } from './palette.js';
 import { mountLibrary } from './library.js';
 import { startRuntime, kindOf, getLastResult, getBoundaryOutput } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
@@ -13,13 +14,15 @@ import { installDialogSystem } from './dialogSystem.js';
 import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
 import * as livePins from './livePins.js';
+import * as devkitCircuit from './devkitCircuit.js';
 
 // noditron's own "primitive" kinds — plain value/logic leaves with no
 // business growing a sub-architecture of their own (unlike Timer, whose
 // whole T_ON/T_OFF design *depends* on being a container). See
 // window.nodigraphCanEnter below and palette.js's own addKindProp calls
 // for where each one gets tagged.
-const NO_SUB_ARCHITECTURE_KINDS = ['digital-io', 'and', 'data'];
+const NO_SUB_ARCHITECTURE_KINDS = ['digital-io', 'and', 'or', 'gate', 'not', 'data'];
+const ESP32_TEMPLATE_PROP_NAMES = ['render', 'html', 'dialog', 'allowedChildKinds', 'usbOrientation', 'boardVariant', 'pinMap', 'onboardControls'];
 
 function waitForNodigraph() {
   return new Promise((resolve) => {
@@ -78,7 +81,104 @@ async function boot() {
   // Inspector's own "Enter block" button. Read fresh on every attempt
   // (nodigraph's own doc on it), so setting it here — after nodigraph's
   // own bootstrap has already run — still works.
-  window.nodigraphCanEnter = (block) => !NO_SUB_ARCHITECTURE_KINDS.includes(kindOf(block));
+  window.nodigraphCanEnter = (block) => {
+    const kind = kindOf(block);
+    if (kind === 'esp32-devkit') {
+      const state = (block.props || []).find((p) => p.name === 'connectionState')?.value || 'disconnected';
+      if (state !== 'connected:running') return false;
+    }
+    return !NO_SUB_ARCHITECTURE_KINDS.includes(kind);
+  };
+  window.nodigraphOnEnterBlocked = (block) => {
+    if (kindOf(block) === 'esp32-devkit') dialogSystem.openDialog(block);
+  };
+
+  // Fills a block's noditron-specific logic back in after it arrives
+  // through nodigraph's own generic slim-YAML paste (see nodigraph's
+  // main.js — window.nodigraphRehydrateBlock, a new host hook alongside
+  // nodigraphDrawBlock/nodigraphCanEnter above), which restores plain-data
+  // props faithfully but has no idea `fn`/`render`/`html`/`dialog`/
+  // `noditronKind` mean anything — see palette.js's own rehydrateKindLogic
+  // for why this lives there instead of a second copy of every kind's
+  // logic. Deliberately not window.nodigraphAfterSave/nodigraphCanEnter's
+  // sibling for nodigraph's OTHER paste path (Ctrl+C/Ctrl+V's own JSON
+  // clipboard format, model/clipboard.js) -- that one already carries
+  // every prop verbatim and never had this gap.
+  window.nodigraphRehydrateBlock = rehydrateKindLogic;
+
+  async function refreshEsp32DevkitTemplates() {
+    let templateBlock = null;
+    try {
+      const response = await fetch('/api/modules/esp32-devkit');
+      if (!response.ok) return;
+      const moduleDef = await response.json();
+      templateBlock = moduleDef?.block?.blocks?.[0] || null;
+    } catch {
+      return;
+    }
+    if (!templateBlock) return;
+    let changed = false;
+    // The whole block tree, not project.listBlocks() — that only returns
+    // the level currently being viewed, so an ESP32 DevKit went un-refreshed
+    // whenever it wasn't on screen, including the very common case of
+    // standing *inside* it (then listBlocks() returns its children and the
+    // board itself is never even considered). That left already-placed
+    // boards running whatever dialog/render code they were pasted with,
+    // which is what made a stale dialog outlive edits to the module.
+    for (const { block } of devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children)) {
+      for (const name of ESP32_TEMPLATE_PROP_NAMES) {
+        const src = (templateBlock.props || []).find((p) => p.name === name);
+        if (!src) continue;
+        const existing = (block.props || []).find((p) => p.name === name);
+        if (existing && existing.value !== src.value) {
+          existing.value = src.value;
+          changed = true;
+        } else if (!existing) {
+          block.props.push({ ...src, id: `${src.id}_${block.id}` });
+          changed = true;
+        }
+      }
+      if (changed) {
+        const bd = await import('/nodigraph/src/model/BlockDescription.js');
+        block.description = bd.serializeBlockDescription(block);
+      }
+    }
+    if (changed) {
+      nodigraph.persist();
+      nodigraph.renderLoop.requestRender();
+    }
+  }
+  refreshEsp32DevkitTemplates();
+
+  // `connectionState` is a persisted prop, but the serial session it
+  // describes is not — a Web Serial port only lives as long as the page
+  // that opened it. So a board left "connected:running" when the project
+  // was last saved comes back claiming to be running with nothing actually
+  // on the other end: the on-canvas card shows its green "Logic Module
+  // running" dot, the dialog logs that same stale value, and both the
+  // dialog's "Save changes to device" section and the Save-triggered push
+  // (window.nodigraphAfterSave) stay hidden/skipped, since each of those
+  // *correctly* also requires a live serialFlash session. The visible
+  // result is a board that looks connected, says "Circuit changed -- not
+  // sent", and offers no way to send it. Nothing can hold a session this
+  // early in a page's life, so any leftover "connected:*" here is stale by
+  // definition: reset it, and the card honestly reads "Not connected"
+  // until Connect actually runs again.
+  function resetStaleConnectionStates() {
+    let changed = false;
+    for (const { block } of devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children)) {
+      const prop = (block.props || []).find((p) => p.name === 'connectionState');
+      if (!prop || !String(prop.value || '').startsWith('connected')) continue;
+      prop.value = 'disconnected';
+      block.description = serializeBlockDescription(block);
+      changed = true;
+    }
+    if (changed) {
+      nodigraph.persist();
+      nodigraph.renderLoop.requestRender();
+    }
+  }
+  resetStaleConnectionStates();
 
   // Colors a wire by whatever boolean value it's actually carrying right
   // now — green while true/high, dim gray while false/low — read straight
@@ -113,27 +213,126 @@ async function boot() {
   // that fires after every single edit (a drag, a prop tweak), which would
   // spam the serial link; an explicit Save is a deliberate, occasional
   // action, the same one the dialog's own button already represents.
+  function logicalName(block, portId) {
+    const pin = (block.ports || []).find((p) => p.id === portId);
+    const logical = pin && (block.logicalPorts || []).find((lp) => lp.id === pin.logicalId);
+    return logical?.name || null;
+  }
+
+  function pinMapFor(block) {
+    const prop = (block.props || []).find((p) => p.name === 'pinMap');
+    try {
+      const map = JSON.parse(prop?.value || '[]');
+      return Array.isArray(map) ? map : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function buildExternalDevkitDesign(esp, level) {
+    const gpioByPortName = new Map(
+      pinMapFor(esp)
+        .filter((pin) => pin.gpio !== null && pin.gpio !== undefined)
+        .map((pin) => [pin.label, Number(pin.gpio)]),
+    );
+    const syntheticPins = new Map();
+
+    function syntheticPinBlock(gpio, direction) {
+      const key = `${direction}:${gpio}`;
+      if (syntheticPins.has(key)) return syntheticPins.get(key);
+      const block = {
+        id: `${esp.id}:${key}`,
+        name: `GPIO${gpio}`,
+        logicalPorts: [{ id: `${esp.id}:${key}:io`, name: 'value', direction: direction === 'output' ? 'in' : 'out' }],
+        ports: [{ id: `${esp.id}:${key}:port`, logicalId: `${esp.id}:${key}:io`, side: direction === 'output' ? 'left' : 'right', offset: 20, manualOffset: true }],
+        props: [
+          { id: `${esp.id}:${key}:pin`, name: 'pin', kind: 'value', value: gpio },
+          { id: `${esp.id}:${key}:dir`, name: 'direction', kind: 'value', value: direction },
+          { id: `${esp.id}:${key}:value`, name: 'value', kind: 'range', min: 0, max: 1, value: 0 },
+          { id: `${esp.id}:${key}:kind`, name: 'noditronKind', kind: 'value', value: 'digital-io' },
+        ],
+      };
+      syntheticPins.set(key, block);
+      return block;
+    }
+
+    function mapEndpoint(blockId, portId, isTarget) {
+      if (blockId !== esp.id) return { blockId, portId };
+      const portName = logicalName(esp, portId);
+      const gpio = gpioByPortName.get(portName);
+      if (gpio === undefined) return null;
+      const pin = syntheticPinBlock(gpio, isTarget ? 'output' : 'input');
+      return { blockId: pin.id, portId: pin.ports[0].id };
+    }
+
+    const connections = [];
+    for (const conn of Array.from(level.connections.values())) {
+      const source = mapEndpoint(conn.sourceBlockId, conn.sourcePortId, false);
+      const target = mapEndpoint(conn.targetBlockId, conn.targetPortId, true);
+      if (!source || !target) continue;
+      connections.push({
+        ...conn,
+        sourceBlockId: source.blockId,
+        sourcePortId: source.portId,
+        targetBlockId: target.blockId,
+        targetPortId: target.portId,
+      });
+    }
+
+    const siblingBlocks = Array.from(level.blocks.values()).filter((block) => block.id !== esp.id && kindOf(block) !== 'esp32-devkit');
+    return serialConsole.buildMinimalDesign([...siblingBlocks, ...syntheticPins.values()], connections);
+  }
+
+  function buildDevkitDesign(esp, level) {
+    const children = esp.children ? Array.from(esp.children.blocks.values()) : [];
+    const childConnections = esp.children ? Array.from(esp.children.connections.values()) : [];
+    const internal = serialConsole.buildMinimalDesign(children, childConnections);
+    const external = buildExternalDevkitDesign(esp, level);
+    return external.blocks.length ? external : internal;
+  }
+
+  function devkitSnapshot(esp, level) {
+    const siblings = Array.from(level.blocks.values())
+      .filter((block) => block.id !== esp.id)
+      .map((block) => ({ id: block.id, props: block.props, ports: block.ports, logicalPorts: block.logicalPorts }));
+    const levelConnections = Array.from(level.connections.values()).map((cn) => ({
+      s: cn.sourceBlockId, sp: cn.sourcePortId, t: cn.targetBlockId, tp: cn.targetPortId,
+    }));
+    const children = esp.children ? Array.from(esp.children.blocks.values()).map((block) => ({ id: block.id, props: block.props })) : [];
+    const childConnections = esp.children ? Array.from(esp.children.connections.values()).map((cn) => ({
+      s: cn.sourceBlockId, sp: cn.sourcePortId, t: cn.targetBlockId, tp: cn.targetPortId,
+    })) : [];
+    return JSON.stringify({ siblings, levelConnections, children, childConnections });
+  }
+
   function collectEsp32DevkitBlocks(level, out = []) {
     if (!level) return out;
     for (const block of level.blocks.values()) {
-      if (kindOf(block) === 'esp32-devkit') out.push(block);
+      if (kindOf(block) === 'esp32-devkit') out.push({ block, level });
       if (block.children) collectEsp32DevkitBlocks(block.children, out);
     }
     return out;
   }
   window.nodigraphAfterSave = async () => {
-    const devkits = collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children);
+    const devkits = devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children);
     let changed = false;
-    for (const esp of devkits) {
+    let promptedConnection = false;
+    for (const { block: esp, level } of devkits) {
+      const design = devkitCircuit.buildDevkitDesign(esp, level);
+      if (!design.blocks.length) continue;
       // No live session for this block right now (never connected this
       // page load, or the connectionState prop is stale from before a
       // reload) -- nothing to push to, silently skip rather than error.
-      if (!serialFlash.getSession(esp.id)) continue;
-      if ((esp.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running') continue;
-      const children = esp.children ? Array.from(esp.children.blocks.values()) : [];
-      const connections = esp.children ? Array.from(esp.children.connections.values()) : [];
-      const design = serialConsole.buildMinimalDesign(children, connections);
-      if (!design.blocks.length) continue;
+      if (
+        !serialFlash.getSession(esp.id) ||
+        (esp.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running'
+      ) {
+        if (!promptedConnection) {
+          promptedConnection = true;
+          dialogSystem.openDialog(esp);
+        }
+        continue;
+      }
       // Same shape as the ESP32 DevKit dialog's own childSnapshot() (see
       // modules/esp32-devkit's dialog prop) -- connections included, not
       // just the blocks' own props, so rewiring alone (no other prop
@@ -142,18 +341,11 @@ async function boot() {
       // path saves first writes lastSentSnapshot, and the other path needs
       // to recognize that same string as "already up to date," not
       // mismatch on format and resend on every single trigger.
-      const blocksSnap = children.map((c) => ({ id: c.id, props: c.props }));
-      const connsSnap = connections.map((cn) => ({
-        s: cn.sourceBlockId, sp: cn.sourcePortId, t: cn.targetBlockId, tp: cn.targetPortId,
-      }));
-      const snapshot = JSON.stringify({ blocksSnap, connsSnap });
-      const lastSentProp = esp.props.find((p) => p.name === 'lastSentSnapshot');
-      if (snapshot === (lastSentProp?.value || '')) continue;
+      const snapshot = devkitCircuit.devkitSnapshot(esp, level);
+      if (snapshot === ((esp.props || []).find((p) => p.name === 'lastSentSnapshot')?.value || '')) continue;
       try {
         await serialConsole.sendDesign(esp.id, design);
-        if (lastSentProp) lastSentProp.value = snapshot;
-        const bd = await import('/nodigraph/src/model/BlockDescription.js');
-        esp.description = bd.serializeBlockDescription(esp);
+        devkitCircuit.markDevkitSent(esp, snapshot);
         changed = true;
       } catch (err) {
         console.warn(`[noditron] Save-triggered device push failed for "${esp.name}":`, err.message);
