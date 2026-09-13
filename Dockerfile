@@ -15,6 +15,16 @@ RUN npm ci --omit=dev --prefix server
 COPY client ./client
 COPY server ./server
 
+# The bundled module catalog (modules/NAME/noditron.module.json), served by
+# the server's own /api/modules off disk — see app.js's MODULES_DIR. Easy to
+# overlook because nothing here imports it: it's read at request time, not
+# build time, so leaving it out fails silently rather than breaking the
+# build. readdirSync throws, the catch turns that into an empty list, and
+# the library dialog just shows no modules at all — which is exactly how
+# the ESP32 DevKit went missing from noditron.com while working in local
+# dev, where the folder is simply there in the checkout.
+COPY modules ./modules
+
 # Vendor nodigraph's client read-only, the same way local dev points at a
 # sibling checkout (see server/src/app.js's own NODIGRAPH_CLIENT_DIR) — a
 # deployed container has no sibling repo of its own, so this pulls one at
