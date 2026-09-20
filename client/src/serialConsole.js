@@ -125,6 +125,30 @@ async function writeBytes(blockId, bytes) {
 
 const INFO_RE = /^\[INFO] LogicMod v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \| heap=(\d+) \| circuit=(\w+) nCB=(\d+)/;
 
+// Two more lines worth recognising while probing (see identify below).
+// The firmware prints this banner once, out of setup(), a second or more
+// before it can answer anything — it is proof the app image is there and
+// running, and the only thing that justifies waiting out a slow boot.
+const BOOTING_RE = /^Logic Module v(\S+) \(build (\S+)\) booting/;
+// The ROM's own boot loop on a chip with no valid app image. No amount of
+// asking will produce an answer, so stop asking and let the caller offer
+// the firmware installer straight away.
+const NO_APP_RE = /invalid header|flash read err|waiting for download/i;
+// The firmware is there and starting, and the board dies before it can
+// finish — measured on a DevKit: banner, then "Brownout detector was
+// triggered" 79ms later as WiFi.softAP() powers the radio, then round
+// again every 483ms, forever. Indistinguishable from "no firmware" to
+// anything that only waits for an answer, so it is called out by name
+// rather than left to time out.
+//
+// Only the panic lines themselves, never the ROM's `rst:0x..` reason: a
+// perfectly ordinary boot prints one of those every time (opening the
+// port resets the board; esptool's own hard_reset after a flash does
+// too), so matching those would report a healthy board as broken. A
+// second boot banner inside one probe is the other unambiguous signal —
+// whatever the cause, the board restarted while we were talking to it.
+const RESET_LOOP_RE = /Brownout detector was triggered|Guru Meditation Error/i;
+
 // Plain `ping` — the same command a human gets from a serial monitor,
 // nothing added just for this. Whatever old boot-log lines are still
 // sitting in the queue from before this call are irrelevant noise, not a
@@ -141,18 +165,40 @@ const INFO_RE = /^\[INFO] LogicMod v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \|
 // unsolicited output as if it were its own reply (confirmed live: this is
 // exactly what turned a save-design's own READY check into "Unexpected
 // response: [CIRCUIT] Load failed, retrying in 500ms").
-export async function identify(blockId, { timeoutMs = 3000 } = {}) {
+export async function identify(blockId, { timeoutMs = 3000, pingEveryMs = 500, bootGraceMs = 20000 } = {}) {
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0);
-  await writeLine(blockId, 'ping');
-  const deadline = Date.now() + timeoutMs;
+  // Asked repeatedly, not once. Opening the port drives DTR/RTS and so
+  // resets the board (see serialFlash.releaseResetLines), and the firmware
+  // answers nothing at all until setup() has mounted SPIFFS — formatting
+  // it, on the first boot after a flash writes a fresh partition table —
+  // and brought the AP up, which is seconds later. A single ping sent the
+  // moment the port opens is swallowed by Serial.begin() re-initialising
+  // the UART, and nothing ever asks again: a board running perfectly well
+  // reads as having no firmware. esp32_logic prints no [INFO] line of its
+  // own accord either (printSystemInfo runs only from the 'ping' handler
+  // and the '?' shortcut), so the answer has to be asked for again once
+  // the board's own loop is alive to hear it.
+  let deadline = Date.now() + timeoutMs;
+  let nextPing = 0;
+  let booting = false;
+  let banners = 0;
+  let version = null;
   while (Date.now() < deadline) {
+    if (Date.now() >= nextPing) {
+      try {
+        await writeLine(blockId, 'ping');
+      } catch {
+        break; // the port went away under us — nothing left to ask
+      }
+      nextPing = Date.now() + pingEveryMs;
+    }
     let line;
     try {
-      line = await readLine(state, Math.max(deadline - Date.now(), 1));
+      line = await readLine(state, Math.min(pingEveryMs, Math.max(deadline - Date.now(), 1)));
     } catch {
-      break;
+      continue; // quiet until the next ping is due — ask again
     }
     const m = line.match(INFO_RE);
     if (m) {
@@ -167,9 +213,48 @@ export async function identify(blockId, { timeoutMs = 3000 } = {}) {
         blockCount: Number(m[7]),
       };
     }
+    // The boot banner says the app image is there and starting: from here
+    // the wait is for a boot to finish rather than for a board that may
+    // have nothing on it at all, which earns far more patience than the
+    // caller's own budget — a first boot after a flash formats SPIFFS.
+    const boot = line.match(BOOTING_RE);
+    if (boot) {
+      banners += 1;
+      version = boot[1];
+      if (!booting) {
+        booting = true;
+        deadline = Math.max(deadline, Date.now() + bootGraceMs);
+      }
+    }
+    // A board that starts its firmware and resets before it can answer is
+    // not a board without firmware, and waiting out the full grace period
+    // to say so is both slow and wrong. A second banner is the loop; a
+    // brownout or panic line names the cause outright.
+    //
+    // Only claim it is the Logic Module when its own banner was actually
+    // seen: a board looping on some *other* firmware panics exactly the
+    // same way (seen live — a stale Grbl_ESP32 image null-dereferencing
+    // on every boot), and naming the wrong firmware would send whoever
+    // reads this looking in the wrong place entirely.
+    if (banners > 1 || RESET_LOOP_RE.test(line)) {
+      closeConsole(blockId);
+      const cause = /Brownout/i.test(line)
+        ? ' (brownout — the 3.3V rail collapses as the radio starts)'
+        : /Guru Meditation/i.test(line)
+          ? ' (its firmware panics on every boot)'
+          : '';
+      throw new Error(
+        version
+          ? `Logic Module v${version} is installed but the board keeps resetting${cause}. `
+            + 'Check the USB cable and port, or power the board externally.'
+          : `The board is resetting in a loop${cause} and cannot answer. `
+            + 'Check power first; if it holds up, re-install the firmware — what is on it may not be the Logic Module.',
+      );
+    }
+    if (NO_APP_RE.test(line)) break;
   }
   closeConsole(blockId);
-  return { verified: false };
+  return { verified: false, booting };
 }
 
 export async function readDesign(blockId, { timeoutMs = 4000 } = {}) {
