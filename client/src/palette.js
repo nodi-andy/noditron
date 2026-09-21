@@ -8,7 +8,7 @@ import { createBlock, generateId } from '/nodigraph/src/model/Block.js';
 import { addPort, logicalPortOf, serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { createConnection } from '/nodigraph/src/model/Connection.js';
 import { KIND_PROP } from './runtime.js';
-import { getAllowedChildKinds } from './containerRestrictions.js';
+import { getAllowedChildKinds, prepareAdd } from './containerRestrictions.js';
 
 function addNamedPort(block, direction, name) {
   const pin = addPort(block, { direction });
@@ -1047,7 +1047,13 @@ export function mountPalette(nodigraph, container) {
     const label_ = document.createElement('span');
     label_.textContent = text;
     button.append(swatch, label_);
-    button.addEventListener('click', onClick);
+    // Into the selected block, when one is selected (see prepareAdd) —
+    // before onClick, which places the new block in view of the camera the
+    // move leaves behind.
+    button.addEventListener('click', () => {
+      prepareAdd(nodigraph);
+      onClick();
+    });
     container.appendChild(button);
     buttons.push({ el: button, kind });
     return button;

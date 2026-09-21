@@ -21,7 +21,7 @@ import { generateId } from '/nodigraph/src/model/Block.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { pasteSelection, isClipboardPayload, serializeSelection } from '/nodigraph/src/model/clipboard.js';
 import { getStoredToken, setStoredToken } from '/nodigraph/src/model/githubSync.js';
-import { getAllowedChildKinds } from './containerRestrictions.js';
+import { getAllowedChildKinds, prepareAdd } from './containerRestrictions.js';
 import { rehydrateKindLogic } from './palette.js';
 
 const GITHUB_API = 'https://api.github.com';
@@ -804,6 +804,9 @@ export function mountLibrary(nodigraph, container) {
       btn.addEventListener('click', async () => {
         try {
           const manifest = await fetchManifest(mod.owner, mod.repo, mod.ref, mod.path);
+          // Into the selected block, when one is selected — the same as the
+          // palette's own buttons (see containerRestrictions.prepareAdd).
+          prepareAdd(nodigraph);
           addModuleBlock(nodigraph, manifest, mod);
         } catch (err) {
           // eslint-disable-next-line no-alert

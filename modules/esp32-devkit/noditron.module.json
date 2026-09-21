@@ -465,7 +465,7 @@
             "id": "prp_mtg8v3ep8",
             "name": "allowedChildKinds",
             "kind": "value",
-            "value": "[digital-io,timer]"
+            "value": "[\"digital-io\",\"timer\"]"
           },
           {
             "id": "prp_esp32_usbOrientation",

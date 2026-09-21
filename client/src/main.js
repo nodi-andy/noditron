@@ -404,7 +404,11 @@ async function boot() {
   // different block" event of its own to hook, so this just compares
   // project.path against what it was last tick, which is already ticking
   // here at a rate no navigation could outrun.
-  let lastPathJson = JSON.stringify(nodigraph.project.path);
+  // The palette and library offer what fits where a new block would land
+  // (see containerRestrictions.addTarget), which moves with the selection
+  // as well as with navigation — so both are part of the key.
+  const addTargetKey = () => JSON.stringify([nodigraph.project.path, nodigraph.addTarget?.()?.id ?? null]);
+  let lastPathJson = addTargetKey();
   startRuntime(
     nodigraph,
     () => {
@@ -412,7 +416,7 @@ async function boot() {
       htmlOverlay.prune(byId);
       nodigraph.renderLoop.requestRender();
 
-      const pathJson = JSON.stringify(nodigraph.project.path);
+      const pathJson = addTargetKey();
       if (pathJson !== lastPathJson) {
         lastPathJson = pathJson;
         palette.refresh();
