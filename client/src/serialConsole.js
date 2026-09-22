@@ -302,6 +302,42 @@ export async function readDesign(blockId, { timeoutMs = 4000 } = {}) {
 // second belt, since this simple per-row layout has no way to route two
 // different partners to the same fixed position without risking a
 // collision.
+function collapsePassThroughs(childBlocks, connections) {
+  const propOf = (block, name) => (block.props || []).find((p) => p.name === name)?.value;
+  const passThrough = new Set(
+    childBlocks
+      .filter((b) => propOf(b, 'noditronKind') === 'digital-io')
+      .filter((b) => {
+        const pin = propOf(b, 'pin');
+        return pin === null || pin === undefined || pin === '';
+      })
+      .map((b) => b.id),
+  );
+  if (!passThrough.size) return connections;
+  const byId = new Map(childBlocks.map((b) => [b.id, b]));
+  const portNameOf = (blockId, portId) => {
+    const block = byId.get(blockId);
+    const pin = (block?.ports || []).find((p) => p.id === portId);
+    return (block?.logicalPorts || []).find((l) => l.id === pin?.logicalId)?.name ?? null;
+  };
+  const feedOf = (blockId) => connections.find((c) => c.targetBlockId === blockId && portNameOf(blockId, c.targetPortId) === 'in');
+  const out = [];
+  for (const conn of connections) {
+    if (passThrough.has(conn.targetBlockId)) continue;
+    let source = conn;
+    const seen = new Set();
+    while (passThrough.has(source.sourceBlockId) && !seen.has(source.sourceBlockId)) {
+      seen.add(source.sourceBlockId);
+      const feed = feedOf(source.sourceBlockId);
+      if (!feed) break;
+      source = feed;
+    }
+    if (passThrough.has(source.sourceBlockId)) continue; // a Bool fed by nothing: a manual value the board cannot hold
+    out.push({ ...conn, sourceBlockId: source.sourceBlockId, sourcePortId: source.sourcePortId });
+  }
+  return out;
+}
+
 export function buildMinimalDesign(childBlocks, connections = []) {
   const blocks = [];
   let nextBlockId = 1;
@@ -313,6 +349,14 @@ export function buildMinimalDesign(childBlocks, connections = []) {
   });
   const timerChildren = childBlocks.filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'timer');
   const andChildren = childBlocks.filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'and');
+
+  // A Bool with no pin of its own and a wire into its `in` only passes a
+  // value along — the board has nothing to run for it. GPIO0 → Bool → AND
+  // is, on the board, GPIO0 → AND: a wire leaving such a Bool is traced
+  // back to whatever feeds its `in`, and the wire into it is dropped. Left
+  // in place, the AND's input had no source the board could run and was
+  // never connected at all, so the AND never fired.
+  connections = collapsePassThroughs(childBlocks, connections);
 
   // A connection only carries block ids/port ids, not the logical port name
   // ('a' vs 'b' vs 'out') -- resolved the same way runtime.js's own
