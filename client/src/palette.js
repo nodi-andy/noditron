@@ -10,8 +10,13 @@ import { createConnection } from '/nodigraph/src/model/Connection.js';
 import { KIND_PROP } from './runtime.js';
 import { getAllowedChildKinds, prepareAdd } from './containerRestrictions.js';
 
-function addNamedPort(block, direction, name) {
-  const pin = addPort(block, { direction });
+// `hidden` ships a port that's real and wireable but not painted on the
+// canvas until someone reveals it from the Inspector's own port list (see
+// nodigraph's BlockDescription.isPortHidden) — for a secondary input that
+// would otherwise clutter every instance of a block most people only ever
+// use one way. Data's `write` is the first of these.
+function addNamedPort(block, direction, name, { hidden = false } = {}) {
+  const pin = addPort(block, { direction, hidden });
   logicalPortOf(block, pin).name = name;
   return pin;
 }
@@ -394,6 +399,86 @@ export function createOrBlock(nodigraph) {
   return finish(nodigraph, block);
 }
 
+// Sums every input that currently carries a value. Deliberately not a
+// fixed two-input adder: `inputs` is keyed by this block's own input port
+// names and holds `undefined` for any port with nothing wired to it (see
+// runtime.js's inputsFor), so walking it means "all connected inputs",
+// whatever they happen to be called and however many there are. Add a port
+// in the Inspector and it counts toward the sum with nothing here to
+// change; unwire one and it drops out again.
+//
+// Booleans count as 1/0, which is what makes a Bool or a Digital I/O pin a
+// usable input; text that isn't a number counts as 0 rather than turning
+// the whole sum into NaN and taking every other input down with it.
+//
+// `fired` is the same one-tick pulse the Data block draws (see DATA_FN) —
+// not a port, just something for this block's own html. Any input actually
+// changing is what counts as this block being triggered; on the firmware
+// side that's a real signal arriving, here it's the edge.
+const ADD_FN = `
+let sum = 0;
+let fired = false;
+for (const [name, value] of Object.entries(inputs)) {
+  if (value === undefined) continue;
+  if (helpers.changed(name, value)) fired = true;
+  sum += Number(value) || 0;
+}
+return { out: sum, fired };
+`.trim();
+
+const ADD_HTML = `
+container.style.display = 'flex';
+container.style.alignItems = 'center';
+container.style.justifyContent = 'center';
+container.style.boxSizing = 'border-box';
+container.style.padding = '6px';
+container.style.fontFamily = 'Inter, sans-serif';
+
+let val = container.querySelector('.add-sum');
+if (!val) {
+  val = document.createElement('div');
+  val.className = 'add-sum';
+  val.style.cssText = 'font-size:18px;font-weight:700;color:var(--text-primary,#fff);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+  container.appendChild(val);
+}
+let lamp = container.querySelector('.add-fired');
+if (!lamp) {
+  lamp = document.createElement('div');
+  lamp.className = 'add-fired';
+  lamp.style.cssText = 'position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;border:1px solid var(--border,#8888);box-sizing:border-box;';
+  container.appendChild(lamp);
+}
+const sum = outputs.out;
+val.textContent = sum === undefined ? '0' : String(sum);
+
+if (outputs.fired) lamp.dataset.firedAt = String(Date.now());
+const lit = Date.now() - Number(lamp.dataset.firedAt || 0) < 180;
+lamp.style.transition = lit ? 'none' : 'background .3s ease-out, box-shadow .3s ease-out';
+lamp.style.background = lit ? 'var(--success, #3ecf5d)' : 'transparent';
+lamp.style.boxShadow = lit ? '0 0 6px var(--success, #3ecf5d)' : 'none';
+`.trim();
+
+// Two inputs shown and a third hidden (see addNamedPort): adding two
+// things is the ordinary case, and a third pin on every instance of it
+// would be clutter — reveal `in3` from the Inspector's port list when a
+// sum needs it, or add a fourth port of your own, which ADD_FN picks up
+// without being told. 120 tall so the left edge has three real slots to
+// put them in (see nodigraph's grid.getPortSlotOffsets — one per 40 units).
+export function createAddBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Add' });
+  block.geometry.width = 160;
+  block.geometry.height = 120;
+  addNamedPort(block, 'in', 'in1');
+  addNamedPort(block, 'in', 'in2');
+  addNamedPort(block, 'in', 'in3', { hidden: true });
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'add');
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: ADD_FN });
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: ADD_HTML });
+  return finish(nodigraph, block);
+}
+
 // The "transistor" primitive: `sig` passes straight through to `out`
 // while `ctrl` is high, and is blocked (out = false) while `ctrl` is low —
 // same truth table as AND (see createAndBlock just above), but named and
@@ -578,14 +663,29 @@ export function createLedBlock(nodigraph) {
 // block's whole card is just its value.
 //
 // A standalone one (from the palette) also gets an *input* port, `in` —
-// wire something into it and that overrides the block's own constant on
-// `out` for as long as the wire's there (unwire it and `out` falls back to
-// the constant again); this is what lets a Data block work as a live
-// readout for something else's output — Weather's current temperature,
-// say — not just a source. One living inside a container as a named
-// child (see createTimerBlock's T_ON/T_OFF) skips both ports entirely —
-// nothing there ever wires it, only reads its value by name (see
-// runtime.js's helpers.childValue), so a port would just be dead weight.
+// a plain trigger, matching what conucon's own `data` block does on the
+// firmware side (see its circuitRecv: a signal arriving at a data block
+// fires that block's stored value onto the belt, and the incoming value
+// itself is discarded). So `in` never shows up on `out`: what leaves this
+// block is always its own data, overwriting whatever poked it. Here, where
+// every block's fn is simply re-run ~10x/second rather than woken by an
+// event, `out` carries that data continuously and the trigger's only
+// visible effect is the card's own flash — but the wiring means the same
+// thing, and exports to an event-driven target (see serialConsole.js)
+// unchanged.
+//
+// A second input, `write`, is the way to change the stored value from the
+// diagram instead of by hand: whatever arrives there is latched into the
+// block's own `value` prop, exactly as if it had been typed into the
+// dialog. It ships *hidden* (see addNamedPort) — the trigger-plus-constant
+// shape above is what a Data block is for nearly every use, and a second
+// permanently-visible input on all of them would be clutter; reveal it per
+// block from the Inspector's port list when it's actually wanted.
+//
+// One living inside a container as a named child (see createTimerBlock's
+// T_ON/T_OFF) skips every port entirely — nothing there ever wires it,
+// only reads its value by name (see runtime.js's helpers.childValue), so a
+// port would just be dead weight.
 const DATA_HTML = `
 container.style.display = 'flex';
 container.style.alignItems = 'flex-end';
@@ -601,11 +701,54 @@ if (!val) {
   val.style.cssText = 'font-size:16px;font-weight:700;color:var(--success,#3ecf5d);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
   container.appendChild(val);
 }
-// outputs.out, not the raw value prop directly — this is what makes an
-// incoming wire actually show up here instead of just the stored constant
-// (see the fn this block is seeded with).
+let lamp = container.querySelector('.data-fired');
+if (!lamp) {
+  lamp = document.createElement('div');
+  lamp.className = 'data-fired';
+  lamp.style.cssText = 'position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;border:1px solid var(--border,#8888);box-sizing:border-box;';
+  container.appendChild(lamp);
+}
+// outputs.out, not the raw value prop directly — so a value just latched
+// in over the block's own write port shows up here on the same tick it
+// arrives, before the prop write itself has been committed (see the fn
+// this block is seeded with, and runtime.js's __persist).
 const v = outputs.out;
 val.textContent = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
+
+// The lamp is the trigger's only local tell: in fires this block rather
+// than feeding it, and out already carries the stored value continuously,
+// so without this a signal arriving would look like nothing happening.
+// Driven by outputs.fired, which the fn computes from helpers.changed —
+// html runs every animation frame, not once per tick, so working the edge
+// out here instead would just eat it. The fn's pulse lasts a single tick
+// (~100ms), too brief to be sure of catching, so the moment it is seen is
+// timestamped and the lamp is held lit for a beat past it.
+if (outputs.fired) lamp.dataset.firedAt = String(Date.now());
+const lit = Date.now() - Number(lamp.dataset.firedAt || 0) < 180;
+lamp.style.transition = lit ? 'none' : 'background .3s ease-out, box-shadow .3s ease-out';
+lamp.style.background = lit ? 'var(--success, #3ecf5d)' : 'transparent';
+lamp.style.boxShadow = lit ? '0 0 6px var(--success, #3ecf5d)' : 'none';
+`.trim();
+
+// `in` is a trigger only — its value is deliberately never read, so
+// nothing wired into it can ever reach `out` (see this block's own note
+// above). `write` is the one input that changes what the block holds:
+// helpers.changed narrows it to the moment a value actually arrives or
+// changes, and __persist is what writes it onto the `value` prop for real
+// (see runtime.js) instead of only for the tick it showed up in — the
+// same thing typing into the dialog does, just from the diagram.
+// `fired` is not a port — nothing is wired to it and the runtime ignores an
+// outputs key with no port of that name. It exists for this block's own
+// html to draw (see DATA_HTML's lamp): a one-tick pulse marking the moment
+// a signal actually arrived on `in`, which is the only observable thing a
+// trigger does here.
+const DATA_FN = `
+const fired = inputs.in !== undefined && helpers.changed('in', inputs.in);
+const incoming = inputs.write;
+if (incoming !== undefined && helpers.changed('write', incoming)) {
+  return { out: incoming, fired, __persist: { value: incoming } };
+}
+return { out: props.value, fired };
 `.trim();
 
 const DATA_DIALOG = `
@@ -633,7 +776,7 @@ input.addEventListener('change', () => {
 container.appendChild(input);
 
 const hint = document.createElement('p');
-hint.textContent = "A plain constant — numbers work as-is, anything else is kept as text. Ignored while something is wired into this block's own in port; out follows the wire instead until it's disconnected.";
+hint.textContent = "The data this block holds — numbers work as-is, anything else is kept as text. A signal arriving on in only triggers the block: out always carries this value, never whatever came in. Wire the hidden write port (reveal it in the Inspector's port list) to set this value from the diagram instead of here.";
 hint.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';
 container.appendChild(hint);
 `.trim();
@@ -650,6 +793,7 @@ function createDataBlock({ name = 'Data', value = 0, x = 0, y = 0, width = 160, 
   // entirely, same as before — it's read directly by name, never wired.
   if (withPort) {
     addNamedPort(block, 'in', 'in');
+    addNamedPort(block, 'in', 'write', { hidden: true });
     addNamedPort(block, 'out', 'out');
   }
   // Marks this as one of noditron's "primitive" kinds (see runtime.js's
@@ -661,7 +805,7 @@ function createDataBlock({ name = 'Data', value = 0, x = 0, y = 0, width = 160, 
     id: generateId('prp'),
     name: 'fn',
     kind: 'value',
-    value: withPort ? 'return { out: inputs.in !== undefined ? inputs.in : props.value };' : 'return { out: props.value };',
+    value: withPort ? DATA_FN : 'return { out: props.value };',
   });
   block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: DATA_HTML });
   block.props.push({ id: generateId('prp'), name: 'dialog', kind: 'value', value: DATA_DIALOG });
@@ -976,6 +1120,7 @@ const CREATE_BY_KIND = {
   'digital-io': createDigitalIOBlock,
   and: createAndBlock,
   or: createOrBlock,
+  add: createAddBlock,
   gate: createGateBlock,
   not: createNotBlock,
   led: createLedBlock,
@@ -991,6 +1136,53 @@ function setProp(block, name, value) {
   const existing = (block.props || []).find((p) => p.name === name);
   if (existing) existing.value = value;
   else block.props.push({ id: generateId('prp'), name, kind: 'value', value });
+}
+
+// The built-in Data `fn` exactly as it stood before `in` became a trigger:
+// a wired input passed straight through to `out`, overriding the stored
+// constant. A block still carrying this string byte-for-byte has never
+// been hand-edited, which is what makes it safe to move onto the current
+// behavior (see createDataBlock's own note on what changed).
+// Each entry is a *previous built-in default*, never anything a person
+// typed: the original pass-through, then the first trigger version, which
+// had the `write` latch but computed no `fired` pulse yet and so left the
+// block with no way to show that it had been triggered at all.
+const LEGACY_DATA_FN_SOURCES = [
+  'return { out: inputs.in !== undefined ? inputs.in : props.value };',
+  [
+    'const incoming = inputs.write;',
+    "if (incoming !== undefined && helpers.changed('write', incoming)) {",
+    '  return { out: incoming, __persist: { value: incoming } };',
+    '}',
+    'return { out: props.value };',
+  ].join('\n'),
+];
+
+// Brings a Data block placed before that change up to what a freshly
+// created one now is: the current fn and html (so its trigger lamp exists
+// at all), plus the hidden `write` port it never had. Nothing here ever
+// overwrites a fn someone actually wrote — an unrecognised one means the
+// block is left completely alone, the same principle rehydrateKindLogic
+// below already works on. Returns whether it changed anything.
+//
+// This exists because the alternative is worse: an older diagram would
+// otherwise hold two kinds of Data block that look identical and behave
+// differently, one passing its input through and one triggering.
+export function migrateLegacyDataBlock(block) {
+  if ((block.props || []).find((p) => p.name === KIND_PROP)?.value !== 'data') return false;
+  const fn = (block.props || []).find((p) => p.name === 'fn');
+  if (!fn || !LEGACY_DATA_FN_SOURCES.includes(String(fn.value).trim())) return false;
+  fn.value = DATA_FN;
+  setProp(block, 'html', DATA_HTML);
+  // A Data block living as a container's named child has no ports at all
+  // and wants none (see createDataBlock's `withPort`) — but such a child
+  // never carried the legacy fn above either, so reaching here at all
+  // means this is a standalone one.
+  if (!(block.ports || []).some((pin) => logicalPortOf(block, pin)?.name === 'write')) {
+    addNamedPort(block, 'in', 'write', { hidden: true });
+  }
+  block.description = serializeBlockDescription(block);
+  return true;
 }
 
 // Only ever fills in what's actually missing — a block that already has
@@ -1011,7 +1203,13 @@ export function rehydrateKindLogic(block) {
   // block being rehydrated rather than needing its own stub.
   if (kind === 'data') {
     const withPort = (block.ports || []).length > 0;
-    setProp(block, 'fn', withPort ? 'return { out: inputs.in !== undefined ? inputs.in : props.value };' : 'return { out: props.value };');
+    setProp(block, 'fn', withPort ? DATA_FN : 'return { out: props.value };');
+    // A standalone Data block gets its trigger input alongside the rest of
+    // its logic — an import that restored ports faithfully already has it,
+    // so this only ever fires for one that predates the port existing.
+    if (withPort && !(block.ports || []).some((pin) => logicalPortOf(block, pin)?.name === 'write')) {
+      addNamedPort(block, 'in', 'write', { hidden: true });
+    }
     setProp(block, 'html', DATA_HTML);
     setProp(block, 'dialog', DATA_DIALOG);
     return;
@@ -1061,6 +1259,7 @@ export function mountPalette(nodigraph, container) {
 
   paletteButton('#3ecf5d', 'Bool', 'digital-io', () => createDigitalIOBlock(nodigraph));
   paletteButton('#4f8cff', 'Data', 'data', () => createStandaloneDataBlock(nodigraph));
+  paletteButton('#4f8cff', 'Add', 'add', () => createAddBlock(nodigraph));
   paletteButton('#c98a2f', 'AND gate', 'and', () => createAndBlock(nodigraph));
   paletteButton('#c98a2f', 'OR gate', 'or', () => createOrBlock(nodigraph));
   paletteButton('#c98a2f', 'Gate', 'gate', () => createGateBlock(nodigraph));

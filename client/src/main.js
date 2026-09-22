@@ -5,7 +5,7 @@
 // instant this module starts; a short poll covers that gap without this
 // file needing to know anything about nodigraph's internal timing.
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
-import { mountPalette, rehydrateKindLogic } from './palette.js';
+import { mountPalette, rehydrateKindLogic, migrateLegacyDataBlock } from './palette.js';
 import { mountLibrary } from './library.js';
 import { startRuntime, kindOf, getLastResult, getBoundaryOutput, setBoundaryInput, setBoundaryOutput, clearBoundaryOutput } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
@@ -21,7 +21,7 @@ import * as devkitCircuit from './devkitCircuit.js';
 // whole T_ON/T_OFF design *depends* on being a container). See
 // window.nodigraphCanEnter below and palette.js's own addKindProp calls
 // for where each one gets tagged.
-const NO_SUB_ARCHITECTURE_KINDS = ['digital-io', 'and', 'or', 'gate', 'not', 'data'];
+const NO_SUB_ARCHITECTURE_KINDS = ['digital-io', 'and', 'or', 'gate', 'not', 'data', 'add'];
 const ESP32_TEMPLATE_PROP_NAMES = ['render', 'html', 'dialog', 'allowedChildKinds', 'usbOrientation', 'boardVariant', 'pinMap', 'onboardControls'];
 
 function waitForNodigraph() {
@@ -196,6 +196,27 @@ async function boot() {
     }
   }
   refreshEsp32DevkitTemplates();
+
+  // Data blocks saved before `in` became a trigger (see palette.js's
+  // migrateLegacyDataBlock) are brought up to the current one here, once at
+  // load. The whole block tree, not project.listBlocks(), for the same
+  // reason refreshEsp32DevkitTemplates walks it: listBlocks() only returns
+  // the level currently on screen, and a block nested inside a container
+  // would otherwise stay on the old behavior until someone happened to
+  // navigate into it.
+  function migrateDataBlocks(level) {
+    if (!level) return false;
+    let changed = false;
+    for (const block of level.blocks.values()) {
+      if (migrateLegacyDataBlock(block)) changed = true;
+      if (block.children && migrateDataBlocks(block.children)) changed = true;
+    }
+    return changed;
+  }
+  if (migrateDataBlocks(nodigraph.project.rootBlock.children)) {
+    nodigraph.persist();
+    nodigraph.renderLoop.requestRender();
+  }
 
   // `connectionState` is a persisted prop, but the serial session it
   // describes is not — a Web Serial port only lives as long as the page
