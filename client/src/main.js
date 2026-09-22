@@ -107,16 +107,34 @@ async function boot() {
   window.nodigraphRehydrateBlock = rehydrateKindLogic;
 
   async function refreshEsp32DevkitTemplates() {
-    let templateBlock = null;
-    try {
-      const response = await fetch('/api/modules/esp32-devkit');
-      if (!response.ok) return;
-      const moduleDef = await response.json();
-      templateBlock = moduleDef?.block?.blocks?.[0] || null;
-    } catch {
-      return;
+    // Each board refreshes from the module it was installed from — its
+    // noditronModuleSource names it (see library.js) — not from
+    // esp32-devkit for all: every ESP32 variant shares the esp32-devkit
+    // kind, so an S3 board used to be handed the classic board's props, and
+    // its pins too. A board placed before modules recorded their source is
+    // a classic DevKit. Each module is fetched once per load.
+    const templates = new Map();
+    async function templateFor(moduleName) {
+      if (!templates.has(moduleName)) {
+        let template = null;
+        try {
+          const response = await fetch(`/api/modules/${encodeURIComponent(moduleName)}`);
+          if (response.ok) template = (await response.json())?.block?.blocks?.[0] || null;
+        } catch {
+          template = null;
+        }
+        templates.set(moduleName, template);
+      }
+      return templates.get(moduleName);
     }
-    if (!templateBlock) return;
+    function moduleNameOf(block) {
+      const source = (block.props || []).find((p) => p.name === 'noditronModuleSource')?.value;
+      try {
+        return JSON.parse(source || '{}').name || 'esp32-devkit';
+      } catch {
+        return 'esp32-devkit';
+      }
+    }
     let changed = false;
     // The whole block tree, not project.listBlocks() — that only returns
     // the level currently being viewed, so an ESP32 DevKit went un-refreshed
@@ -126,6 +144,8 @@ async function boot() {
     // boards running whatever dialog/render code they were pasted with,
     // which is what made a stale dialog outlive edits to the module.
     for (const { block } of devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children)) {
+      const templateBlock = await templateFor(moduleNameOf(block));
+      if (!templateBlock) continue;
       for (const name of ESP32_TEMPLATE_PROP_NAMES) {
         const src = (templateBlock.props || []).find((p) => p.name === name);
         if (!src) continue;

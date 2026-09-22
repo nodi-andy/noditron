@@ -2,7 +2,7 @@
   "noditronModule": 1,
   "name": "esp32-s3-devkit",
   "displayName": "ESP32-S3 DevKit",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "A blank ESP32-S3 dev board with no known firmware yet. Connect over Web Serial, detect the chip, and flash the ESP32-S3 build of logicMod (or any other .bin) directly from the browser.",
   "swatchColor": "#2f6fed",
   "block": {
@@ -66,7 +66,7 @@
             "id": "prp_mtg8v3ep8",
             "name": "allowedChildKinds",
             "kind": "value",
-            "value": "[\"digital-io\",\"timer\"]"
+            "value": "[\"digital-io\",\"timer\",\"and\",\"or\",\"not\",\"data\"]"
           }
         ],
         "hasChildren": true,
