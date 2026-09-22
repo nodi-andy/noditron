@@ -138,6 +138,24 @@ async function boot() {
           changed = true;
         }
       }
+      // Pins the module has gained since this board was placed (GPIO0 on
+      // the BOOT button, say): added by name, never moved or removed, so a
+      // wire already on a board pin is never disturbed. A pin on the top or
+      // bottom edge keeps its distance from the centre, where the board
+      // drawing puts USB, buttons and LED whatever the board's width.
+      for (const tplLogical of templateBlock.logicalPorts || []) {
+        if ((block.logicalPorts || []).some((lp) => lp.name === tplLogical.name)) continue;
+        const tplPin = (templateBlock.ports || []).find((pin) => pin.logicalId === tplLogical.id);
+        if (!tplPin) continue;
+        const logicalId = `${tplLogical.id}_${block.id}`;
+        let offset = tplPin.offset;
+        if (tplPin.side === 'top' || tplPin.side === 'bottom') {
+          offset = block.geometry.width / 2 + (tplPin.offset - templateBlock.geometry.width / 2);
+        }
+        block.logicalPorts = [...(block.logicalPorts || []), { ...tplLogical, id: logicalId }];
+        block.ports = [...(block.ports || []), { ...tplPin, id: `${tplPin.id}_${block.id}`, logicalId, offset }];
+        changed = true;
+      }
       if (changed) {
         const bd = await import('/nodigraph/src/model/BlockDescription.js');
         block.description = bd.serializeBlockDescription(block);
