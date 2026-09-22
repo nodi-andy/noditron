@@ -164,6 +164,22 @@ export function getBoundaryOutput(containerId, portId) {
 // notice.
 const boundaryInputCache = new Map(); // containerId -> Map(pinId -> value)
 
+// Sets what one of a container's own pins carries into its level, for a
+// pin fed from outside the diagram rather than by a wire one level up —
+// an ESP32 DevKit's GPIO read live off the board (see main.js's
+// syncLiveDigitalIO). Meant for evaluateLevel's `beforeLevel` hook, which
+// runs right before the level reads these: the parent level's own pass
+// rewrites the container's entries from its outer wires every tick, so a
+// value set here holds for exactly the tick it was set in.
+export function setBoundaryInput(containerId, pinId, value) {
+  let map = boundaryInputCache.get(containerId);
+  if (!map) {
+    map = new Map();
+    boundaryInputCache.set(containerId, map);
+  }
+  map.set(pinId, value);
+}
+
 function computeBoundaryOutputs(container, innerConnections, outputValueMap) {
   const out = new Map();
   for (const conn of innerConnections) {

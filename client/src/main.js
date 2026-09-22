@@ -7,7 +7,7 @@
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { mountPalette, rehydrateKindLogic } from './palette.js';
 import { mountLibrary } from './library.js';
-import { startRuntime, kindOf, getLastResult, getBoundaryOutput } from './runtime.js';
+import { startRuntime, kindOf, getLastResult, getBoundaryOutput, setBoundaryInput } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
 import { installHtmlOverlay } from './htmlOverlay.js';
 import { installDialogSystem } from './dialogSystem.js';
@@ -395,6 +395,16 @@ async function boot() {
     livePins.ensurePolling(container.id);
     const cached = livePins.getCachedPins(container.id);
     if (!cached) return;
+    // The board's own pins carry their live state into the level, so a
+    // block wired straight to one — a pin-less Bool on GPIO0's BOOT button,
+    // say — sees the hardware without needing a pin of its own. Only pins
+    // the uploaded circuit declares are reported, and only those are set.
+    const gpioByName = new Map(pinMapFor(container).filter((p) => p.gpio !== null && p.gpio !== undefined).map((p) => [p.label, Number(p.gpio)]));
+    for (const port of container.ports || []) {
+      const gpio = gpioByName.get(logicalName(container, port.id));
+      const live = gpio === undefined ? null : cached.find((p) => Number(p.gpio) === gpio);
+      if (live) setBoundaryInput(container.id, port.id, Boolean(live.state));
+    }
     let changed = false;
     for (const child of blocks) {
       if (kindOf(child) !== 'digital-io') continue;
