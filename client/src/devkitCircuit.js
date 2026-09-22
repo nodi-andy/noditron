@@ -54,6 +54,17 @@ function buildPinMappedDesign(esp, blocks, connections) {
       .map((pin) => [pin.label, Number(pin.gpio)]),
   );
   const syntheticPins = new Map();
+  // The board's USB pin (pinMap role usb-serial): a wire into it sends its
+  // value to the browser over USB (see serialConsole.buildMinimalDesign).
+  const usbPortNames = new Set(pinMapFor(esp).filter((pin) => pin.role === 'usb-serial').map((pin) => pin.label));
+  const usbTarget = {
+    id: `${esp.id}:usb`,
+    name: 'USB',
+    logicalPorts: [{ id: `${esp.id}:usb:io`, name: 'in', direction: 'in' }],
+    ports: [{ id: `${esp.id}:usb:port`, logicalId: `${esp.id}:usb:io`, side: 'left', offset: 20, manualOffset: true }],
+    props: [{ id: `${esp.id}:usb:kind`, name: 'noditronKind', kind: 'value', value: 'usb-serial' }],
+  };
+  let usesUsb = false;
 
   function syntheticPinBlock(gpio, direction) {
     const key = `${direction}:${gpio}`;
@@ -77,6 +88,11 @@ function buildPinMappedDesign(esp, blocks, connections) {
   function mapEndpoint(blockId, portId, isTarget) {
     if (blockId !== esp.id) return { blockId, portId };
     const portName = logicalName(esp, portId);
+    if (usbPortNames.has(portName)) {
+      if (!isTarget) return null; // reading from USB into the circuit is not a thing yet
+      usesUsb = true;
+      return { blockId: usbTarget.id, portId: usbTarget.ports[0].id };
+    }
     const gpio = gpioByPortName.get(portName);
     if (gpio === undefined) return null;
     const pin = syntheticPinBlock(gpio, isTarget ? 'output' : 'input');
@@ -97,7 +113,7 @@ function buildPinMappedDesign(esp, blocks, connections) {
     });
   }
 
-  return serialConsole.buildMinimalDesign([...blocks, ...syntheticPins.values()], mapped);
+  return serialConsole.buildMinimalDesign([...blocks, ...syntheticPins.values(), ...(usesUsb ? [usbTarget] : [])], mapped);
 }
 
 export function buildExternalDevkitDesign(esp, level) {

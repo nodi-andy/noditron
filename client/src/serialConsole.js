@@ -28,11 +28,67 @@ async function ensurePlain(blockId) {
   if (before?.esploader) closeConsole(blockId);
 }
 
+// What a circuit sends to the browser over USB (see buildMinimalDesign's
+// USB serial chains): a firmware `serial` block on UART0 prints each value
+// as its own console line, behind this prefix. Such lines arrive whenever
+// the circuit fires, not in answer to anything, so they are taken out of
+// the console stream the moment they are complete — before a command
+// waiting on its own reply can mistake one for it — and kept per board as
+// the latest value received (see getUsbValue).
+export const USB_SERIAL_PREFIX = '[USB] ';
+const USB_PREFIX_BYTES = new TextEncoder().encode(USB_SERIAL_PREFIX);
+const usbValues = new Map(); // blockId -> { value, at }
+
+// HIGH/LOW (a Timer's two edges) read as booleans, numbers as numbers,
+// anything else as the text it is — the same kinds a wire carries in the
+// simulation.
+function parseUsbValue(text) {
+  if (text === 'HIGH') return true;
+  if (text === 'LOW') return false;
+  if (/^-?\d+(\.\d+)?$/.test(text)) return Number(text);
+  return text;
+}
+
+// The last value the board's circuit sent over USB, or undefined when
+// nothing has arrived since the board was last (re)connected.
+export function getUsbValue(blockId) {
+  return usbValues.get(blockId);
+}
+
+function takeUsbLines(state, bytes) {
+  const parts = [];
+  let keepFrom = 0;
+  let lineStart = 0;
+  for (let i = 0; i < bytes.length; i += 1) {
+    if (bytes[i] !== 10) continue;
+    let match = i - lineStart >= USB_PREFIX_BYTES.length;
+    for (let k = 0; match && k < USB_PREFIX_BYTES.length; k += 1) {
+      if (bytes[lineStart + k] !== USB_PREFIX_BYTES[k]) match = false;
+    }
+    if (match) {
+      const text = new TextDecoder().decode(bytes.slice(lineStart + USB_PREFIX_BYTES.length, i)).replace(/\r$/, '');
+      usbValues.set(state.blockId, { value: parseUsbValue(text), at: Date.now() });
+      parts.push(bytes.slice(keepFrom, lineStart));
+      keepFrom = i + 1;
+    }
+    lineStart = i + 1;
+  }
+  if (!parts.length) return bytes;
+  parts.push(bytes.slice(keepFrom));
+  const out = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+  let offset = 0;
+  for (const p of parts) {
+    out.set(p, offset);
+    offset += p.length;
+  }
+  return out;
+}
+
 function appendBytes(state, chunk) {
   const merged = new Uint8Array(state.queue.length + chunk.length);
   merged.set(state.queue);
   merged.set(chunk, state.queue.length);
-  state.queue = merged;
+  state.queue = takeUsbLines(state, merged);
   drainWaiters(state);
 }
 
@@ -84,7 +140,7 @@ export function openConsole(blockId) {
   if (!session) throw new Error('Not connected — pick a serial port first.');
   let state = consoles.get(blockId);
   if (state) return state;
-  state = { queue: new Uint8Array(0), waiters: [], closed: false };
+  state = { queue: new Uint8Array(0), waiters: [], closed: false, blockId };
   consoles.set(blockId, state);
   session.transport.rawRead((chunk) => appendBytes(state, chunk), () => state.closed).catch(() => {});
   return state;
@@ -95,6 +151,7 @@ export function openConsole(blockId) {
 // its own doc), so a silent device would otherwise hang this forever
 // without an explicit cancel, same reasoning as Transport.disconnect()'s.
 export function closeConsole(blockId) {
+  usbValues.delete(blockId);
   const state = consoles.get(blockId);
   if (!state) return;
   state.closed = true;
@@ -304,7 +361,7 @@ export async function readDesign(blockId, { timeoutMs = 4000 } = {}) {
 // collision.
 function collapsePassThroughs(childBlocks, connections) {
   const propOf = (block, name) => (block.props || []).find((p) => p.name === name)?.value;
-  const passThrough = new Set(
+  const pinlessBools = new Set(
     childBlocks
       .filter((b) => propOf(b, 'noditronKind') === 'digital-io')
       .filter((b) => {
@@ -313,6 +370,12 @@ function collapsePassThroughs(childBlocks, connections) {
       })
       .map((b) => b.id),
   );
+  // A Data block fed through its `in` passes that value on too — its own
+  // fn is `inputs.in !== undefined ? inputs.in : props.value` — and so is
+  // traced through the same way. One fed by nothing is a real source: its
+  // own value (see the USB serial chains in buildMinimalDesign).
+  const dataBlocks = new Set(childBlocks.filter((b) => propOf(b, 'noditronKind') === 'data').map((b) => b.id));
+  const passThrough = new Set([...pinlessBools, ...dataBlocks]);
   if (!passThrough.size) return connections;
   const byId = new Map(childBlocks.map((b) => [b.id, b]));
   const portNameOf = (blockId, portId) => {
@@ -332,7 +395,7 @@ function collapsePassThroughs(childBlocks, connections) {
       if (!feed) break;
       source = feed;
     }
-    if (passThrough.has(source.sourceBlockId)) continue; // a Bool fed by nothing: a manual value the board cannot hold
+    if (pinlessBools.has(source.sourceBlockId)) continue; // a Bool fed by nothing: a manual value the board cannot hold
     out.push({ ...conn, sourceBlockId: source.sourceBlockId, sourcePortId: source.sourcePortId });
   }
   return out;
@@ -495,6 +558,43 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     placeBool(target, 3, row * 3);
     blocks.push({ id: nextBlockId, type: 'belt', gx: 2, gy: row * 3, data: { dir: 'E' } });
     nextBlockId += 1;
+    row += 1;
+  }
+
+  // USB serial: a wire into the board's USB pin (see devkitCircuit's
+  // usb-serial synthetic target) ends in a firmware `serial` block on UART0,
+  // which prints each value it receives to the USB console behind
+  // USB_SERIAL_PREFIX, for the browser to pick up (see getUsbValue).
+  //   Data (fed by nothing): its value, resent on a timer every
+  //     USB_RESEND_MS so the browser has it whenever it connects —
+  //     timer @ (0,r), data @ (3,r), serial @ (6,r), belts between.
+  //   Anything placeSource can run (a Timer, a GPIO input): its own value,
+  //     straight in — source @ (0,r), serial @ (3,r).
+  // Same single-row shape and 3-row pitch as the pairs above.
+  const USB_RESEND_MS = 500;
+  const kindOfBlock = (c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value;
+  const usbTargets = childBlocks.filter((c) => kindOfBlock(c) === 'usb-serial');
+  for (const conn of connections) {
+    if (!usbTargets.some((c) => c.id === conn.targetBlockId)) continue;
+    const source = childBlocks.find((c) => c.id === conn.sourceBlockId);
+    if (!source || idByChildId.has(source.id)) continue;
+    const base = row * 3;
+    const serialBlock = (gx) => ({ id: nextBlockId++, type: 'serial', gx, gy: base, data: { uart: 0, baud: 115200, prefix: USB_SERIAL_PREFIX } });
+    const belt = (gx) => ({ id: nextBlockId++, type: 'belt', gx, gy: base, data: { dir: 'E' } });
+    if (kindOfBlock(source) === 'data') {
+      const value = String((source.props || []).find((p) => p.name === 'value')?.value ?? '');
+      blocks.push({ id: nextBlockId++, type: 'timer', gx: 0, gy: base, data: { onTime: USB_RESEND_MS, offTime: USB_RESEND_MS, mode: 'periodic' } });
+      blocks.push(belt(2));
+      const dataId = nextBlockId++;
+      idByChildId.set(source.id, dataId);
+      blocks.push({ id: dataId, type: 'data', gx: 3, gy: base, data: { value } });
+      blocks.push(belt(5));
+      blocks.push(serialBlock(6));
+    } else {
+      if (!placeSource(source, 0, base)) continue;
+      blocks.push(belt(2));
+      blocks.push(serialBlock(3));
+    }
     row += 1;
   }
 

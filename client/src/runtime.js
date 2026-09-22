@@ -131,6 +131,24 @@ function compiledFn(blockId, source) {
 // portId) rather than just containerId, since a container can expose more
 // than one boundary port.
 const boundaryOutputCache = new Map(); // containerId -> Map(portId -> value)
+
+// Values a container's own pins carry OUT to the level above that come
+// from outside the diagram instead of from a wire inside — what an ESP32
+// DevKit's circuit actually sent the browser over USB (see main.js's
+// syncLiveDigitalIO). Laid over the computed values each time the
+// container's level is evaluated; set and cleared by the host.
+const boundaryOutputOverrides = new Map(); // containerId -> Map(portId -> value)
+export function setBoundaryOutput(containerId, portId, value) {
+  let map = boundaryOutputOverrides.get(containerId);
+  if (!map) {
+    map = new Map();
+    boundaryOutputOverrides.set(containerId, map);
+  }
+  map.set(portId, value);
+}
+export function clearBoundaryOutput(containerId, portId) {
+  boundaryOutputOverrides.get(containerId)?.delete(portId);
+}
 export function getBoundaryOutput(containerId, portId) {
   return boundaryOutputCache.get(containerId)?.get(portId);
 }
@@ -473,7 +491,12 @@ function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
   }
   const connections = [...container.children.connections.values()];
   const result = evaluateBlocksAndConnections(blocks, connections, outputValue);
-  boundaryOutputCache.set(container.id, computeBoundaryOutputs(container, connections, result.outputValue));
+  const boundaryOut = computeBoundaryOutputs(container, connections, result.outputValue);
+  for (const [portId, value] of boundaryOutputOverrides.get(container.id) || []) {
+    if (value === undefined) boundaryOut.delete(portId);
+    else boundaryOut.set(portId, value);
+  }
+  boundaryOutputCache.set(container.id, boundaryOut);
   if (container === currentLevelBlock) results.current = result;
 }
 

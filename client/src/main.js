@@ -7,7 +7,7 @@
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { mountPalette, rehydrateKindLogic } from './palette.js';
 import { mountLibrary } from './library.js';
-import { startRuntime, kindOf, getLastResult, getBoundaryOutput, setBoundaryInput } from './runtime.js';
+import { startRuntime, kindOf, getLastResult, getBoundaryOutput, setBoundaryInput, setBoundaryOutput, clearBoundaryOutput } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
 import { installHtmlOverlay } from './htmlOverlay.js';
 import { installDialogSystem } from './dialogSystem.js';
@@ -410,8 +410,20 @@ async function boot() {
   // belt-routed circuit running on the board itself, never from a tick.
   function syncLiveDigitalIO(container, blocks) {
     if (kindOf(container) !== 'esp32-devkit') return;
-    if ((container.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running') return;
-    if (!serialFlash.getSession(container.id)) return; // never connected this page load, or stale prop from before a reload
+    // The board's USB pin (pinMap role usb-serial) carries, to the level
+    // above, what the board's circuit actually sent over USB — only while
+    // the board is connected and running; otherwise the simulation's own
+    // value for it stands.
+    const usbPortNames = new Set(pinMapFor(container).filter((p) => p.role === 'usb-serial').map((p) => p.label));
+    const usbPorts = (container.ports || []).filter((port) => usbPortNames.has(logicalName(container, port.id)));
+    const live =
+      (container.props || []).find((p) => p.name === 'connectionState')?.value === 'connected:running'
+      && Boolean(serialFlash.getSession(container.id)); // never connected this page load, or stale prop from before a reload
+    for (const port of usbPorts) {
+      if (live) setBoundaryOutput(container.id, port.id, serialConsole.getUsbValue(container.id)?.value);
+      else clearBoundaryOutput(container.id, port.id);
+    }
+    if (!live) return;
     livePins.ensurePolling(container.id);
     const cached = livePins.getCachedPins(container.id);
     if (!cached) return;
