@@ -1,18 +1,10 @@
 /* noditron's own additions on top of nodigraph's unmodified stylesheet
    (loaded first, see index.html) — the CSS variables it defines (--accent,
    --border, --bg-well, ...) are reused here rather than redeclared, so
-   this stays in sync with whichever theme (light/dark) nodigraph itself is
-   currently showing. */
+   this stays in sync with nodigraph's light canvas and editor chrome. */
 
-/* Top-right, not top-left — nodigraph's own "go to parent" FAB
-   (#fab-parent, top-left under the topbar — see nodigraph's styles.css
-   .fab.fab-left) lives exactly where this used to sit, and a palette
-   floating on top of it made that button unreachable. Top-right is clear
-   of every one of nodigraph's own floating controls (add/delete/colour/
-   font are all bottom corners; parent-nav is top-left) — the one thing
-   that *does* land here is the Inspector drawer when it's open, handled
-   the same way nodigraph shifts its own add-block FAB out of that panel's
-   way (see the body.inspector-open rule below). */
+/* Keep the palette below the top-right HUD and clear of the Inspector.
+   On small screens it sits above nodigraph's bottom control bar. */
 #noditron-palette {
   position: fixed;
   top: calc(var(--topbar-height, 44px) + 22px);
@@ -22,7 +14,7 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px;
-  background: var(--bg-panel, #fff);
+  background: var(--bg-surface, #fff);
   border: 1px solid var(--border);
   border-radius: 8px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
@@ -33,7 +25,7 @@
 
 @media (min-width: 769px) {
   body.inspector-open #noditron-palette {
-    right: calc(12px + 300px);
+    right: calc(12px + var(--inspector-width, 300px));
   }
 }
 

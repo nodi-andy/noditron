@@ -65,15 +65,23 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
     return el;
   }
 
-  function drawBlock(ctx, block) {
+  function drawBlock(ctx, block, { contentAlpha = 1 } = {}) {
     const source = block.props?.find((p) => p.name === 'html')?.value;
     if (!source || !String(source).trim()) return;
+
+    if (contentAlpha <= 0) {
+      const el = containers.get(block.id);
+      if (el) el.style.visibility = 'hidden';
+      return;
+    }
 
     const canvas = document.getElementById('scene-canvas');
     const rect = canvas.getBoundingClientRect();
     const { camera } = nodigraph;
     const topLeft = camera.worldToScreen(block.geometry.x, block.geometry.y);
     const el = containerFor(block.id);
+    el.style.visibility = 'visible';
+    el.style.opacity = String(contentAlpha);
     el.style.left = `${rect.left + topLeft.x}px`;
     el.style.top = `${rect.top + topLeft.y}px`;
     el.style.width = `${block.geometry.width * camera.zoom}px`;

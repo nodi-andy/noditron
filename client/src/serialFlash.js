@@ -173,7 +173,7 @@ export async function reopenPlain(blockId, baudrate = 115200) {
   const transport = new Transport(session.port, true);
   await transport.connect(baudrate);
   await releaseResetLines(transport);
-  const fresh = { port: session.port, transport, esploader: null, chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };
+  const fresh = { port: session.port, transport, esploader: null, bootloaderDirty: false, chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };
   sessions.set(blockId, fresh);
   return fresh;
 }
@@ -185,7 +185,11 @@ export async function reopenPlain(blockId, baudrate = 115200) {
 export async function ensureOpenPlain(blockId, baudrate = 115200) {
   const session = sessions.get(blockId);
   if (!session) throw new Error('Not connected — pick a serial port first.');
-  if (session.esploader) return reopenPlain(blockId, baudrate);
+  // `bootloaderDirty`, not just `esploader`: a detect that *failed* leaves
+  // the port just as tainted as one that worked — esptool-js has already
+  // opened it and started its read loop by the time the sync gives up —
+  // and only a close/reopen gets the reader lock back for plain text.
+  if (session.esploader || session.bootloaderDirty) return reopenPlain(blockId, baudrate);
   if (!session.port.readable) {
     await session.transport.connect(baudrate);
     await releaseResetLines(session.transport);
@@ -210,10 +214,29 @@ export async function detectChip(blockId, { onLog } = {}) {
   }
   const transport = new Transport(session.port, true);
   session.transport = transport;
+  session.bootloaderDirty = true; // see ensureOpenPlain — true even if the sync below fails
   const terminal = { clean() {}, writeLine: (line) => onLog?.(line), write: (line) => onLog?.(line) };
-  session.esploader = new ESPLoader({ transport, baudrate: 115200, terminal });
-  session.chipName = await session.esploader.main();
-  session.bootloaderOffset = session.esploader.chip.BOOTLOADER_FLASH_OFFSET;
+  const esploader = new ESPLoader({ transport, baudrate: 115200, terminal });
+  // Only published to the session once it is actually connected. A loader
+  // whose main() threw has no `.chip`, and writeFlash reads
+  // chip.BOOTLOADER_FLASH_OFFSET straight off it — so leaving a failed one
+  // in place turned the next Install into "Cannot read properties of
+  // undefined (reading 'BOOTLOADER_FLASH_OFFSET')", which says nothing
+  // about the board never having answered in the first place.
+  try {
+    session.chipName = await esploader.main();
+  } catch (err) {
+    session.esploader = null;
+    session.chipName = null;
+    session.bootloaderOffset = null;
+    // esptool-js has already retried its reset sequence seven times by
+    // here, so this is the board not entering download mode rather than a
+    // timing fluke — which on most DevKits is the auto-reset circuit and
+    // is worked around by hand.
+    throw new Error(`${err.message} — hold the board's BOOT/FLASH button, tap EN/RST, then try again.`);
+  }
+  session.esploader = esploader;
+  session.bootloaderOffset = esploader.chip.BOOTLOADER_FLASH_OFFSET;
   return { chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };
 }
 
@@ -225,8 +248,19 @@ export async function detectChip(blockId, { onLog } = {}) {
 // a board whose flash chip might be anything; the dialog never asks the
 // user to pick those, only the per-file address.
 export async function flash(blockId, files, { eraseAll = false, onProgress, onLog } = {}) {
-  const session = sessions.get(blockId);
-  if (!session?.esploader) throw new Error('Detect the chip before flashing.');
+  let session = sessions.get(blockId);
+  if (!session) throw new Error('Not connected — pick a serial port first.');
+  // Install is reachable with no live bootloader session behind it: the
+  // firmware panel is shown whenever the console said nothing, including
+  // when the chip detect that followed also failed (see the dialog's
+  // afterPortOpen). Rather than refusing, connect now — the board may
+  // well have been put into download mode by hand since — and let the
+  // connect error speak for itself if it still will not answer.
+  if (!session.esploader) {
+    onLog?.('No bootloader session — connecting to the chip first...');
+    await detectChip(blockId, { onLog });
+    session = sessions.get(blockId);
+  }
   const fileArray = [];
   for (const f of files) {
     const data = f.bytes ? f.bytes : new Uint8Array(await f.file.arrayBuffer());

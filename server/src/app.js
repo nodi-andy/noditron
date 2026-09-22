@@ -14,6 +14,7 @@
 import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 
@@ -24,6 +25,40 @@ const MODULES_DIR = path.join(here, '..', '..', 'modules');
 // somewhere else on this machine.
 const NODIGRAPH_CLIENT_DIR = process.env.NODIGRAPH_CLIENT_DIR || path.join(here, '..', '..', '..', 'nodigraph', 'client');
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8090;
+
+// The embedded editor requests /api/version and labels it "nodigraph".
+// Report the editor's revision, not noditron's: locally it comes from the
+// sibling checkout; Docker stamps the exact vendored commit before removing
+// that checkout. No copied editor sources need updating in this repo.
+function readNodigraphBuildInfo() {
+  const root = path.resolve(NODIGRAPH_CLIENT_DIR, '..');
+  let stamped = {};
+  try {
+    stamped = JSON.parse(fs.readFileSync(path.join(root, 'build-info.json'), 'utf8'));
+  } catch {
+    // Local checkouts do not need a build stamp.
+  }
+  let commit = stamped.commit;
+  if ((!commit || commit === 'unknown') && fs.existsSync(path.join(root, '.git'))) {
+    try {
+      commit = execFileSync('git', ['-C', root, 'rev-parse', 'HEAD'], {
+        encoding: 'utf8', windowsHide: true, timeout: 1000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+    } catch {
+      // A plain client directory can still be served without Git installed.
+    }
+  }
+  return {
+    commit: commit || 'unknown',
+    builtAt: stamped.builtAt || null,
+    revision: process.env.K_REVISION || null,
+    service: process.env.K_SERVICE || null,
+    startedAt: new Date().toISOString(),
+  };
+}
+
+const NODIGRAPH_BUILD_INFO = readNodigraphBuildInfo();
 
 // Same reasoning as nodigraph's own PERSISTENCE_DISABLED (see that
 // server's own comment on it) — `savedProject` below is one variable
@@ -170,6 +205,12 @@ function handlePutProject(req, res) {
 
 const server = http.createServer((req, res) => {
   const [urlPath] = req.url.split('?');
+
+  if (urlPath === '/api/version' && req.method === 'GET') {
+    res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+    res.end(JSON.stringify(NODIGRAPH_BUILD_INFO));
+    return;
+  }
 
   if (urlPath === '/api/project' && req.method === 'GET') {
     handleGetProject(res);

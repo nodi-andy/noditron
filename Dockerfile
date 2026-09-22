@@ -45,6 +45,7 @@ ADD https://api.github.com/repos/nodi-andy/nodigraph/commits/main /tmp/nodigraph
 RUN git clone --depth 1 https://github.com/nodi-andy/nodigraph.git /tmp/nodigraph \
   && mkdir -p /usr/src/nodigraph \
   && cp -r /tmp/nodigraph/client /usr/src/nodigraph/client \
+  && node -e "const fs = require('node:fs'); const cp = require('node:child_process'); fs.writeFileSync('/usr/src/nodigraph/build-info.json', JSON.stringify({ commit: cp.execFileSync('git', ['-C', '/tmp/nodigraph', 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), builtAt: new Date().toISOString() }));" \
   && rm -rf /tmp/nodigraph
 
 ENV NODE_ENV=production

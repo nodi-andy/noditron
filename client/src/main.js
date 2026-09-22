@@ -51,10 +51,19 @@ async function boot() {
   const canvasIndicators = installCanvasIndicators(nodigraph);
   const htmlOverlay = installHtmlOverlay(nodigraph, dialogSystem.openDialog);
 
-  window.nodigraphDrawBlock = (ctx, block) => {
-    canvasIndicators.drawBlock(ctx, block);
-    htmlOverlay.drawBlock(ctx, block);
-    dialogSystem.drawBlock(ctx, block);
+  window.nodigraphDrawBlock = (ctx, block, { contentAlpha = 1 } = {}) => {
+    // The infinite canvas fades the block's face as its interior opens.
+    // Custom board artwork must fade too, or it paints over the circuit.
+    // Keep connection controls visible while the host still blocks entry.
+    if (window.nodigraphCanEnter?.(block) === false) contentAlpha = 1;
+    ctx.save();
+    ctx.globalAlpha *= contentAlpha;
+    if (contentAlpha > 0) {
+      canvasIndicators.drawBlock(ctx, block);
+      dialogSystem.drawBlock(ctx, block);
+    }
+    ctx.restore();
+    htmlOverlay.drawBlock(ctx, block, { contentAlpha });
   };
 
   // The cog button in nodigraph's own bottom-left selection FAB stack (see

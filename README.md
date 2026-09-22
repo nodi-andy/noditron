@@ -59,6 +59,8 @@ node src/app.js
 
 Then open `http://localhost:8090`. `NODIGRAPH_CLIENT_DIR` overrides where nodigraph's client is read from if it isn't a sibling directory; `PORT` overrides the port.
 
+Local nodigraph changes are served directly from that checkout: reload noditron to pick up editor updates, including automatic YAML layout, socket/plug rendering, and wire animation. Restart the server after changing the nodigraph revision so `/api/version` and the browser console report the current editor commit. Docker builds record the exact vendored nodigraph revision for the same endpoint.
+
 ### Deploy
 
 The `Dockerfile` at the repo root builds and serves the whole app — it vendors nodigraph's client at build time (no sibling checkout needed in production) via a shallow clone from GitHub. For Cloud Run:
