@@ -76,13 +76,17 @@ export const FIRMWARE_PRESETS = [
     id: 'logic-esp32-s3',
     label: 'Logic — ESP32-S3',
     chip: 'ESP32-S3',
-    // App-image-only for now — this core builds its own bootloader per
-    // target rather than shipping one project-wide (see conucon's own
-    // comment on why classic and S3 differ here), and nobody's hit this on
-    // an S3 board yet. Same risk as the classic preset used to carry:
-    // fine over a board that already has a bootloader/partition table,
-    // not yet a from-scratch blank-chip flash.
-    parts: [{ path: 'firmware-assets/logic/esp32-s3.bin', address: 0x10000 }],
+    parts: [
+      // 0x0, not the classic's 0x1000. The Arduino core states this per
+      // chip family and the two genuinely differ — its boards.txt has
+      // `esp32s3.build.bootloader_addr=0x0` against
+      // `esp32.build.bootloader_addr=0x1000` — so an S3 bootloader written
+      // where a classic one goes leaves a board that never boots.
+      { path: 'firmware-assets/logic/esp32-s3-bootloader.bin', address: 0x0 },
+      { path: 'firmware-assets/logic/esp32-s3-partitions.bin', address: 0x8000 },
+      BOOT_APP0,
+      { path: 'firmware-assets/logic/esp32-s3.bin', address: 0x10000 },
+    ],
   },
 ];
 

@@ -2,8 +2,8 @@
   "noditronModule": 1,
   "name": "esp32-s3-devkit",
   "displayName": "ESP32-S3 DevKit",
-  "version": "1.4.0",
-  "description": "A blank ESP32-S3 dev board with no known firmware yet. Connect over Web Serial, detect the chip, and flash the ESP32-S3 build of logicMod (or any other .bin) directly from the browser.",
+  "version": "1.5.0",
+  "description": "An ESP32-S3-DevKitC-1 with every header pin on the block edge, USB at the top, and the pins conucon's Logic Module reserves on an S3 (native USB, and everything not brought out) marked as such. Connect over Web Serial, detect the chip, and flash the ESP32-S3 build of logicMod from the browser.",
   "swatchColor": "#2f6fed",
   "block": {
     "format": "nodigraph/clipboard-v1",
@@ -17,14 +17,601 @@
         "geometry": {
           "x": 0,
           "y": 0,
-          "width": 240,
-          "height": 160
+          "width": 300,
+          "height": 940
         },
         "style": {
           "color": "#3b6fa0"
         },
-        "logicalPorts": [],
-        "ports": [],
+        "logicalPorts": [
+          {
+            "id": "io_esp32s3_left_gnd_1",
+            "name": "GND",
+            "direction": null,
+            "description": "ground"
+          },
+          {
+            "id": "io_esp32s3_left_g19_1",
+            "name": "G19",
+            "direction": null,
+            "description": "GPIO19 — unavailable: native USB D− — reconfiguring it breaks the USB port"
+          },
+          {
+            "id": "io_esp32s3_left_g20_1",
+            "name": "G20",
+            "direction": null,
+            "description": "GPIO20 — unavailable: native USB D+ — reconfiguring it breaks the USB port"
+          },
+          {
+            "id": "io_esp32s3_left_g21_1",
+            "name": "G21",
+            "direction": null,
+            "description": "GPIO21"
+          },
+          {
+            "id": "io_esp32s3_left_g47_1",
+            "name": "G47",
+            "direction": null,
+            "description": "GPIO47"
+          },
+          {
+            "id": "io_esp32s3_left_g48_1",
+            "name": "G48",
+            "direction": null,
+            "description": "GPIO48 — the on-board RGB LED"
+          },
+          {
+            "id": "io_esp32s3_left_g45_1",
+            "name": "G45",
+            "direction": null,
+            "description": "GPIO45 — strapping pin (VDD_SPI voltage)"
+          },
+          {
+            "id": "io_esp32s3_left_g0_1",
+            "name": "G0",
+            "direction": null,
+            "description": "GPIO0 — strapping pin, and the BOOT button"
+          },
+          {
+            "id": "io_esp32s3_left_g35_1",
+            "name": "G35",
+            "direction": null,
+            "description": "GPIO35"
+          },
+          {
+            "id": "io_esp32s3_left_g36_1",
+            "name": "G36",
+            "direction": null,
+            "description": "GPIO36"
+          },
+          {
+            "id": "io_esp32s3_left_g37_1",
+            "name": "G37",
+            "direction": null,
+            "description": "GPIO37"
+          },
+          {
+            "id": "io_esp32s3_left_g38_1",
+            "name": "G38",
+            "direction": null,
+            "description": "GPIO38"
+          },
+          {
+            "id": "io_esp32s3_left_g39_1",
+            "name": "G39",
+            "direction": null,
+            "description": "GPIO39"
+          },
+          {
+            "id": "io_esp32s3_left_g40_1",
+            "name": "G40",
+            "direction": null,
+            "description": "GPIO40"
+          },
+          {
+            "id": "io_esp32s3_left_g41_1",
+            "name": "G41",
+            "direction": null,
+            "description": "GPIO41"
+          },
+          {
+            "id": "io_esp32s3_left_g42_1",
+            "name": "G42",
+            "direction": null,
+            "description": "GPIO42"
+          },
+          {
+            "id": "io_esp32s3_left_g2_1",
+            "name": "G2",
+            "direction": null,
+            "description": "GPIO2"
+          },
+          {
+            "id": "io_esp32s3_left_g1_1",
+            "name": "G1",
+            "direction": null,
+            "description": "GPIO1"
+          },
+          {
+            "id": "io_esp32s3_left_rx0_1",
+            "name": "RX0",
+            "direction": null,
+            "description": "GPIO44 — UART0 RX — the USB-UART console"
+          },
+          {
+            "id": "io_esp32s3_left_tx0_1",
+            "name": "TX0",
+            "direction": null,
+            "description": "GPIO43 — UART0 TX — the USB-UART console"
+          },
+          {
+            "id": "io_esp32s3_left_gnd_2",
+            "name": "GND",
+            "direction": null,
+            "description": "ground"
+          },
+          {
+            "id": "io_esp32s3_left_gnd_3",
+            "name": "GND",
+            "direction": null,
+            "description": "ground"
+          },
+          {
+            "id": "io_esp32s3_right_gnd_4",
+            "name": "GND",
+            "direction": null,
+            "description": "ground"
+          },
+          {
+            "id": "io_esp32s3_right_5v_1",
+            "name": "5V",
+            "direction": null,
+            "description": "power"
+          },
+          {
+            "id": "io_esp32s3_right_g14_1",
+            "name": "G14",
+            "direction": null,
+            "description": "GPIO14"
+          },
+          {
+            "id": "io_esp32s3_right_g13_1",
+            "name": "G13",
+            "direction": null,
+            "description": "GPIO13"
+          },
+          {
+            "id": "io_esp32s3_right_g12_1",
+            "name": "G12",
+            "direction": null,
+            "description": "GPIO12"
+          },
+          {
+            "id": "io_esp32s3_right_g11_1",
+            "name": "G11",
+            "direction": null,
+            "description": "GPIO11"
+          },
+          {
+            "id": "io_esp32s3_right_g10_1",
+            "name": "G10",
+            "direction": null,
+            "description": "GPIO10"
+          },
+          {
+            "id": "io_esp32s3_right_g9_1",
+            "name": "G9",
+            "direction": null,
+            "description": "GPIO9 — I2C SCL, as the Logic Module configures it on an S3"
+          },
+          {
+            "id": "io_esp32s3_right_g46_1",
+            "name": "G46",
+            "direction": null,
+            "description": "GPIO46 — strapping pin, input-only on some S3 revisions"
+          },
+          {
+            "id": "io_esp32s3_right_g3_1",
+            "name": "G3",
+            "direction": null,
+            "description": "GPIO3 — strapping pin (JTAG source select)"
+          },
+          {
+            "id": "io_esp32s3_right_g8_1",
+            "name": "G8",
+            "direction": null,
+            "description": "GPIO8 — I2C SDA, as the Logic Module configures it on an S3"
+          },
+          {
+            "id": "io_esp32s3_right_g18_1",
+            "name": "G18",
+            "direction": null,
+            "description": "GPIO18"
+          },
+          {
+            "id": "io_esp32s3_right_g17_1",
+            "name": "G17",
+            "direction": null,
+            "description": "GPIO17"
+          },
+          {
+            "id": "io_esp32s3_right_g16_1",
+            "name": "G16",
+            "direction": null,
+            "description": "GPIO16 — CAN RX by default (see the CAN block)"
+          },
+          {
+            "id": "io_esp32s3_right_g15_1",
+            "name": "G15",
+            "direction": null,
+            "description": "GPIO15 — CAN TX by default (see the CAN block)"
+          },
+          {
+            "id": "io_esp32s3_right_g7_1",
+            "name": "G7",
+            "direction": null,
+            "description": "GPIO7"
+          },
+          {
+            "id": "io_esp32s3_right_g6_1",
+            "name": "G6",
+            "direction": null,
+            "description": "GPIO6"
+          },
+          {
+            "id": "io_esp32s3_right_g5_1",
+            "name": "G5",
+            "direction": null,
+            "description": "GPIO5"
+          },
+          {
+            "id": "io_esp32s3_right_g4_1",
+            "name": "G4",
+            "direction": null,
+            "description": "GPIO4"
+          },
+          {
+            "id": "io_esp32s3_right_rst_1",
+            "name": "RST",
+            "direction": null,
+            "description": "enable"
+          },
+          {
+            "id": "io_esp32s3_right_3v3_1",
+            "name": "3V3",
+            "direction": null,
+            "description": "power"
+          },
+          {
+            "id": "io_esp32s3_right_3v3_2",
+            "name": "3V3",
+            "direction": null,
+            "description": "power"
+          },
+          {
+            "id": "io_esp32s3_top_usb_1",
+            "name": "USB",
+            "direction": null,
+            "description": "usb-serial"
+          }
+        ],
+        "ports": [
+          {
+            "id": "prt_esp32s3_left_gnd_1",
+            "logicalId": "io_esp32s3_left_gnd_1",
+            "side": "left",
+            "offset": 30,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g19_1",
+            "logicalId": "io_esp32s3_left_g19_1",
+            "side": "left",
+            "offset": 70,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g20_1",
+            "logicalId": "io_esp32s3_left_g20_1",
+            "side": "left",
+            "offset": 110,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g21_1",
+            "logicalId": "io_esp32s3_left_g21_1",
+            "side": "left",
+            "offset": 150,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g47_1",
+            "logicalId": "io_esp32s3_left_g47_1",
+            "side": "left",
+            "offset": 190,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g48_1",
+            "logicalId": "io_esp32s3_left_g48_1",
+            "side": "left",
+            "offset": 230,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g45_1",
+            "logicalId": "io_esp32s3_left_g45_1",
+            "side": "left",
+            "offset": 270,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g0_1",
+            "logicalId": "io_esp32s3_left_g0_1",
+            "side": "left",
+            "offset": 310,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g35_1",
+            "logicalId": "io_esp32s3_left_g35_1",
+            "side": "left",
+            "offset": 350,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g36_1",
+            "logicalId": "io_esp32s3_left_g36_1",
+            "side": "left",
+            "offset": 390,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g37_1",
+            "logicalId": "io_esp32s3_left_g37_1",
+            "side": "left",
+            "offset": 430,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g38_1",
+            "logicalId": "io_esp32s3_left_g38_1",
+            "side": "left",
+            "offset": 470,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g39_1",
+            "logicalId": "io_esp32s3_left_g39_1",
+            "side": "left",
+            "offset": 510,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g40_1",
+            "logicalId": "io_esp32s3_left_g40_1",
+            "side": "left",
+            "offset": 550,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g41_1",
+            "logicalId": "io_esp32s3_left_g41_1",
+            "side": "left",
+            "offset": 590,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g42_1",
+            "logicalId": "io_esp32s3_left_g42_1",
+            "side": "left",
+            "offset": 630,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g2_1",
+            "logicalId": "io_esp32s3_left_g2_1",
+            "side": "left",
+            "offset": 670,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_g1_1",
+            "logicalId": "io_esp32s3_left_g1_1",
+            "side": "left",
+            "offset": 710,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_rx0_1",
+            "logicalId": "io_esp32s3_left_rx0_1",
+            "side": "left",
+            "offset": 750,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_tx0_1",
+            "logicalId": "io_esp32s3_left_tx0_1",
+            "side": "left",
+            "offset": 790,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_gnd_2",
+            "logicalId": "io_esp32s3_left_gnd_2",
+            "side": "left",
+            "offset": 830,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_left_gnd_3",
+            "logicalId": "io_esp32s3_left_gnd_3",
+            "side": "left",
+            "offset": 870,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_gnd_4",
+            "logicalId": "io_esp32s3_right_gnd_4",
+            "side": "right",
+            "offset": 30,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_5v_1",
+            "logicalId": "io_esp32s3_right_5v_1",
+            "side": "right",
+            "offset": 70,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g14_1",
+            "logicalId": "io_esp32s3_right_g14_1",
+            "side": "right",
+            "offset": 110,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g13_1",
+            "logicalId": "io_esp32s3_right_g13_1",
+            "side": "right",
+            "offset": 150,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g12_1",
+            "logicalId": "io_esp32s3_right_g12_1",
+            "side": "right",
+            "offset": 190,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g11_1",
+            "logicalId": "io_esp32s3_right_g11_1",
+            "side": "right",
+            "offset": 230,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g10_1",
+            "logicalId": "io_esp32s3_right_g10_1",
+            "side": "right",
+            "offset": 270,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g9_1",
+            "logicalId": "io_esp32s3_right_g9_1",
+            "side": "right",
+            "offset": 310,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g46_1",
+            "logicalId": "io_esp32s3_right_g46_1",
+            "side": "right",
+            "offset": 350,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g3_1",
+            "logicalId": "io_esp32s3_right_g3_1",
+            "side": "right",
+            "offset": 390,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g8_1",
+            "logicalId": "io_esp32s3_right_g8_1",
+            "side": "right",
+            "offset": 430,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g18_1",
+            "logicalId": "io_esp32s3_right_g18_1",
+            "side": "right",
+            "offset": 470,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g17_1",
+            "logicalId": "io_esp32s3_right_g17_1",
+            "side": "right",
+            "offset": 510,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g16_1",
+            "logicalId": "io_esp32s3_right_g16_1",
+            "side": "right",
+            "offset": 550,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g15_1",
+            "logicalId": "io_esp32s3_right_g15_1",
+            "side": "right",
+            "offset": 590,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g7_1",
+            "logicalId": "io_esp32s3_right_g7_1",
+            "side": "right",
+            "offset": 630,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g6_1",
+            "logicalId": "io_esp32s3_right_g6_1",
+            "side": "right",
+            "offset": 670,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g5_1",
+            "logicalId": "io_esp32s3_right_g5_1",
+            "side": "right",
+            "offset": 710,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_g4_1",
+            "logicalId": "io_esp32s3_right_g4_1",
+            "side": "right",
+            "offset": 750,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_rst_1",
+            "logicalId": "io_esp32s3_right_rst_1",
+            "side": "right",
+            "offset": 790,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_3v3_1",
+            "logicalId": "io_esp32s3_right_3v3_1",
+            "side": "right",
+            "offset": 830,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_3v3_2",
+            "logicalId": "io_esp32s3_right_3v3_2",
+            "side": "right",
+            "offset": 870,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_top_usb_1",
+            "logicalId": "io_esp32s3_top_usb_1",
+            "side": "top",
+            "offset": 150,
+            "manualOffset": true
+          }
+        ],
         "props": [
           {
             "id": "prp_mtg8v3eu9",
@@ -67,6 +654,36 @@
             "name": "allowedChildKinds",
             "kind": "value",
             "value": "[\"digital-io\",\"timer\",\"and\",\"or\",\"not\",\"data\",\"add\",\"boot\",\"serial\",\"serialin\",\"can\",\"i2cout\",\"i2cin\",\"pwmout\",\"pwmin\",\"slice\",\"route\",\"croute\"]"
+          },
+          {
+            "id": "prp_esp32s3_pinmap",
+            "name": "pinMap",
+            "kind": "value",
+            "value": "[{\"label\":\"GND\",\"gpio\":null,\"role\":\"ground\",\"inputOnly\":null,\"side\":\"left\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"G19\",\"gpio\":19,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":1,\"orientation\":\"usb-top\",\"reserved\":\"native USB D− — reconfiguring it breaks the USB port\"},{\"label\":\"G20\",\"gpio\":20,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":2,\"orientation\":\"usb-top\",\"reserved\":\"native USB D+ — reconfiguring it breaks the USB port\"},{\"label\":\"G21\",\"gpio\":21,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"G47\",\"gpio\":47,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"G48\",\"gpio\":48,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":5,\"orientation\":\"usb-top\",\"note\":\"the on-board RGB LED\"},{\"label\":\"G45\",\"gpio\":45,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":6,\"orientation\":\"usb-top\",\"note\":\"strapping pin (VDD_SPI voltage)\"},{\"label\":\"G0\",\"gpio\":0,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":7,\"orientation\":\"usb-top\",\"note\":\"strapping pin, and the BOOT button\"},{\"label\":\"G35\",\"gpio\":35,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":8,\"orientation\":\"usb-top\"},{\"label\":\"G36\",\"gpio\":36,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":9,\"orientation\":\"usb-top\"},{\"label\":\"G37\",\"gpio\":37,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":10,\"orientation\":\"usb-top\"},{\"label\":\"G38\",\"gpio\":38,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":11,\"orientation\":\"usb-top\"},{\"label\":\"G39\",\"gpio\":39,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":12,\"orientation\":\"usb-top\"},{\"label\":\"G40\",\"gpio\":40,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":13,\"orientation\":\"usb-top\"},{\"label\":\"G41\",\"gpio\":41,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":14,\"orientation\":\"usb-top\"},{\"label\":\"G42\",\"gpio\":42,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":15,\"orientation\":\"usb-top\"},{\"label\":\"G2\",\"gpio\":2,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":16,\"orientation\":\"usb-top\"},{\"label\":\"G1\",\"gpio\":1,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":17,\"orientation\":\"usb-top\"},{\"label\":\"RX0\",\"gpio\":44,\"role\":\"uart\",\"inputOnly\":false,\"side\":\"left\",\"row\":18,\"orientation\":\"usb-top\",\"note\":\"UART0 RX — the USB-UART console\"},{\"label\":\"TX0\",\"gpio\":43,\"role\":\"uart\",\"inputOnly\":false,\"side\":\"left\",\"row\":19,\"orientation\":\"usb-top\",\"note\":\"UART0 TX — the USB-UART console\"},{\"label\":\"GND\",\"gpio\":null,\"role\":\"ground\",\"inputOnly\":null,\"side\":\"left\",\"row\":20,\"orientation\":\"usb-top\"},{\"label\":\"GND\",\"gpio\":null,\"role\":\"ground\",\"inputOnly\":null,\"side\":\"left\",\"row\":21,\"orientation\":\"usb-top\"},{\"label\":\"GND\",\"gpio\":null,\"role\":\"ground\",\"inputOnly\":null,\"side\":\"right\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"5V\",\"gpio\":null,\"role\":\"power\",\"inputOnly\":null,\"side\":\"right\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"G14\",\"gpio\":14,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"G13\",\"gpio\":13,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"G12\",\"gpio\":12,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"G11\",\"gpio\":11,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"G10\",\"gpio\":10,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"G9\",\"gpio\":9,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":7,\"orientation\":\"usb-top\",\"note\":\"I2C SCL, as the Logic Module configures it on an S3\"},{\"label\":\"G46\",\"gpio\":46,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":8,\"orientation\":\"usb-top\",\"note\":\"strapping pin, input-only on some S3 revisions\"},{\"label\":\"G3\",\"gpio\":3,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":9,\"orientation\":\"usb-top\",\"note\":\"strapping pin (JTAG source select)\"},{\"label\":\"G8\",\"gpio\":8,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":10,\"orientation\":\"usb-top\",\"note\":\"I2C SDA, as the Logic Module configures it on an S3\"},{\"label\":\"G18\",\"gpio\":18,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":11,\"orientation\":\"usb-top\"},{\"label\":\"G17\",\"gpio\":17,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":12,\"orientation\":\"usb-top\"},{\"label\":\"G16\",\"gpio\":16,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":13,\"orientation\":\"usb-top\",\"note\":\"CAN RX by default (see the CAN block)\"},{\"label\":\"G15\",\"gpio\":15,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":14,\"orientation\":\"usb-top\",\"note\":\"CAN TX by default (see the CAN block)\"},{\"label\":\"G7\",\"gpio\":7,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":15,\"orientation\":\"usb-top\"},{\"label\":\"G6\",\"gpio\":6,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":16,\"orientation\":\"usb-top\"},{\"label\":\"G5\",\"gpio\":5,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":17,\"orientation\":\"usb-top\"},{\"label\":\"G4\",\"gpio\":4,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":18,\"orientation\":\"usb-top\"},{\"label\":\"RST\",\"gpio\":null,\"role\":\"enable\",\"inputOnly\":null,\"side\":\"right\",\"row\":19,\"orientation\":\"usb-top\"},{\"label\":\"3V3\",\"gpio\":null,\"role\":\"power\",\"inputOnly\":null,\"side\":\"right\",\"row\":20,\"orientation\":\"usb-top\"},{\"label\":\"3V3\",\"gpio\":null,\"role\":\"power\",\"inputOnly\":null,\"side\":\"right\",\"row\":21,\"orientation\":\"usb-top\"},{\"label\":\"USB\",\"gpio\":null,\"role\":\"usb-serial\",\"inputOnly\":null,\"side\":\"top\",\"row\":null,\"orientation\":\"usb-top\"}]"
+          },
+          {
+            "id": "prp_esp32s3_render",
+            "name": "render",
+            "kind": "value",
+            "value": "const g = block.geometry;\nconst pinMapProp = block.props.find((p) => p.name === 'pinMap');\nlet pins = [];\ntry { pins = JSON.parse(pinMapProp ? pinMapProp.value : '[]'); } catch (_) { pins = []; }\n\nctx.save();\nctx.fillStyle = '#ffffff';\nctx.fillRect(g.x + 12, g.y + 8, g.width - 24, g.height - 16);\n\nctx.fillStyle = '#1f2937';\nctx.font = '20px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.textAlign = 'center';\nctx.textBaseline = 'middle';\nctx.fillText(block.name || 'ESP32-S3 DevKit', g.x + g.width / 2, g.y + g.height / 2 + 30, g.width - 48);\n\n// The USB connector sits under the USB pin, wherever that pin is on the\n// top edge (on the slot nodigraph draws it at), like the BOOT button below.\nconst slotOf = (o) => Math.max(20, Math.min(g.width - 20, Math.round((o - 20) / 40) * 40 + 20));\nconst topPinX = (name, fallback) => {\n  const logical = (block.logicalPorts || []).find((lp) => lp.name === name);\n  const pin = logical && (block.ports || []).find((p) => p.logicalId === logical.id && p.side === 'top');\n  return pin ? g.x + slotOf(Number(pin.offset)) : fallback;\n};\nconst usbX = topPinX('USB', g.x + g.width / 2);\nctx.fillStyle = '#e5e7eb';\nctx.strokeStyle = '#9ca3af';\nctx.lineWidth = 1;\nctx.beginPath();\nctx.roundRect(usbX - 36, g.y + 14, 72, 30, 4);\nctx.fill();\nctx.stroke();\nctx.fillStyle = '#6b7280';\nctx.font = '10px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.fillText('USB', usbX, g.y + 29);\n\nconst topY = g.y + 58;\nfunction drawBoardButton(cx, label, fill) {\n  ctx.beginPath();\n  ctx.arc(cx, topY, 13, 0, Math.PI * 2);\n  ctx.fillStyle = fill;\n  ctx.fill();\n  ctx.lineWidth = 1;\n  ctx.strokeStyle = '#94a3b8';\n  ctx.stroke();\n  ctx.fillStyle = '#6b7280';\n  ctx.font = '9px -apple-system, Segoe UI, Roboto, sans-serif';\n  ctx.textAlign = 'center';\n  ctx.fillText(label, cx, topY + 25);\n}\n// The BOOT button sits under the GPIO0 pin, wherever that pin is on the\n// top edge (nodigraph draws a pin on the nearest 40-unit slot: 20, 60, ...).\nconst bootLogical = (block.logicalPorts || []).find((lp) => lp.name === 'GPIO0');\nconst bootPin = bootLogical && (block.ports || []).find((p) => p.logicalId === bootLogical.id && p.side === 'top');\nconst onSlot = (o) => Math.max(20, Math.min(g.width - 20, Math.round((o - 20) / 40) * 40 + 20));\ndrawBoardButton(bootPin ? g.x + onSlot(Number(bootPin.offset)) : g.x + g.width / 2 - 72, 'GPIO0', '#f8fafc');\ndrawBoardButton(g.x + g.width / 2 + 72, 'RESET', '#f8fafc');\n\nctx.beginPath();\nctx.arc(g.x + g.width / 2, topY, 7, 0, Math.PI * 2);\nctx.fillStyle = '#3ecf5d';\nctx.fill();\nctx.fillStyle = '#6b7280';\nctx.font = '9px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.fillText('RGB GPIO48', g.x + g.width / 2, topY + 25);\n\nctx.font = '15px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.textBaseline = 'middle';\nfor (const pin of pins) {\n  if (pin.side !== 'left' && pin.side !== 'right') continue;\n  const y = g.y + 30 + Number(pin.row || 0) * 40;\n  const left = pin.side === 'left';\n  const labelX = left ? g.x + 26 : g.x + g.width - 26;\n  ctx.fillStyle = pin.role === 'power' ? '#ef4444' : pin.role === 'ground' ? '#6b7280' : (pin.reserved || pin.inputOnly) ? '#94a3b8' : '#1f2937';\n  ctx.textAlign = left ? 'left' : 'right';\n  ctx.fillText(pin.label, labelX, y, 86);\n}\nctx.restore();"
+          },
+          {
+            "id": "prp_esp32s3_boardvariant",
+            "name": "boardVariant",
+            "kind": "value",
+            "value": "ESP32-S3-DevKitC-1"
+          },
+          {
+            "id": "prp_esp32s3_usborientation",
+            "name": "usbOrientation",
+            "kind": "value",
+            "value": "top"
+          },
+          {
+            "id": "prp_esp32s3_onboardcontrols",
+            "name": "onboardControls",
+            "kind": "value",
+            "value": "{\"buttons\":[{\"label\":\"GPIO0\",\"gpio\":0,\"role\":\"input\"},{\"label\":\"RESET\",\"gpio\":null,\"role\":\"reset\"}],\"led\":{\"label\":\"RGB\",\"gpio\":48,\"role\":\"output\",\"type\":\"addressable\"}}"
           }
         ],
         "hasChildren": true,
