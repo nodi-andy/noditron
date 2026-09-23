@@ -21,12 +21,13 @@ function wired(from, to) {
 test('Waveshare name, eight isolated inputs, eight driver outputs and CAN pins', () => {
   assert.equal(module.displayName, 'esp32-S3');
   assert.equal(board.name, 'esp32-S3');
-  assert.deepEqual(pins.filter(p => p.inputOnly).map(p => p.gpio), [4,5,6,7,8,9,10,11]);
-  assert.deepEqual(pins.filter(p => p.outputOnly).map(p => p.exio), [1,2,3,4,5,6,7,8]);
+  assert.deepEqual(pins.filter(p => p.role === 'digital-input').map(p => p.gpio), [4,5,6,7,8,9,10,11]);
+  assert.deepEqual(pins.filter(p => p.role === 'digital-output').map(p => p.exio), [1,2,3,4,5,6,7,8]);
   assert.equal(board.logicalPorts.find(p => p.name === 'DI1').direction, 'in');
   assert.equal(board.logicalPorts.find(p => p.name === 'DO1').direction, 'out');
-  assert.equal(pins.find(p => p.label === 'CAN TX').gpio, 2);
-  assert.equal(pins.find(p => p.label === 'CAN RX').gpio, 3);
+  assert.equal(pins.find(p => p.label === 'CAN Out').gpio, 2);
+  assert.equal(pins.find(p => p.label === 'CAN In').gpio, 3);
+  assert.equal(board.logicalPorts.find(p => p.name === 'CAN speed').direction, 'out');
 });
 
 test('an already placed Waveshare block receives corrected DI and DO directions', () => {
@@ -84,7 +85,36 @@ test('a pinless Bool between DI1 and DO1 is compiled as a pass-through', () => {
 test('fixed hardware directions and bus pins cannot become arbitrary GPIOs', () => {
   assert.throws(() => circuit.buildInternalDevkitDesign(wired('DO1', 'DI1')), /digital input/);
   assert.throws(() => circuit.buildInternalDevkitDesign(wired('DI1', 'DI2')), /digital output/);
-  assert.throws(() => circuit.buildInternalDevkitDesign(wired('CAN RX', 'DO1')), /digital input/);
+  assert.throws(() => circuit.buildInternalDevkitDesign(wired('CAN Out', 'DI1')), /only accepts data/);
+});
+
+test('CAN Out sends connected Data at the configured speed without a visible CAN block', () => {
+  const esp = structuredClone(board);
+  const data = (id, value) => ({
+    id, logicalPorts: [{ id: `${id}-out`, name: 'out', direction: 'out' }],
+    ports: [{ id: `${id}-port`, logicalId: `${id}-out` }],
+    props: [{ name: 'noditronKind', value: 'data' }, { name: 'value', value }],
+  });
+  const payload = data('payload', '123#AA');
+  const speed = data('speed', '500k');
+  const port = label => esp.ports.find(p => esp.logicalPorts.find(lp => lp.id === p.logicalId)?.name === label).id;
+  esp.children = {
+    blocks: new Map([[payload.id, payload], [speed.id, speed]]),
+    connections: new Map([
+      ['payload', { sourceBlockId: payload.id, sourcePortId: 'payload-port', targetBlockId: esp.id, targetPortId: port('CAN Out') }],
+      ['speed', { sourceBlockId: speed.id, sourcePortId: 'speed-port', targetBlockId: esp.id, targetPortId: port('CAN speed') }],
+    ]),
+  };
+  const design = circuit.buildInternalDevkitDesign(esp);
+  assert.deepEqual(design.blocks.find(b => b.type === 'can').data, { tx: 2, rx: 3, bitrate: 500000, format: 'string' });
+  assert.ok(design.blocks.some(b => b.type === 'boot'));
+  assert.equal(design.blocks.find(b => b.type === 'data').data.value, '123#AA');
+});
+
+test('CAN In is a direct source and defaults to 250 kbit/s', () => {
+  const design = circuit.buildInternalDevkitDesign(wired('CAN In', 'DO1'));
+  assert.deepEqual(design.blocks.find(b => b.type === 'can').data, { tx: 2, rx: 3, bitrate: 250000, format: 'string' });
+  assert.deepEqual(design.blocks.find(b => b.type === 'dout').data, { exio: 1 });
 });
 
 test('Waveshare preset is selected after S3 detection', () => {
@@ -106,7 +136,7 @@ test('an older running build exposes the firmware update action', () => {
   assert.match(source, /info\.build < preferredPreset\.build/);
   assert.match(source, /showRunning\(info\)/);
   const flashSource = read('../client/src/serialFlash.js');
-  assert.match(flashSource, /build: '20260924d'/);
+  assert.match(flashSource, /build: '20260924e'/);
 });
 
 test('existing DevKit input wires retain their IDs and obsolete wired pins survive', () => {

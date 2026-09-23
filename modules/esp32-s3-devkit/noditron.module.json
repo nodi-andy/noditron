@@ -2,8 +2,8 @@
   "noditronModule": 1,
   "name": "esp32-s3-devkit",
   "displayName": "esp32-S3",
-  "version": "1.6.1",
-  "description": "Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8 on GPIO4-11, DO1-DO8 through TCA9554 EXIO1-8 and isolated Darlington drivers. CAN TX=2/RX=3. USB console and firmware installation.",
+  "version": "1.7.0",
+  "description": "Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8, DO1-D8, direct CAN In/Out with configurable speed, and USB firmware installation.",
   "swatchColor": "#2f6fed",
   "block": {
     "format": "nodigraph/clipboard-v1",
@@ -18,7 +18,7 @@
           "x": 0,
           "y": 0,
           "width": 300,
-          "height": 460
+          "height": 540
         },
         "style": {
           "color": "#3b6fa0"
@@ -73,16 +73,10 @@
             "description": "GPIO11"
           },
           {
-            "id": "io_esp32s3_left_cantx_1",
-            "name": "CAN TX",
-            "direction": null,
-            "description": "GPIO2 — unavailable: CAN TX (TWAI)"
-          },
-          {
-            "id": "io_esp32s3_left_canrx_1",
-            "name": "CAN RX",
-            "direction": null,
-            "description": "GPIO3 — unavailable: CAN RX (TWAI)"
+            "id": "io_esp32s3_left_canin_1",
+            "name": "CAN In",
+            "direction": "in",
+            "description": "GPIO3"
           },
           {
             "id": "io_esp32s3_right_do1_1",
@@ -131,6 +125,18 @@
             "name": "DO8",
             "direction": "out",
             "description": "GPIO1007 — TCA9554 EXIO8 / isolated Darlington output"
+          },
+          {
+            "id": "io_esp32s3_right_canout_1",
+            "name": "CAN Out",
+            "direction": "out",
+            "description": "GPIO2"
+          },
+          {
+            "id": "io_esp32s3_right_canspeed_1",
+            "name": "CAN speed",
+            "direction": "out",
+            "description": "can-speed"
           },
           {
             "id": "io_esp32s3_right_rs485tx_1",
@@ -209,17 +215,10 @@
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_cantx_1",
-            "logicalId": "io_esp32s3_left_cantx_1",
+            "id": "prt_esp32s3_left_canin_1",
+            "logicalId": "io_esp32s3_left_canin_1",
             "side": "left",
             "offset": 350,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_canrx_1",
-            "logicalId": "io_esp32s3_left_canrx_1",
-            "side": "left",
-            "offset": 390,
             "manualOffset": true
           },
           {
@@ -279,17 +278,31 @@
             "manualOffset": true
           },
           {
+            "id": "prt_esp32s3_right_canout_1",
+            "logicalId": "io_esp32s3_right_canout_1",
+            "side": "right",
+            "offset": 350,
+            "manualOffset": true
+          },
+          {
+            "id": "prt_esp32s3_right_canspeed_1",
+            "logicalId": "io_esp32s3_right_canspeed_1",
+            "side": "right",
+            "offset": 390,
+            "manualOffset": true
+          },
+          {
             "id": "prt_esp32s3_right_rs485tx_1",
             "logicalId": "io_esp32s3_right_rs485tx_1",
             "side": "right",
-            "offset": 350,
+            "offset": 430,
             "manualOffset": true
           },
           {
             "id": "prt_esp32s3_right_rs485rx_1",
             "logicalId": "io_esp32s3_right_rs485rx_1",
             "side": "right",
-            "offset": 390,
+            "offset": 470,
             "manualOffset": true
           },
           {
@@ -347,7 +360,7 @@
             "id": "prp_esp32s3_pinmap",
             "name": "pinMap",
             "kind": "value",
-            "value": "[{\"label\":\"DI1\",\"gpio\":4,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"DI2\",\"gpio\":5,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"DI3\",\"gpio\":6,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"DI4\",\"gpio\":7,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"DI5\",\"gpio\":8,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"DI6\",\"gpio\":9,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"DI7\",\"gpio\":10,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"DI8\",\"gpio\":11,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"CAN TX\",\"gpio\":2,\"role\":\"can\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":8,\"orientation\":\"usb-top\",\"reserved\":\"CAN TX (TWAI)\"},{\"label\":\"CAN RX\",\"gpio\":3,\"role\":\"can\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":9,\"orientation\":\"usb-top\",\"reserved\":\"CAN RX (TWAI)\"},{\"label\":\"DO1\",\"gpio\":1000,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":1,\"note\":\"TCA9554 EXIO1 / isolated Darlington output\",\"side\":\"right\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"DO2\",\"gpio\":1001,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":2,\"note\":\"TCA9554 EXIO2 / isolated Darlington output\",\"side\":\"right\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"DO3\",\"gpio\":1002,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":3,\"note\":\"TCA9554 EXIO3 / isolated Darlington output\",\"side\":\"right\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"DO4\",\"gpio\":1003,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":4,\"note\":\"TCA9554 EXIO4 / isolated Darlington output\",\"side\":\"right\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"DO5\",\"gpio\":1004,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":5,\"note\":\"TCA9554 EXIO5 / isolated Darlington output\",\"side\":\"right\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"DO6\",\"gpio\":1005,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":6,\"note\":\"TCA9554 EXIO6 / isolated Darlington output\",\"side\":\"right\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"DO7\",\"gpio\":1006,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":7,\"note\":\"TCA9554 EXIO7 / isolated Darlington output\",\"side\":\"right\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"DO8\",\"gpio\":1007,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":8,\"note\":\"TCA9554 EXIO8 / isolated Darlington output\",\"side\":\"right\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"RS485 TX\",\"gpio\":17,\"role\":\"rs485\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":8,\"orientation\":\"usb-top\",\"reserved\":\"RS485 TX\"},{\"label\":\"RS485 RX\",\"gpio\":18,\"role\":\"rs485\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":9,\"orientation\":\"usb-top\",\"reserved\":\"RS485 RX\"},{\"label\":\"USB\",\"gpio\":null,\"role\":\"usb-serial\",\"inputOnly\":null,\"side\":\"top\",\"row\":null,\"orientation\":\"usb-top\"}]"
+            "value": "[{\"label\":\"DI1\",\"gpio\":4,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"DI2\",\"gpio\":5,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"DI3\",\"gpio\":6,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"DI4\",\"gpio\":7,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"DI5\",\"gpio\":8,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"DI6\",\"gpio\":9,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"DI7\",\"gpio\":10,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"DI8\",\"gpio\":11,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"CAN In\",\"gpio\":3,\"role\":\"can-in\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":8,\"orientation\":\"usb-top\"},{\"label\":\"DO1\",\"gpio\":1000,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":1,\"note\":\"TCA9554 EXIO1 / isolated Darlington output\",\"side\":\"right\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"DO2\",\"gpio\":1001,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":2,\"note\":\"TCA9554 EXIO2 / isolated Darlington output\",\"side\":\"right\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"DO3\",\"gpio\":1002,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":3,\"note\":\"TCA9554 EXIO3 / isolated Darlington output\",\"side\":\"right\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"DO4\",\"gpio\":1003,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":4,\"note\":\"TCA9554 EXIO4 / isolated Darlington output\",\"side\":\"right\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"DO5\",\"gpio\":1004,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":5,\"note\":\"TCA9554 EXIO5 / isolated Darlington output\",\"side\":\"right\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"DO6\",\"gpio\":1005,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":6,\"note\":\"TCA9554 EXIO6 / isolated Darlington output\",\"side\":\"right\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"DO7\",\"gpio\":1006,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":7,\"note\":\"TCA9554 EXIO7 / isolated Darlington output\",\"side\":\"right\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"DO8\",\"gpio\":1007,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":8,\"note\":\"TCA9554 EXIO8 / isolated Darlington output\",\"side\":\"right\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"CAN Out\",\"gpio\":2,\"role\":\"can-out\",\"inputOnly\":false,\"outputOnly\":true,\"side\":\"right\",\"row\":8,\"orientation\":\"usb-top\"},{\"label\":\"CAN speed\",\"gpio\":null,\"role\":\"can-speed\",\"inputOnly\":false,\"outputOnly\":true,\"side\":\"right\",\"row\":9,\"orientation\":\"usb-top\"},{\"label\":\"RS485 TX\",\"gpio\":17,\"role\":\"rs485\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":10,\"orientation\":\"usb-top\",\"reserved\":\"RS485 TX\"},{\"label\":\"RS485 RX\",\"gpio\":18,\"role\":\"rs485\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":11,\"orientation\":\"usb-top\",\"reserved\":\"RS485 RX\"},{\"label\":\"USB\",\"gpio\":null,\"role\":\"usb-serial\",\"inputOnly\":null,\"side\":\"top\",\"row\":null,\"orientation\":\"usb-top\"}]"
           },
           {
             "id": "prp_esp32s3_render",

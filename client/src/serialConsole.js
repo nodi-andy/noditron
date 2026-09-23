@@ -569,6 +569,7 @@ export function buildMinimalDesign(childBlocks, connections = []) {
   });
   const timerChildren = childBlocks.filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'timer');
   const andChildren = childBlocks.filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'and');
+  const dataChildren = childBlocks.filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'data');
 
   // A Bool with no pin of its own and a wire into its `in` only passes a
   // value along — the board has nothing to run for it. GPIO0 → Bool → AND
@@ -696,13 +697,29 @@ export function buildMinimalDesign(childBlocks, connections = []) {
   for (const conn of connections) {
     const boolSource = pinChildren.find((c) => c.id === conn.sourceBlockId);
     const timerSource = timerChildren.find((c) => c.id === conn.sourceBlockId);
+    const dataSource = dataChildren.find((c) => c.id === conn.sourceBlockId);
     const target = pinChildren.find((c) => c.id === conn.targetBlockId);
     if (!target) continue;
     const targetDir = (target.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
     if (targetDir !== 'output') continue; // only driving a real Output pin has firmware meaning
     if (idByChildId.has(target.id)) continue; // see fan-out/fan-in note above
 
-    if (boolSource) {
+    if (dataSource) {
+      // A constant connected directly to a hardware sink is sent once when
+      // the circuit loads. The boot block wakes the firmware data block;
+      // the latter emits its configured value into the target (CAN Out is
+      // represented as a synthetic target and rewritten after this pass).
+      const base = row * 3;
+      blocks.push({ id: nextBlockId++, type: 'boot', gx: 0, gy: base, data: { delay: 100 } });
+      blocks.push({ id: nextBlockId++, type: 'belt', gx: 2, gy: base, data: { dir: 'E' } });
+      const dataId = nextBlockId++;
+      idByChildId.set(dataSource.id, dataId);
+      blocks.push({ id: dataId, type: 'data', gx: 3, gy: base, data: { value: String((dataSource.props || []).find((p) => p.name === 'value')?.value ?? '') } });
+      blocks.push({ id: nextBlockId++, type: 'belt', gx: 5, gy: base, data: { dir: 'E' } });
+      placeBool(target, 6, base);
+      row += 1;
+      continue;
+    } else if (boolSource) {
       const sourceDir = (boolSource.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';
       if (sourceDir !== 'input') continue; // Bool source has to be an Input, i.e. the wire is din -> dout
       if (idByChildId.has(boolSource.id)) continue;

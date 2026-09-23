@@ -18,9 +18,10 @@ const CLASSIC_PATH = path.join(here, '..', 'modules', 'esp32-devkit', 'noditron.
 // EXIO virtual GPIOs 1000..1007 match conucon's live IO protocol.
 const LEFT = Array.from({ length: 8 }, (_, i) => ['DI' + (i + 1), i + 4, 'digital-input']);
 const RIGHT = Array.from({ length: 8 }, (_, i) => ['DO' + (i + 1), 1000 + i, 'digital-output']);
-LEFT.push(['CAN TX', 2, 'can'], ['CAN RX', 3, 'can']);
+LEFT.push(['CAN In', 3, 'can-in']);
+RIGHT.push(['CAN Out', 2, 'can-out'], ['CAN speed', null, 'can-speed']);
 RIGHT.push(['RS485 TX', 17, 'rs485'], ['RS485 RX', 18, 'rs485']);
-const RESERVED = new Map([[2, 'CAN TX (TWAI)'], [3, 'CAN RX (TWAI)'], [17, 'RS485 TX'], [18, 'RS485 RX']]);
+const RESERVED = new Map([[17, 'RS485 TX'], [18, 'RS485 RX']]);
 const NOTES = new Map();
 
 const PIN_SPACING = 40;
@@ -33,8 +34,8 @@ function pinEntry([label, gpio, role], side, row) {
     role,
     // The S3 has no input-only pins at all, unlike the classic ESP32's
     // 34/35/36/39 — every GPIO it brings out can drive as well as read.
-    inputOnly: role === 'digital-input',
-    outputOnly: role === 'digital-output',
+    inputOnly: role === 'digital-input' || role === 'can-in',
+    outputOnly: role === 'digital-output' || role === 'can-out' || role === 'can-speed',
     ...(role === 'digital-output' ? { exio: gpio - 999, note: 'TCA9554 EXIO' + (gpio - 999) + ' / isolated Darlington output' } : {}),
     side,
     row,
@@ -127,7 +128,7 @@ function setProp(name, value) {
 setProp('pinMap', JSON.stringify(pins));
 setProp('render', renderSource('esp32-S3'));
 module_.displayName = block.name = 'esp32-S3';
-module_.version = '1.6.1';
+module_.version = '1.7.0';
 setProp('boardVariant', 'ESP32-S3-POE-ETH-8DI-8DO');
 setProp('firmwarePreset', 'logic-esp32-s3-waveshare');
 setProp('canPins', JSON.stringify({ tx: 2, rx: 3 }));
@@ -141,7 +142,7 @@ setProp('onboardControls', JSON.stringify({
   led: { label: 'RGB', gpio: 38, role: 'output', type: 'addressable' },
 }));
 
-module_.description = 'Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8 on GPIO4-11, DO1-DO8 through TCA9554 EXIO1-8 and isolated Darlington drivers. CAN TX=2/RX=3. USB console and firmware installation.';
+module_.description = 'Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8, DO1-D8, direct CAN In/Out with configurable speed, and USB firmware installation.';
 block.description = '';
 
 fs.writeFileSync(MODULE_PATH, `${JSON.stringify(module_, null, 2)}\n`);

@@ -30,7 +30,8 @@ export function migrateWaveshareBoard(block, template, level) {
   if (block.name === 'ESP32-S3 DevKit') { block.name = 'esp32-S3'; changed = true; }
   const alreadyWaveshare = propValue(block, 'boardVariant') === 'ESP32-S3-POE-ETH-8DI-8DO';
   const aliases = new Map(Array.from({ length: 8 }, (_, i) => [`G${i + 4}`, `DI${i + 1}`]));
-  aliases.set('G2', 'CAN TX'); aliases.set('G3', 'CAN RX');
+  aliases.set('G2', 'CAN Out'); aliases.set('G3', 'CAN In');
+  aliases.set('CAN TX', 'CAN Out'); aliases.set('CAN RX', 'CAN In');
   aliases.set('G17', 'RS485 TX'); aliases.set('G18', 'RS485 RX');
   const connections = [...(level?.connections?.values?.() || []), ...(block.children?.connections?.values?.() || [])];
   const retained = new Set();
@@ -87,12 +88,25 @@ export function findContainingLevel(level, blockId) {
 // Timer's `out` into D2 is therefore a complete, uploadable circuit on its
 // own — that's the whole point of the pins being on the block.
 function buildPinMappedDesign(esp, blocks, connections) {
+  const allPinsByPortName = new Map(pinMapFor(esp).map((pin) => [pin.label, pin]));
   const pinsByPortName = new Map(
     pinMapFor(esp)
       .filter((pin) => pin.gpio !== null && pin.gpio !== undefined)
       .map((pin) => [pin.label, pin]),
   );
   const syntheticPins = new Map();
+  const CAN_OUT_GPIO = 2000;
+  const CAN_IN_GPIO = 2001;
+  let canBitrate = 250000;
+
+  const speedPort = (esp.ports || []).find((port) => logicalName(esp, port.id) === 'CAN speed');
+  const speedConnection = speedPort && connections.find((conn) => conn.targetBlockId === esp.id && conn.targetPortId === speedPort.id);
+  if (speedConnection) {
+    const source = blocks.find((block) => block.id === speedConnection.sourceBlockId);
+    const raw = String(propValue(source || {}, 'value', '250k')).trim().toLowerCase();
+    const parsed = raw.endsWith('k') ? Number(raw.slice(0, -1)) * 1000 : Number(raw);
+    if ([50000, 100000, 125000, 250000, 500000, 800000, 1000000].includes(parsed)) canBitrate = parsed;
+  }
   // The board's USB pin (pinMap role usb-serial): a wire into it sends its
   // value to the browser over USB (see serialConsole.buildMinimalDesign).
   const usbPortNames = new Set(pinMapFor(esp).filter((pin) => pin.role === 'usb-serial').map((pin) => pin.label));
@@ -129,6 +143,21 @@ function buildPinMappedDesign(esp, blocks, connections) {
   function mapEndpoint(blockId, portId, isTarget) {
     if (blockId !== esp.id) return { blockId, portId };
     const portName = logicalName(esp, portId);
+    const boardPin = allPinsByPortName.get(portName);
+    if (boardPin?.role === 'can-speed') {
+      if (!isTarget) throw new Error('CAN speed only accepts a configured value.');
+      return null; // compile-time configuration, not a runtime signal path
+    }
+    if (boardPin?.role === 'can-out') {
+      if (!isTarget) throw new Error('CAN Out only accepts data to transmit.');
+      const pin = syntheticPinBlock({ label: 'CAN Out', gpio: CAN_OUT_GPIO }, 'output');
+      return { blockId: pin.id, portId: pin.ports[0].id };
+    }
+    if (boardPin?.role === 'can-in') {
+      if (isTarget) throw new Error('CAN In only provides received data.');
+      const pin = syntheticPinBlock({ label: 'CAN In', gpio: CAN_IN_GPIO }, 'input');
+      return { blockId: pin.id, portId: pin.ports[0].id };
+    }
     if (usbPortNames.has(portName)) {
       if (!isTarget) return null; // reading from USB into the circuit is not a thing yet
       usesUsb = true;
@@ -162,7 +191,17 @@ function buildPinMappedDesign(esp, blocks, connections) {
     });
   }
 
-  return serialConsole.buildMinimalDesign([...blocks, ...syntheticPins.values(), ...(usesUsb ? [usbTarget] : [])], mapped);
+  const design = serialConsole.buildMinimalDesign([...blocks, ...syntheticPins.values(), ...(usesUsb ? [usbTarget] : [])], mapped);
+  for (const block of design.blocks) {
+    if (block.type === 'dout' && block.data?.gpio === CAN_OUT_GPIO) {
+      block.type = 'can';
+      block.data = { tx: 2, rx: 3, bitrate: canBitrate, format: 'string' };
+    } else if (block.type === 'din' && block.data?.gpio === CAN_IN_GPIO) {
+      block.type = 'can';
+      block.data = { tx: 2, rx: 3, bitrate: canBitrate, format: 'string' };
+    }
+  }
+  return design;
 }
 
 export function buildExternalDevkitDesign(esp, level) {
