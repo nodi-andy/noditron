@@ -72,7 +72,7 @@ test('an older running build exposes the firmware update action', () => {
   assert.match(source, /info\.build < preferredPreset\.build/);
   assert.match(source, /showRunning\(info\)/);
   const flashSource = read('../client/src/serialFlash.js');
-  assert.match(flashSource, /build: '20260924b'/);
+  assert.match(flashSource, /build: '20260924c'/);
 });
 
 test('existing DevKit input wires retain their IDs and obsolete wired pins survive', () => {
