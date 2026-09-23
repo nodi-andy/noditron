@@ -47,6 +47,40 @@ test('each DI to DO connection exports a real input and an EXIO output', () => {
   }
 });
 
+test('a pinless Bool between DI1 and DO1 is compiled as a pass-through', () => {
+  const esp = structuredClone(board);
+  const bool = {
+    id: 'bool',
+    logicalPorts: [
+      { id: 'bool-in', name: 'in', direction: 'in' },
+      { id: 'bool-out', name: 'out', direction: 'out' },
+    ],
+    ports: [
+      { id: 'bool-in-port', logicalId: 'bool-in' },
+      { id: 'bool-out-port', logicalId: 'bool-out' },
+    ],
+    props: [
+      { name: 'noditronKind', value: 'digital-io' },
+      { name: 'pin', value: '' },
+      { name: 'direction', value: 'input' },
+    ],
+  };
+  const port = label => esp.ports.find(p => esp.logicalPorts.find(lp => lp.id === p.logicalId)?.name === label).id;
+  esp.children = {
+    blocks: new Map([[bool.id, bool]]),
+    connections: new Map([
+      ['into-bool', { sourceBlockId: esp.id, sourcePortId: port('DI1'), targetBlockId: bool.id, targetPortId: 'bool-in-port' }],
+      ['out-of-bool', { sourceBlockId: bool.id, sourcePortId: 'bool-out-port', targetBlockId: esp.id, targetPortId: port('DO1') }],
+    ]),
+  };
+  const design = circuit.buildInternalDevkitDesign(esp);
+  assert.deepEqual(design.blocks.map(({ type, data }) => ({ type, data })), [
+    { type: 'din', data: { gpio: 4, emitOnChange: true } },
+    { type: 'dout', data: { exio: 1 } },
+    { type: 'belt', data: { dir: 'E' } },
+  ]);
+});
+
 test('fixed hardware directions and bus pins cannot become arbitrary GPIOs', () => {
   assert.throws(() => circuit.buildInternalDevkitDesign(wired('DO1', 'DI1')), /digital input/);
   assert.throws(() => circuit.buildInternalDevkitDesign(wired('DI1', 'DI2')), /digital output/);
@@ -72,7 +106,7 @@ test('an older running build exposes the firmware update action', () => {
   assert.match(source, /info\.build < preferredPreset\.build/);
   assert.match(source, /showRunning\(info\)/);
   const flashSource = read('../client/src/serialFlash.js');
-  assert.match(flashSource, /build: '20260924c'/);
+  assert.match(flashSource, /build: '20260924d'/);
 });
 
 test('existing DevKit input wires retain their IDs and obsolete wired pins survive', () => {

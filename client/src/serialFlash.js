@@ -67,7 +67,7 @@ export const FIRMWARE_PRESETS = [
     label: 'Logic — esp32-S3 (Waveshare 8DI/8DO)',
     chip: 'ESP32-S3',
     board: 'ESP32-S3-POE-ETH-8DI-8DO',
-    build: '20260924c',
+    build: '20260924d',
     parts: [
       { path: 'firmware-assets/logic/esp32-s3-bootloader.bin', address: 0x0 },
       { path: 'firmware-assets/logic/esp32-s3-partitions.bin', address: 0x8000 },
