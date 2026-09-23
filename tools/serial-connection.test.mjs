@@ -79,6 +79,7 @@ test('native ESP32-S3 USB uses ROM flashing instead of the unstable RAM stub', (
   assert.match(flashSource.replace(/\s+/g, ' '), /usbProductId === ESPRESSIF_USB_JTAG_SERIAL_PID/);
   assert.match(flashSource, /await esploader\.detectChip\(\)/);
   assert.match(flashSource, /Using ROM flasher for native USB/);
+  assert.match(flashSource, /compress: session\.esploader\.IS_STUB === true/);
 });
 
 for (const name of ['esp32-devkit', 'esp32-s3-devkit']) {

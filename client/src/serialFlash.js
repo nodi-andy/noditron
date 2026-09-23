@@ -411,7 +411,10 @@ export async function flash(blockId, files, { eraseAll = false, onProgress, onLo
     flashFreq: 'keep',
     flashSize: 'keep',
     eraseAll,
-    compress: true,
+    // The ROM loader cannot enter compressed flash mode on this S3
+    // (status 1,5). Compression is a stub feature; direct ROM flashing must
+    // send ordinary blocks, as esptool.py --no-stub --no-compress does.
+    compress: session.esploader.IS_STUB === true,
     reportProgress: (fileIndex, written, total) => onProgress?.(fileIndex, written, total),
   });
   await session.esploader.after('hard_reset');
