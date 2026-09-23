@@ -19,6 +19,7 @@ function wired(from, to) {
 }
 
 test('Waveshare name, eight isolated inputs, eight driver outputs and CAN pins', () => {
+  assert.equal(module.version, '1.7.1');
   assert.equal(module.displayName, 'esp32-S3');
   assert.equal(board.name, 'esp32-S3');
   assert.deepEqual(pins.filter(p => p.role === 'digital-input').map(p => p.gpio), [4,5,6,7,8,9,10,11]);
@@ -28,6 +29,14 @@ test('Waveshare name, eight isolated inputs, eight driver outputs and CAN pins',
   assert.equal(pins.find(p => p.label === 'CAN Out').gpio, 2);
   assert.equal(pins.find(p => p.label === 'CAN In').gpio, 3);
   assert.equal(board.logicalPorts.find(p => p.name === 'CAN speed').direction, 'out');
+});
+
+test('the device dialog accepts circuits wired directly to board terminals', () => {
+  const source = board.props.find(p => p.name === 'dialog').value;
+  assert.match(source, /programLabel\.textContent = 'CIRCUIT'/);
+  assert.match(source, /compiledCount = compiled\.blocks\.length/);
+  assert.doesNotMatch(source, /No Digital I\/O blocks|add a Digital I\/O block/);
+  assert.match(source, /connect a supported circuit signal directly to DI, DO, CAN In, or CAN Out/);
 });
 
 test('an already placed Waveshare block receives corrected DI and DO directions', () => {

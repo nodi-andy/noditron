@@ -715,24 +715,16 @@ if (!val) {
   val.style.cssText = 'font-size:16px;font-weight:700;color:var(--success,#3ecf5d);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
   container.appendChild(val);
 }
-// What this block HOLDS, read from its own value prop — not outputs.out.
-// With something wired to the in port, out carries the value only at the
-// instant the block fires (see DATA_FN) and is empty every tick between,
-// so reading out here drew the word "undefined" for all of those ticks,
-// which looked exactly like a trigger arriving had wiped the block's
-// contents. It never did: in cannot change what this block holds, and
-// only write ever does.
+// Show the live pass-through value when `in` carries one. This does not
+// change the stored fallback; only `write` does that.
 const stored = (block.props.find((p) => p.name === 'value') || {}).value;
-val.textContent = typeof stored === 'object' && stored !== null ? JSON.stringify(stored) : String(stored);
+const shown = inputs.in !== undefined ? inputs.in : stored;
+val.textContent = typeof shown === 'object' && shown !== null ? JSON.stringify(shown) : String(shown);
 `.trim();
 
-// `in` is a trigger only — its value is deliberately never read, so
-// nothing wired into it can ever reach `out` (see this block's own note
-// above). `write` is the one input that changes what the block holds:
-// helpers.changed narrows it to the moment a value actually arrives or
-// changes, and __persist is what writes it onto the `value` prop for real
-// (see runtime.js) instead of only for the tick it showed up in — the
-// same thing typing into the dialog does, just from the diagram.
+// `in` is a live pass-through and never changes what this block holds.
+// `write` is the one input that changes the stored value; __persist writes
+// it onto the prop for real, the same as typing it into the dialog.
 // `write` sets what this block holds, and is compared against the value
 // the block ALREADY holds rather than against helpers.changed. That
 // distinction is the whole thing: `changed` reports an *edge*, and is
@@ -744,27 +736,13 @@ val.textContent = typeof stored === 'object' && stored !== null ? JSON.stringify
 // it doesn't" — which is true until the write actually lands, however long
 // the value has been sitting there, and self-evidently stops being true
 // once it has. Serialized on both sides so an object compares by content.
-//
-// `in` is read nowhere at all: it triggers this block on the firmware side
-// and its own value is discarded, so there is deliberately no path from it
-// to `out` (see this block's own note above).
-// With something wired to `in`, this block is trigger-driven: it puts its
-// value on `out` at the moment a signal arrives and `out` is empty between
-// those moments, which is what makes firing show up as a pulse on the wire
-// rather than a permanently-on one. That is conucon's own data block (see
-// its circuitRecv) rather than an approximation of it.
-//
-// With NOTHING wired to `in` there is nothing that could ever trigger it,
-// so it stays a plain continuous constant instead of going silent — which
-// is the other half of what a Data block is for, and the reason this is a
-// condition rather than one behavior or the other.
+// With no value on `in`, `out` carries the stored fallback.
 const DATA_FN = `
 const incoming = inputs.write;
 if (incoming !== undefined && JSON.stringify(incoming) !== JSON.stringify(props.value)) {
   return { out: incoming, __persist: { value: incoming } };
 }
-if (!helpers.isWired('in')) return { out: props.value };
-return helpers.changed('in', inputs.in) ? { out: props.value } : {};
+return { out: inputs.in !== undefined ? inputs.in : props.value };
 `.trim();
 
 const DATA_DIALOG = `
@@ -792,7 +770,7 @@ input.addEventListener('change', () => {
 container.appendChild(input);
 
 const hint = document.createElement('p');
-hint.textContent = "The data this block holds — numbers work as-is, anything else is kept as text. A signal arriving on in only triggers the block: out always carries this value, never whatever came in. Wire the hidden write port (reveal it in the Inspector's port list) to set this value from the diagram instead of here.";
+hint.textContent = "The data this block holds — numbers work as-is, anything else is kept as text. A signal on in passes through to out without changing this stored value. Wire the hidden write port (reveal it in the Inspector's port list) to change the stored value from the diagram.";
 hint.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';
 container.appendChild(hint);
 `.trim();
@@ -1718,6 +1696,14 @@ const LEGACY_DATA_FN_SOURCES = [
     '  return { out: incoming, __persist: { value: incoming } };',
     '}',
     'if (inputs.in === undefined) return { out: props.value };',
+    "return helpers.changed('in', inputs.in) ? { out: props.value } : {};",
+  ].join('\n'),
+  [
+    'const incoming = inputs.write;',
+    'if (incoming !== undefined && JSON.stringify(incoming) !== JSON.stringify(props.value)) {',
+    '  return { out: incoming, __persist: { value: incoming } };',
+    '}',
+    "if (!helpers.isWired('in')) return { out: props.value };",
     "return helpers.changed('in', inputs.in) ? { out: props.value } : {};",
   ].join('\n'),
 ];

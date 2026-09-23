@@ -127,8 +127,30 @@ function setProp(name, value) {
 
 setProp('pinMap', JSON.stringify(pins));
 setProp('render', renderSource('esp32-S3'));
+const currentDialog = (block.props || []).find((p) => p.name === 'dialog')?.value || '';
+setProp('dialog', currentDialog
+  .replace("programLabel.textContent = 'DIGITAL I/O';", "programLabel.textContent = 'CIRCUIT';")
+  .replace(
+    "    const childCount = block.children ? block.children.blocks.size : 0;",
+    "    let compiledCount = 0;\n    try {\n      const compiled = helpers.console.buildDevkitDesign ? helpers.console.buildDevkitDesign() : { blocks: [] };\n      compiledCount = compiled.blocks.length;\n    } catch (_) {\n      compiledCount = 0;\n    }",
+  )
+  .replace("    const dirty = childCount && childSnapshot() !== lastSent;", "    const dirty = compiledCount > 0 && childSnapshot() !== lastSent;")
+  .replace("    programStatus.textContent = !childCount", "    programStatus.textContent = !compiledCount")
+  .replace(
+    "      ? 'No Digital I/O blocks inside this ' + (block.name || 'ESP32 DevKit') + ' yet -- enter it to add some.'",
+    "      ? 'No supported circuit is connected to this ' + (block.name || 'ESP32') + ' yet.'",
+  )
+  .replace("    sendBtn.disabled = !childCount;", "    sendBtn.disabled = !compiledCount;")
+  .replace(
+    "log('Nothing to send -- wire a Timer/Bool to a GPIO pin on this ESP32 DevKit first.');",
+    "log('Nothing to send -- connect a supported circuit signal directly to DI, DO, CAN In, or CAN Out.');",
+  )
+  .replace(
+    "log('Nothing to send -- add a Digital I/O block inside this ESP32 DevKit with a real pin set first.');",
+    "log('Nothing to send -- connect a supported circuit signal directly to DI, DO, CAN In, or CAN Out.');",
+  ));
 module_.displayName = block.name = 'esp32-S3';
-module_.version = '1.7.0';
+module_.version = '1.7.1';
 setProp('boardVariant', 'ESP32-S3-POE-ETH-8DI-8DO');
 setProp('firmwarePreset', 'logic-esp32-s3-waveshare');
 setProp('canPins', JSON.stringify({ tx: 2, rx: 3 }));
