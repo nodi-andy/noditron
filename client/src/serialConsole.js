@@ -84,7 +84,45 @@ function takeUsbLines(state, bytes) {
   return out;
 }
 
+// Everything the board says, one readable line per line it sent, instead
+// of the per-chunk hex dump esptool-js's own tracing used to bury the
+// console in (see serialFlash.js's TRACE_SERIAL). Only whole lines are
+// logged, and only once — the bytes stay in the queue for whoever is
+// actually waiting on them, this just watches them go past.
+export let logIncoming = true;
+export function setLogIncoming(on) {
+  logIncoming = Boolean(on);
+}
+
+// Deliberately its own buffer rather than an index into `state.queue`:
+// that queue is spliced by takeUsbLines and drained by waiters, so any
+// mark into it goes stale the moment either of them runs. This just sees
+// every chunk once, on its way in.
+const MAX_LOG_BUFFER = 4096; // a stream with no newline in it must not grow forever
+function logCompleteLines(state, chunk) {
+  if (!logIncoming) return;
+  const text = (state.logBuf || '') + new TextDecoder().decode(chunk);
+  const parts = text.split('\n');
+  const tail = parts.pop();
+  state.logBuf = tail.length > MAX_LOG_BUFFER ? tail.slice(-MAX_LOG_BUFFER) : tail;
+  for (const part of parts) {
+    const line = part.replace(/\r$/, '');
+    if (!line) continue;
+    // Only when it actually changes. Live pin state is *polled* (see
+    // livePins.js — a request every 150ms for as long as a board is on
+    // screen), so the board dutifully answers with the same
+    // {"type":"io",...} line several times a second whether anything moved
+    // or not. Logging each one buries the lines that carry news. A repeat
+    // is still delivered to whoever is waiting on it — this only decides
+    // what is worth printing.
+    if (line === state.lastLogged) continue;
+    state.lastLogged = line;
+    console.log('[serial]', line);
+  }
+}
+
 function appendBytes(state, chunk) {
+  logCompleteLines(state, chunk);
   const merged = new Uint8Array(state.queue.length + chunk.length);
   merged.set(state.queue);
   merged.set(chunk, state.queue.length);

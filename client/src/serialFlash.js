@@ -11,6 +11,16 @@
 // always drops it, same as any other Web Serial connection; nothing here
 // tries to work around that.
 import { ESPLoader, Transport } from '../vendor/esptool-js/esptool-js.bundle.js';
+
+// esptool-js's Transport takes `tracing` as its second argument, and this
+// was passing `true` at every call site — which prints a console line for
+// every single chunk read or written ("TRACE 34502.000 Read 10 bytes:
+// 7065223a22696f222c22"), thousands of them, burying anything the app
+// itself has to say. It is a protocol-debugging aid for esptool-js, not
+// something this app needs; flip it back on here if you are ever
+// debugging the flasher's own framing. What the *device* says is logged
+// separately and legibly (see serialConsole.js).
+const TRACE_SERIAL = false;
 import { getStoredToken } from '/nodigraph/src/model/githubSync.js';
 
 const sessions = new Map(); // blockId -> { port, transport, esploader, chipName, bootloaderOffset }
@@ -131,7 +141,7 @@ function describePort(port) {
 
 export async function connect(blockId, { onLog } = {}) {
   const port = await navigator.serial.requestPort();
-  const transport = new Transport(port, true);
+  const transport = new Transport(port, TRACE_SERIAL);
   const session = { port, transport, esploader: null, chipName: null, bootloaderOffset: null };
   sessions.set(blockId, session);
   onLog?.(`Port selected: ${describePort(port)}`);
@@ -170,7 +180,7 @@ export async function reopenPlain(blockId, baudrate = 115200) {
   } catch {
     // Already closed, or never fully opened — nothing to release.
   }
-  const transport = new Transport(session.port, true);
+  const transport = new Transport(session.port, TRACE_SERIAL);
   await transport.connect(baudrate);
   await releaseResetLines(transport);
   const fresh = { port: session.port, transport, esploader: null, bootloaderDirty: false, chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };
@@ -212,7 +222,7 @@ export async function detectChip(blockId, { onLog } = {}) {
   } catch {
     // Never opened yet, or already closed — nothing to release.
   }
-  const transport = new Transport(session.port, true);
+  const transport = new Transport(session.port, TRACE_SERIAL);
   session.transport = transport;
   session.bootloaderDirty = true; // see ensureOpenPlain — true even if the sync below fails
   const terminal = { clean() {}, writeLine: (line) => onLog?.(line), write: (line) => onLog?.(line) };
