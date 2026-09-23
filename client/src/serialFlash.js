@@ -24,6 +24,7 @@ const TRACE_SERIAL = false;
 import { getStoredToken } from '/nodigraph/src/model/githubSync.js';
 
 const sessions = new Map(); // blockId -> { port, transport, esploader, chipName, bootloaderOffset }
+const ESPRESSIF_USB_JTAG_SERIAL_PID = 0x1001;
 
 export function isSupported() {
   return typeof navigator !== 'undefined' && 'serial' in navigator;
@@ -343,7 +344,23 @@ export async function detectChip(blockId, { onLog } = {}) {
   // undefined (reading 'BOOTLOADER_FLASH_OFFSET')", which says nothing
   // about the board never having answered in the first place.
   try {
-    session.chipName = await esploader.main();
+    const nativeUsb = session.port.getInfo?.().usbProductId === ESPRESSIF_USB_JTAG_SERIAL_PID;
+    if (nativeUsb) {
+      // Starting esptool's RAM stub can tear down the S3's native USB data
+      // stream immediately after otherwise-successful chip detection. The
+      // ROM loader supports writeFlash too; keep using that stable stream
+      // for 303a:1001 instead of uploading/running a stub first.
+      await esploader.detectChip();
+      session.chipName = await esploader.chip.getChipDescription(esploader);
+      terminal.writeLine(`Chip is ${session.chipName}`);
+      terminal.writeLine(`Features: ${(await esploader.chip.getChipFeatures(esploader)).join(',')}`);
+      terminal.writeLine(`Crystal is ${await esploader.chip.getCrystalFreq(esploader)}MHz`);
+      terminal.writeLine(`MAC: ${await esploader.chip.readMac(esploader)}`);
+      await esploader.chip.postConnect?.(esploader);
+      terminal.writeLine('Using ROM flasher for native USB.');
+    } else {
+      session.chipName = await esploader.main();
+    }
   } catch (err) {
     session.esploader = null;
     session.chipName = null;

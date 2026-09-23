@@ -74,6 +74,13 @@ test('flash refuses classic ESP32 preset parts on a detected S3 before writing',
   assert.equal(writes, 0);
 });
 
+test('native ESP32-S3 USB uses ROM flashing instead of the unstable RAM stub', () => {
+  const flashSource = fs.readFileSync(new URL('../client/src/serialFlash.js', import.meta.url), 'utf8');
+  assert.match(flashSource.replace(/\s+/g, ' '), /usbProductId === ESPRESSIF_USB_JTAG_SERIAL_PID/);
+  assert.match(flashSource, /await esploader\.detectChip\(\)/);
+  assert.match(flashSource, /Using ROM flasher for native USB/);
+});
+
 for (const name of ['esp32-devkit', 'esp32-s3-devkit']) {
   test(`${name} selects S3 firmware from detection even for a classic diagram block`, () => {
     const module = JSON.parse(fs.readFileSync(new URL(`../modules/${name}/noditron.module.json`, import.meta.url)));
