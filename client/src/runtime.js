@@ -517,7 +517,10 @@ export function evaluateLevel(project) {
 // from changeTracker/compiledCache elsewhere in this file).
 const levelOutputValueCache = new Map(); // containerId -> outputValue Map
 function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
-  if (!container.children) return;
+    if (!container.children) {
+      beforeLevel?.(container, []);
+      return;
+    }
   const blocks = [...container.children.blocks.values()];
   for (const block of blocks) evaluateSubtree(block, currentLevelBlock, results, beforeLevel);
 

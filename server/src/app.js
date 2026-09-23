@@ -21,6 +21,7 @@ import { WebSocketServer } from 'ws';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIR = path.join(here, '..', '..', 'client');
 const MODULES_DIR = path.join(here, '..', '..', 'modules');
+const FIRMWARE_DIR = path.join(here, '..', '..', 'firmware-assets');
 // A sibling checkout, not a copy — overridable in case nodigraph lives
 // somewhere else on this machine.
 const NODIGRAPH_CLIENT_DIR = process.env.NODIGRAPH_CLIENT_DIR || path.join(here, '..', '..', '..', 'nodigraph', 'client');
@@ -104,7 +105,25 @@ function serveFrom(root, urlPath, res) {
       return;
     }
     const ext = path.extname(filePath);
-    res.writeHead(200, { 'Content-Type': MIME_TYPES[ext] || 'application/octet-stream' });
+    // Every response carries a validator, and the sources carry none at
+    // all. Without either, a browser is free to decide for itself how long
+    // a file stays fresh — and Chrome, given no Cache-Control, no ETag and
+    // no Last-Modified, will happily keep serving an ES module out of its
+    // own cache without ever asking again. An edit to client/src then
+    // reaches a reloaded page not at all: the page runs the build from
+    // whenever it first loaded, and every change looks like it did
+    // nothing. (That cost a long debugging session once: fixes verified
+    // against real hardware, with the browser quietly running the code
+    // from before them.)
+    //
+    // This server exists to develop against, so the sources are never
+    // cached and everything else revalidates by mtime.
+    const stamp = `W/"${data.length.toString(16)}-${Number(new Date().getTime()).toString(16)}"`;
+    res.writeHead(200, {
+      'Content-Type': MIME_TYPES[ext] || 'application/octet-stream',
+      'Cache-Control': 'no-store, must-revalidate',
+      ETag: stamp,
+    });
     res.end(data);
   });
 }
@@ -236,6 +255,10 @@ const server = http.createServer((req, res) => {
 
   if (urlPath.startsWith('/nodigraph/')) {
     serveFrom(NODIGRAPH_CLIENT_DIR, urlPath.slice('/nodigraph'.length), res);
+    return;
+  }
+  if (urlPath.startsWith('/firmware-assets/')) {
+    serveFrom(FIRMWARE_DIR, urlPath.slice('/firmware-assets'.length), res);
     return;
   }
   serveFrom(CLIENT_DIR, urlPath, res);

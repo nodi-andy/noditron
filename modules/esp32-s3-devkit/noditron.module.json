@@ -1,292 +1,148 @@
 {
   "noditronModule": 1,
   "name": "esp32-s3-devkit",
-  "displayName": "ESP32-S3 DevKit",
-  "version": "1.5.0",
-  "description": "An ESP32-S3-DevKitC-1 with every header pin on the block edge, USB at the top, and the pins conucon's Logic Module reserves on an S3 (native USB, and everything not brought out) marked as such. Connect over Web Serial, detect the chip, and flash the ESP32-S3 build of logicMod from the browser.",
+  "displayName": "esp32-S3",
+  "version": "1.6.1",
+  "description": "Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8 on GPIO4-11, DO1-DO8 through TCA9554 EXIO1-8 and isolated Darlington drivers. CAN TX=2/RX=3. USB console and firmware installation.",
   "swatchColor": "#2f6fed",
   "block": {
     "format": "nodigraph/clipboard-v1",
     "blocks": [
       {
         "id": "blk_mtg8v3eu8",
-        "name": "ESP32-S3 DevKit",
+        "name": "esp32-S3",
         "type": "block",
         "kind": "block",
-        "description": "Block: ESP32-S3 DevKit\n\nprop.noditronKind: esp32-devkit\nprop.chipFamily: ESP32-S3\nprop.connectionState: disconnected\nprop.lastSentSnapshot: \nprop.html: container.style.position = 'relative';\ncontainer.style.display = 'flex';\ncontainer.style.flexDirection = 'column';\ncontainer.style.boxSizing = 'border-box';\ncontainer.style.padding = '8px';\ncontainer.style.fontFamily = 'Inter, sans-serif';\n\nlet row = container.querySelector('.esp-status-row');\nif (!row) {\n  row = document.createElement('div');\n  row.className = 'esp-status-row';\n  row.style.cssText = 'display:flex;align-items:center;gap:6px;max-width:calc(100% - 26px);';\n  const dot = document.createElement('span');\n  dot.className = 'esp-status-dot';\n  dot.style.cssText = 'width:9px;height:9px;border-radius:50%;flex:none;background:var(--border);';\n  const label = document.createElement('span');\n  label.className = 'esp-status-label';\n  label.style.cssText = 'font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';\n  row.append(dot, label);\n\n  const dirty = document.createElement('div');\n  dirty.className = 'esp-dirty-row';\n  dirty.style.cssText = 'font-size:9px;color:#e5b93e;margin-top:2px;';\n\n  const gear = document.createElement('button');\n  gear.type = 'button';\n  gear.className = 'esp-gear';\n  gear.textContent = String.fromCharCode(9881);\n  gear.title = 'Configure';\n  gear.style.cssText = 'position:absolute;top:4px;right:4px;width:20px;height:20px;padding:0;border-radius:5px;border:1px solid var(--border);background:none;color:var(--text-muted);font-size:11px;line-height:1;cursor:pointer;';\n  gear.addEventListener('click', helpers.openDialog);\n\n  container.append(row, dirty, gear);\n}\n\nconst state = String((block.props.find((p) => p.name === 'connectionState') || {}).value || 'disconnected');\nconst dot = container.querySelector('.esp-status-dot');\nconst label = container.querySelector('.esp-status-label');\nif (state === 'connected:running') {\n  dot.style.background = '#3ecf5d';\n  label.textContent = 'Logic Module running';\n} else if (state === 'disconnected' || !state) {\n  dot.style.background = 'var(--border)';\n  label.textContent = 'Not connected';\n} else if (state.indexOf('connected:needs-firmware:') === 0) {\n  dot.style.background = '#e5b93e';\n  label.textContent = state.slice('connected:needs-firmware:'.length) + ' -- needs firmware';\n} else {\n  dot.style.background = '#e5b93e';\n  label.textContent = 'Connected -- firmware unknown';\n}\n\nconst childCount = block.children ? block.children.blocks.size : 0;\nconst snapshot = block.children ? JSON.stringify(Array.from(block.children.blocks.values()).map((c) => ({ id: c.id, props: c.props }))) : '';\nconst lastSent = (block.props.find((p) => p.name === 'lastSentSnapshot') || {}).value || '';\ncontainer.querySelector('.esp-dirty-row').textContent = childCount && snapshot !== lastSent ? 'Circuit changed -- not sent' : '';\nprop.dialog: container.style.fontFamily = 'Inter, sans-serif';\ncontainer.style.minWidth = '420px';\n\nconst heading = document.createElement('h3');\nheading.textContent = String(block.name || 'ESP32 DEVKIT').toUpperCase();\nheading.style.cssText = 'margin:0 0 14px;color:var(--success,#3ecf5d);font-size:15px;letter-spacing:.03em;';\ncontainer.appendChild(heading);\n\nif (!helpers.serial || !helpers.serial.isSupported()) {\n  const notSupported = document.createElement('p');\n  notSupported.style.cssText = 'margin:0;font-size:12px;color:var(--text-muted);';\n  notSupported.textContent = 'Web Serial is not available in this browser (use Chrome or Edge on desktop).';\n  container.appendChild(notSupported);\n} else {\n  const btnStyle = 'padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text-primary);font-size:12px;cursor:pointer;';\n  const primaryBtnStyle = 'padding:6px 14px;border:1px solid var(--success,#3ecf5d);border-radius:6px;background:var(--success,#3ecf5d);color:#06210f;font-size:12px;font-weight:600;cursor:pointer;';\n  const sectionStyle = 'margin:0 0 16px;padding-bottom:16px;border-bottom:1px solid var(--border);';\n  const labelStyle = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px;';\n\n  function childSnapshot() {\n    if (!block.children) return '';\n    return JSON.stringify(Array.from(block.children.blocks.values()).map((c) => ({ id: c.id, props: c.props })));\n  }\n\n  const statusEl = document.createElement('p');\n  statusEl.style.cssText = 'margin:0 0 12px;font-size:12px;color:var(--text-muted);';\n  container.appendChild(statusEl);\n\n  const connectRow = document.createElement('div');\n  connectRow.style.cssText = 'display:flex;gap:8px;margin-bottom:16px;';\n  const connectBtn = document.createElement('button');\n  connectBtn.type = 'button';\n  connectBtn.textContent = 'Connect (COM)';\n  connectBtn.style.cssText = btnStyle;\n  const disconnectBtn = document.createElement('button');\n  disconnectBtn.type = 'button';\n  disconnectBtn.textContent = 'Disconnect';\n  disconnectBtn.style.cssText = btnStyle;\n  disconnectBtn.disabled = true;\n  connectRow.append(connectBtn, disconnectBtn);\n  container.appendChild(connectRow);\n\n  // Shown only once a port is open but no firmware answered 'ping' --\n  // either a genuinely blank chip, or one running something else entirely.\n  const firmwareSection = document.createElement('div');\n  firmwareSection.style.cssText = sectionStyle + 'display:none;';\n  const firmwareLabel = document.createElement('div');\n  firmwareLabel.textContent = 'NO FIRMWARE DETECTED';\n  firmwareLabel.style.cssText = labelStyle;\n  firmwareSection.appendChild(firmwareLabel);\n  const firmwareRow = document.createElement('div');\n  firmwareRow.style.cssText = 'display:flex;gap:8px;align-items:center;';\n  const firmwareSelect = document.createElement('select');\n  firmwareSelect.style.cssText = 'flex:1;padding:5px 6px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;';\n  const presets = (helpers.serial.firmwarePresets || []).filter((p) => !props.chipFamily || p.chip === props.chipFamily);\n  for (const preset of presets) {\n    const option = document.createElement('option');\n    option.value = preset.id;\n    option.textContent = preset.label;\n    firmwareSelect.appendChild(option);\n  }\n  const installBtn = document.createElement('button');\n  installBtn.type = 'button';\n  installBtn.textContent = 'Install firmware';\n  installBtn.style.cssText = primaryBtnStyle;\n  installBtn.disabled = !presets.length;\n  firmwareRow.append(firmwareSelect, installBtn);\n  firmwareSection.appendChild(firmwareRow);\n  if (!presets.length) {\n    const noPresets = document.createElement('p');\n    noPresets.textContent = 'No firmware published yet for this chip.';\n    noPresets.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';\n    firmwareSection.appendChild(noPresets);\n  }\n  const progressEl = document.createElement('div');\n  progressEl.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';\n  firmwareSection.appendChild(progressEl);\n  container.appendChild(firmwareSection);\n\n  // Shown only once the board's own console confirmed it's actually\n  // running -- this is where the \"fixed hardware modules\" live; for now\n  // that's just Digital I/O (see the module's own children), CAN/WiFi etc.\n  // are future, separate submodules, not this one's job.\n  const programSection = document.createElement('div');\n  programSection.style.cssText = sectionStyle + 'display:none;';\n  const programLabel = document.createElement('div');\n  programLabel.textContent = 'DIGITAL I/O';\n  programLabel.style.cssText = labelStyle;\n  programSection.appendChild(programLabel);\n  const programStatus = document.createElement('p');\n  programStatus.style.cssText = 'margin:0 0 8px;font-size:11px;color:var(--text-muted);';\n  programSection.appendChild(programStatus);\n  const sendBtn = document.createElement('button');\n  sendBtn.type = 'button';\n  sendBtn.textContent = 'Save changes to device';\n  sendBtn.style.cssText = btnStyle;\n  programSection.appendChild(sendBtn);\n  container.appendChild(programSection);\n\n  function updateProgramSection() {\n    const childCount = block.children ? block.children.blocks.size : 0;\n    // Reads block.props directly rather than the `props` shorthand --\n    // that's a one-time snapshot taken when the dialog opened, so it would\n    // still show the *previous* lastSentSnapshot right after a successful\n    // save this same session (helpers.setProp mutates the live block, not\n    // this closure's own copy of it).\n    const lastSent = (block.props.find((p) => p.name === 'lastSentSnapshot') || {}).value || '';\n    const dirty = childCount && childSnapshot() !== lastSent;\n    programStatus.textContent = !childCount\n      ? 'No Digital I/O blocks inside this ' + (block.name || 'ESP32 DevKit') + ' yet -- enter it to add some.'\n      : dirty ? 'Circuit changed -- not yet saved to the device.' : 'Circuit matches what is on the device.';\n    sendBtn.disabled = !childCount;\n  }\n  updateProgramSection();\n\n  // A truly blank chip also needs its own bootloader/partition table, not\n  // just the app image \"Install firmware\" above assumes is already there\n  // (the ordinary case -- factory-fresh or previously-flashed boards both\n  // already have one). Collapsed since most people never need it.\n  const advanced = document.createElement('details');\n  advanced.style.cssText = 'margin:0 0 12px;';\n  const summary = document.createElement('summary');\n  summary.textContent = 'Advanced: flash files manually';\n  summary.style.cssText = 'cursor:pointer;font-size:11px;color:var(--text-muted);margin-bottom:8px;';\n  advanced.appendChild(summary);\n  const rows = document.createElement('div');\n  advanced.appendChild(rows);\n  const addRowBtn = document.createElement('button');\n  addRowBtn.type = 'button';\n  addRowBtn.textContent = '+ Add file';\n  addRowBtn.style.cssText = btnStyle;\n  advanced.appendChild(addRowBtn);\n  const eraseRow = document.createElement('label');\n  eraseRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin:12px 0;cursor:pointer;font-size:12px;';\n  const eraseCheckbox = document.createElement('input');\n  eraseCheckbox.type = 'checkbox';\n  eraseCheckbox.checked = true;\n  eraseRow.append(eraseCheckbox, document.createTextNode('Erase flash before writing (recommended for a blank board)'));\n  advanced.appendChild(eraseRow);\n  const flashBtn = document.createElement('button');\n  flashBtn.type = 'button';\n  flashBtn.textContent = 'Flash';\n  flashBtn.style.cssText = btnStyle;\n  advanced.appendChild(flashBtn);\n  container.appendChild(advanced);\n\n  const logEl = document.createElement('pre');\n  logEl.style.cssText = 'margin:0;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-well);color:var(--text-secondary);font-family:ui-monospace,Consolas,monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto;';\n  logEl.textContent = String(props.connectionState || 'disconnected');\n  container.appendChild(logEl);\n  function log(line) {\n    logEl.textContent += '\\n' + line;\n    logEl.scrollTop = logEl.scrollHeight;\n  }\n\n  let bootloaderOffset = null;\n\n  function showRunning() {\n    firmwareSection.style.display = 'none';\n    programSection.style.display = '';\n    updateProgramSection();\n  }\n\n  function showNeedsFirmware() {\n    programSection.style.display = 'none';\n    firmwareSection.style.display = '';\n  }\n\n  // The one place that decides what's actually on the other end of the\n  // port: try the console's own 'ping' first (harmless if it's already\n  // running -- just a status line back), and only reset into the ROM\n  // bootloader if nothing answers. Reused after Connect, and again after\n  // Install firmware once the board's had a moment to boot into it.\n  async function afterPortOpen() {\n    statusEl.textContent = 'Connected -- checking for firmware...';\n    try {\n      const info = await helpers.console.identify({ timeoutMs: 1500 });\n      if (info.verified) {\n        statusEl.textContent = 'Logic Module v' + info.version + ' running.';\n        log('ping: v' + info.version + ' build ' + info.build + ', heap=' + info.heap + '.');\n        helpers.setProp('connectionState', 'connected:running');\n        showRunning();\n        return;\n      }\n    } catch (err) {\n      log('Console check failed: ' + err.message);\n    }\n    try {\n      const detected = await helpers.serial.detectChip(log);\n      bootloaderOffset = detected.bootloaderOffset;\n      statusEl.textContent = detected.chipName + ' detected -- no firmware running yet.';\n      log('Detected ' + detected.chipName + ' (bootloader @ 0x' + detected.bootloaderOffset.toString(16) + ').');\n      helpers.setProp('connectionState', 'connected:needs-firmware:' + detected.chipName);\n      showNeedsFirmware();\n    } catch (err) {\n      statusEl.textContent = 'Connected, but could not identify the board.';\n      log('Chip detect failed: ' + err.message);\n      helpers.setProp('connectionState', 'connected:unknown');\n    }\n  }\n\n  const existing = helpers.serial.getSession();\n  if (existing) {\n    disconnectBtn.disabled = false;\n    connectBtn.disabled = true;\n    afterPortOpen();\n  } else {\n    statusEl.textContent = 'Not connected.';\n  }\n\n  connectBtn.addEventListener('click', async () => {\n    connectBtn.disabled = true;\n    try {\n      await helpers.serial.connect(log);\n      log('Serial port opened.');\n      disconnectBtn.disabled = false;\n      await afterPortOpen();\n    } catch (err) {\n      statusEl.textContent = 'Connect failed: ' + err.message;\n      connectBtn.disabled = false;\n    }\n  });\n\n  disconnectBtn.addEventListener('click', async () => {\n    helpers.console.close();\n    await helpers.serial.disconnect();\n    statusEl.textContent = 'Disconnected.';\n    connectBtn.disabled = false;\n    disconnectBtn.disabled = true;\n    firmwareSection.style.display = 'none';\n    programSection.style.display = 'none';\n    helpers.setProp('connectionState', 'disconnected');\n  });\n\n  installBtn.addEventListener('click', async () => {\n    const preset = presets.find((p) => p.id === firmwareSelect.value);\n    if (!preset) return;\n    installBtn.disabled = true;\n    const original = installBtn.textContent;\n    installBtn.textContent = 'Installing...';\n    try {\n      const files = await helpers.serial.fetchPresetParts(preset);\n      log('Fetched ' + preset.label + ' (' + files.map((f) => f.name).join(', ') + ').');\n      // Every part of the preset, written together in one writeFlash call --\n      // never just the app image alone. A board that only ever gets its app\n      // partition rewritten keeps whatever bootloader/partition table it\n      // already has, which is fine right up until one doesn't have either\n      // (a genuinely blank or fully erased chip) -- then the ROM loops\n      // \"invalid header: 0xffffffff\" forever with nothing to hand off to.\n      // Rewriting an unchanged bootloader/partition table on a board that\n      // already had one is a harmless no-op, so always including them here\n      // costs nothing on the common case and fixes the blank-chip one.\n      await helpers.serial.flash(\n        files,\n        false,\n        (fileIndex, written, total) => {\n          progressEl.textContent = 'File ' + (fileIndex + 1) + '/' + files.length + ': ' + Math.round((written / total) * 100) + '%';\n        },\n        log,\n      );\n      progressEl.textContent = '';\n      statusEl.textContent = 'Flashed -- waiting for the board to boot...';\n      await new Promise((resolve) => setTimeout(resolve, 2000));\n      await afterPortOpen();\n    } catch (err) {\n      log('Install failed: ' + err.message);\n    } finally {\n      installBtn.disabled = false;\n      installBtn.textContent = original;\n    }\n  });\n\n  sendBtn.addEventListener('click', async () => {\n    sendBtn.disabled = true;\n    const original = sendBtn.textContent;\n    sendBtn.textContent = 'Saving...';\n    try {\n      const children = block.children ? Array.from(block.children.blocks.values()) : [];\n      const design = helpers.console.buildMinimalDesign(children);\n      if (!design.blocks.length) {\n        log('Nothing to send -- add a Digital I/O block inside this ESP32 DevKit with a real pin set first.');\n      } else {\n        await helpers.console.sendDesign(design);\n        helpers.setProp('lastSentSnapshot', childSnapshot());\n        log('Saved ' + design.blocks.length + ' pin(s) to the device. It applies immediately and survives reboot.');\n        updateProgramSection();\n      }\n    } catch (err) {\n      log('Save failed: ' + err.message);\n    } finally {\n      sendBtn.disabled = false;\n      sendBtn.textContent = original;\n    }\n  });\n\n  function addFileRow() {\n    const row = document.createElement('div');\n    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';\n    const fileInput = document.createElement('input');\n    fileInput.type = 'file';\n    fileInput.accept = '.bin';\n    fileInput.style.cssText = 'flex:1;font-size:11px;min-width:0;';\n    const addrInput = document.createElement('input');\n    addrInput.type = 'text';\n    addrInput.style.cssText = 'width:90px;flex:none;padding:4px 6px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;font-family:ui-monospace,monospace;box-sizing:border-box;';\n    addrInput.value = '0x10000';\n    const removeBtn = document.createElement('button');\n    removeBtn.type = 'button';\n    removeBtn.textContent = String.fromCharCode(215);\n    removeBtn.style.cssText = 'width:22px;height:22px;flex:none;padding:0;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text-muted);cursor:pointer;';\n    removeBtn.addEventListener('click', () => row.remove());\n    fileInput.addEventListener('change', () => {\n      const f = fileInput.files[0];\n      if (f) addrInput.value = '0x' + helpers.serial.guessAddress(f.name, bootloaderOffset).toString(16);\n    });\n    row.append(fileInput, addrInput, removeBtn);\n    rows.appendChild(row);\n  }\n  addFileRow();\n  addRowBtn.addEventListener('click', () => addFileRow());\n\n  flashBtn.addEventListener('click', async () => {\n    const files = [];\n    for (const row of rows.children) {\n      const addrInput = row.querySelector('input[type=text]');\n      const address = parseInt(addrInput.value, 16) || 0;\n      const fileInput = row.querySelector('input[type=file]');\n      const file = fileInput && fileInput.files[0];\n      if (!file) continue;\n      files.push({ name: file.name, file, address });\n    }\n    if (!files.length) { log('Pick at least one .bin file first.'); return; }\n    flashBtn.disabled = true;\n    try {\n      await helpers.serial.flash(\n        files,\n        eraseCheckbox.checked,\n        (fileIndex, written, total) => {\n          progressEl.textContent = 'File ' + (fileIndex + 1) + ': ' + Math.round((written / total) * 100) + '%';\n        },\n        log,\n      );\n      statusEl.textContent = 'Flashed -- waiting for the board to boot...';\n      await new Promise((resolve) => setTimeout(resolve, 2000));\n      await afterPortOpen();\n    } catch (err) {\n      log('Flash failed: ' + err.message);\n    } finally {\n      flashBtn.disabled = false;\n    }\n  });\n}",
+        "description": "",
         "geometry": {
           "x": 0,
           "y": 0,
           "width": 300,
-          "height": 940
+          "height": 460
         },
         "style": {
           "color": "#3b6fa0"
         },
         "logicalPorts": [
           {
-            "id": "io_esp32s3_left_gnd_1",
-            "name": "GND",
-            "direction": null,
-            "description": "ground"
-          },
-          {
-            "id": "io_esp32s3_left_g19_1",
-            "name": "G19",
-            "direction": null,
-            "description": "GPIO19 — unavailable: native USB D− — reconfiguring it breaks the USB port"
-          },
-          {
-            "id": "io_esp32s3_left_g20_1",
-            "name": "G20",
-            "direction": null,
-            "description": "GPIO20 — unavailable: native USB D+ — reconfiguring it breaks the USB port"
-          },
-          {
-            "id": "io_esp32s3_left_g21_1",
-            "name": "G21",
-            "direction": null,
-            "description": "GPIO21"
-          },
-          {
-            "id": "io_esp32s3_left_g47_1",
-            "name": "G47",
-            "direction": null,
-            "description": "GPIO47"
-          },
-          {
-            "id": "io_esp32s3_left_g48_1",
-            "name": "G48",
-            "direction": null,
-            "description": "GPIO48 — the on-board RGB LED"
-          },
-          {
-            "id": "io_esp32s3_left_g45_1",
-            "name": "G45",
-            "direction": null,
-            "description": "GPIO45 — strapping pin (VDD_SPI voltage)"
-          },
-          {
-            "id": "io_esp32s3_left_g0_1",
-            "name": "G0",
-            "direction": null,
-            "description": "GPIO0 — strapping pin, and the BOOT button"
-          },
-          {
-            "id": "io_esp32s3_left_g35_1",
-            "name": "G35",
-            "direction": null,
-            "description": "GPIO35"
-          },
-          {
-            "id": "io_esp32s3_left_g36_1",
-            "name": "G36",
-            "direction": null,
-            "description": "GPIO36"
-          },
-          {
-            "id": "io_esp32s3_left_g37_1",
-            "name": "G37",
-            "direction": null,
-            "description": "GPIO37"
-          },
-          {
-            "id": "io_esp32s3_left_g38_1",
-            "name": "G38",
-            "direction": null,
-            "description": "GPIO38"
-          },
-          {
-            "id": "io_esp32s3_left_g39_1",
-            "name": "G39",
-            "direction": null,
-            "description": "GPIO39"
-          },
-          {
-            "id": "io_esp32s3_left_g40_1",
-            "name": "G40",
-            "direction": null,
-            "description": "GPIO40"
-          },
-          {
-            "id": "io_esp32s3_left_g41_1",
-            "name": "G41",
-            "direction": null,
-            "description": "GPIO41"
-          },
-          {
-            "id": "io_esp32s3_left_g42_1",
-            "name": "G42",
-            "direction": null,
-            "description": "GPIO42"
-          },
-          {
-            "id": "io_esp32s3_left_g2_1",
-            "name": "G2",
-            "direction": null,
-            "description": "GPIO2"
-          },
-          {
-            "id": "io_esp32s3_left_g1_1",
-            "name": "G1",
-            "direction": null,
-            "description": "GPIO1"
-          },
-          {
-            "id": "io_esp32s3_left_rx0_1",
-            "name": "RX0",
-            "direction": null,
-            "description": "GPIO44 — UART0 RX — the USB-UART console"
-          },
-          {
-            "id": "io_esp32s3_left_tx0_1",
-            "name": "TX0",
-            "direction": null,
-            "description": "GPIO43 — UART0 TX — the USB-UART console"
-          },
-          {
-            "id": "io_esp32s3_left_gnd_2",
-            "name": "GND",
-            "direction": null,
-            "description": "ground"
-          },
-          {
-            "id": "io_esp32s3_left_gnd_3",
-            "name": "GND",
-            "direction": null,
-            "description": "ground"
-          },
-          {
-            "id": "io_esp32s3_right_gnd_4",
-            "name": "GND",
-            "direction": null,
-            "description": "ground"
-          },
-          {
-            "id": "io_esp32s3_right_5v_1",
-            "name": "5V",
-            "direction": null,
-            "description": "power"
-          },
-          {
-            "id": "io_esp32s3_right_g14_1",
-            "name": "G14",
-            "direction": null,
-            "description": "GPIO14"
-          },
-          {
-            "id": "io_esp32s3_right_g13_1",
-            "name": "G13",
-            "direction": null,
-            "description": "GPIO13"
-          },
-          {
-            "id": "io_esp32s3_right_g12_1",
-            "name": "G12",
-            "direction": null,
-            "description": "GPIO12"
-          },
-          {
-            "id": "io_esp32s3_right_g11_1",
-            "name": "G11",
-            "direction": null,
-            "description": "GPIO11"
-          },
-          {
-            "id": "io_esp32s3_right_g10_1",
-            "name": "G10",
-            "direction": null,
-            "description": "GPIO10"
-          },
-          {
-            "id": "io_esp32s3_right_g9_1",
-            "name": "G9",
-            "direction": null,
-            "description": "GPIO9 — I2C SCL, as the Logic Module configures it on an S3"
-          },
-          {
-            "id": "io_esp32s3_right_g46_1",
-            "name": "G46",
-            "direction": null,
-            "description": "GPIO46 — strapping pin, input-only on some S3 revisions"
-          },
-          {
-            "id": "io_esp32s3_right_g3_1",
-            "name": "G3",
-            "direction": null,
-            "description": "GPIO3 — strapping pin (JTAG source select)"
-          },
-          {
-            "id": "io_esp32s3_right_g8_1",
-            "name": "G8",
-            "direction": null,
-            "description": "GPIO8 — I2C SDA, as the Logic Module configures it on an S3"
-          },
-          {
-            "id": "io_esp32s3_right_g18_1",
-            "name": "G18",
-            "direction": null,
-            "description": "GPIO18"
-          },
-          {
-            "id": "io_esp32s3_right_g17_1",
-            "name": "G17",
-            "direction": null,
-            "description": "GPIO17"
-          },
-          {
-            "id": "io_esp32s3_right_g16_1",
-            "name": "G16",
-            "direction": null,
-            "description": "GPIO16 — CAN RX by default (see the CAN block)"
-          },
-          {
-            "id": "io_esp32s3_right_g15_1",
-            "name": "G15",
-            "direction": null,
-            "description": "GPIO15 — CAN TX by default (see the CAN block)"
-          },
-          {
-            "id": "io_esp32s3_right_g7_1",
-            "name": "G7",
-            "direction": null,
-            "description": "GPIO7"
-          },
-          {
-            "id": "io_esp32s3_right_g6_1",
-            "name": "G6",
-            "direction": null,
-            "description": "GPIO6"
-          },
-          {
-            "id": "io_esp32s3_right_g5_1",
-            "name": "G5",
-            "direction": null,
-            "description": "GPIO5"
-          },
-          {
-            "id": "io_esp32s3_right_g4_1",
-            "name": "G4",
-            "direction": null,
+            "id": "io_esp32s3_left_di1_1",
+            "name": "DI1",
+            "direction": "in",
             "description": "GPIO4"
           },
           {
-            "id": "io_esp32s3_right_rst_1",
-            "name": "RST",
-            "direction": null,
-            "description": "enable"
+            "id": "io_esp32s3_left_di2_1",
+            "name": "DI2",
+            "direction": "in",
+            "description": "GPIO5"
           },
           {
-            "id": "io_esp32s3_right_3v3_1",
-            "name": "3V3",
-            "direction": null,
-            "description": "power"
+            "id": "io_esp32s3_left_di3_1",
+            "name": "DI3",
+            "direction": "in",
+            "description": "GPIO6"
           },
           {
-            "id": "io_esp32s3_right_3v3_2",
-            "name": "3V3",
+            "id": "io_esp32s3_left_di4_1",
+            "name": "DI4",
+            "direction": "in",
+            "description": "GPIO7"
+          },
+          {
+            "id": "io_esp32s3_left_di5_1",
+            "name": "DI5",
+            "direction": "in",
+            "description": "GPIO8"
+          },
+          {
+            "id": "io_esp32s3_left_di6_1",
+            "name": "DI6",
+            "direction": "in",
+            "description": "GPIO9"
+          },
+          {
+            "id": "io_esp32s3_left_di7_1",
+            "name": "DI7",
+            "direction": "in",
+            "description": "GPIO10"
+          },
+          {
+            "id": "io_esp32s3_left_di8_1",
+            "name": "DI8",
+            "direction": "in",
+            "description": "GPIO11"
+          },
+          {
+            "id": "io_esp32s3_left_cantx_1",
+            "name": "CAN TX",
             "direction": null,
-            "description": "power"
+            "description": "GPIO2 — unavailable: CAN TX (TWAI)"
+          },
+          {
+            "id": "io_esp32s3_left_canrx_1",
+            "name": "CAN RX",
+            "direction": null,
+            "description": "GPIO3 — unavailable: CAN RX (TWAI)"
+          },
+          {
+            "id": "io_esp32s3_right_do1_1",
+            "name": "DO1",
+            "direction": "out",
+            "description": "GPIO1000 — TCA9554 EXIO1 / isolated Darlington output"
+          },
+          {
+            "id": "io_esp32s3_right_do2_1",
+            "name": "DO2",
+            "direction": "out",
+            "description": "GPIO1001 — TCA9554 EXIO2 / isolated Darlington output"
+          },
+          {
+            "id": "io_esp32s3_right_do3_1",
+            "name": "DO3",
+            "direction": "out",
+            "description": "GPIO1002 — TCA9554 EXIO3 / isolated Darlington output"
+          },
+          {
+            "id": "io_esp32s3_right_do4_1",
+            "name": "DO4",
+            "direction": "out",
+            "description": "GPIO1003 — TCA9554 EXIO4 / isolated Darlington output"
+          },
+          {
+            "id": "io_esp32s3_right_do5_1",
+            "name": "DO5",
+            "direction": "out",
+            "description": "GPIO1004 — TCA9554 EXIO5 / isolated Darlington output"
+          },
+          {
+            "id": "io_esp32s3_right_do6_1",
+            "name": "DO6",
+            "direction": "out",
+            "description": "GPIO1005 — TCA9554 EXIO6 / isolated Darlington output"
+          },
+          {
+            "id": "io_esp32s3_right_do7_1",
+            "name": "DO7",
+            "direction": "out",
+            "description": "GPIO1006 — TCA9554 EXIO7 / isolated Darlington output"
+          },
+          {
+            "id": "io_esp32s3_right_do8_1",
+            "name": "DO8",
+            "direction": "out",
+            "description": "GPIO1007 — TCA9554 EXIO8 / isolated Darlington output"
+          },
+          {
+            "id": "io_esp32s3_right_rs485tx_1",
+            "name": "RS485 TX",
+            "direction": null,
+            "description": "GPIO17 — unavailable: RS485 TX"
+          },
+          {
+            "id": "io_esp32s3_right_rs485rx_1",
+            "name": "RS485 RX",
+            "direction": null,
+            "description": "GPIO18 — unavailable: RS485 RX"
           },
           {
             "id": "io_esp32s3_top_usb_1",
@@ -297,311 +153,143 @@
         ],
         "ports": [
           {
-            "id": "prt_esp32s3_left_gnd_1",
-            "logicalId": "io_esp32s3_left_gnd_1",
+            "id": "prt_esp32s3_left_di1_1",
+            "logicalId": "io_esp32s3_left_di1_1",
             "side": "left",
             "offset": 30,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g19_1",
-            "logicalId": "io_esp32s3_left_g19_1",
+            "id": "prt_esp32s3_left_di2_1",
+            "logicalId": "io_esp32s3_left_di2_1",
             "side": "left",
             "offset": 70,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g20_1",
-            "logicalId": "io_esp32s3_left_g20_1",
+            "id": "prt_esp32s3_left_di3_1",
+            "logicalId": "io_esp32s3_left_di3_1",
             "side": "left",
             "offset": 110,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g21_1",
-            "logicalId": "io_esp32s3_left_g21_1",
+            "id": "prt_esp32s3_left_di4_1",
+            "logicalId": "io_esp32s3_left_di4_1",
             "side": "left",
             "offset": 150,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g47_1",
-            "logicalId": "io_esp32s3_left_g47_1",
+            "id": "prt_esp32s3_left_di5_1",
+            "logicalId": "io_esp32s3_left_di5_1",
             "side": "left",
             "offset": 190,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g48_1",
-            "logicalId": "io_esp32s3_left_g48_1",
+            "id": "prt_esp32s3_left_di6_1",
+            "logicalId": "io_esp32s3_left_di6_1",
             "side": "left",
             "offset": 230,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g45_1",
-            "logicalId": "io_esp32s3_left_g45_1",
+            "id": "prt_esp32s3_left_di7_1",
+            "logicalId": "io_esp32s3_left_di7_1",
             "side": "left",
             "offset": 270,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g0_1",
-            "logicalId": "io_esp32s3_left_g0_1",
+            "id": "prt_esp32s3_left_di8_1",
+            "logicalId": "io_esp32s3_left_di8_1",
             "side": "left",
             "offset": 310,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g35_1",
-            "logicalId": "io_esp32s3_left_g35_1",
+            "id": "prt_esp32s3_left_cantx_1",
+            "logicalId": "io_esp32s3_left_cantx_1",
             "side": "left",
             "offset": 350,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g36_1",
-            "logicalId": "io_esp32s3_left_g36_1",
+            "id": "prt_esp32s3_left_canrx_1",
+            "logicalId": "io_esp32s3_left_canrx_1",
             "side": "left",
             "offset": 390,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_left_g37_1",
-            "logicalId": "io_esp32s3_left_g37_1",
-            "side": "left",
-            "offset": 430,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_g38_1",
-            "logicalId": "io_esp32s3_left_g38_1",
-            "side": "left",
-            "offset": 470,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_g39_1",
-            "logicalId": "io_esp32s3_left_g39_1",
-            "side": "left",
-            "offset": 510,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_g40_1",
-            "logicalId": "io_esp32s3_left_g40_1",
-            "side": "left",
-            "offset": 550,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_g41_1",
-            "logicalId": "io_esp32s3_left_g41_1",
-            "side": "left",
-            "offset": 590,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_g42_1",
-            "logicalId": "io_esp32s3_left_g42_1",
-            "side": "left",
-            "offset": 630,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_g2_1",
-            "logicalId": "io_esp32s3_left_g2_1",
-            "side": "left",
-            "offset": 670,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_g1_1",
-            "logicalId": "io_esp32s3_left_g1_1",
-            "side": "left",
-            "offset": 710,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_rx0_1",
-            "logicalId": "io_esp32s3_left_rx0_1",
-            "side": "left",
-            "offset": 750,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_tx0_1",
-            "logicalId": "io_esp32s3_left_tx0_1",
-            "side": "left",
-            "offset": 790,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_gnd_2",
-            "logicalId": "io_esp32s3_left_gnd_2",
-            "side": "left",
-            "offset": 830,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_left_gnd_3",
-            "logicalId": "io_esp32s3_left_gnd_3",
-            "side": "left",
-            "offset": 870,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_gnd_4",
-            "logicalId": "io_esp32s3_right_gnd_4",
+            "id": "prt_esp32s3_right_do1_1",
+            "logicalId": "io_esp32s3_right_do1_1",
             "side": "right",
             "offset": 30,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_right_5v_1",
-            "logicalId": "io_esp32s3_right_5v_1",
+            "id": "prt_esp32s3_right_do2_1",
+            "logicalId": "io_esp32s3_right_do2_1",
             "side": "right",
             "offset": 70,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_right_g14_1",
-            "logicalId": "io_esp32s3_right_g14_1",
+            "id": "prt_esp32s3_right_do3_1",
+            "logicalId": "io_esp32s3_right_do3_1",
             "side": "right",
             "offset": 110,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_right_g13_1",
-            "logicalId": "io_esp32s3_right_g13_1",
+            "id": "prt_esp32s3_right_do4_1",
+            "logicalId": "io_esp32s3_right_do4_1",
             "side": "right",
             "offset": 150,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_right_g12_1",
-            "logicalId": "io_esp32s3_right_g12_1",
+            "id": "prt_esp32s3_right_do5_1",
+            "logicalId": "io_esp32s3_right_do5_1",
             "side": "right",
             "offset": 190,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_right_g11_1",
-            "logicalId": "io_esp32s3_right_g11_1",
+            "id": "prt_esp32s3_right_do6_1",
+            "logicalId": "io_esp32s3_right_do6_1",
             "side": "right",
             "offset": 230,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_right_g10_1",
-            "logicalId": "io_esp32s3_right_g10_1",
+            "id": "prt_esp32s3_right_do7_1",
+            "logicalId": "io_esp32s3_right_do7_1",
             "side": "right",
             "offset": 270,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_right_g9_1",
-            "logicalId": "io_esp32s3_right_g9_1",
+            "id": "prt_esp32s3_right_do8_1",
+            "logicalId": "io_esp32s3_right_do8_1",
             "side": "right",
             "offset": 310,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_right_g46_1",
-            "logicalId": "io_esp32s3_right_g46_1",
+            "id": "prt_esp32s3_right_rs485tx_1",
+            "logicalId": "io_esp32s3_right_rs485tx_1",
             "side": "right",
             "offset": 350,
             "manualOffset": true
           },
           {
-            "id": "prt_esp32s3_right_g3_1",
-            "logicalId": "io_esp32s3_right_g3_1",
+            "id": "prt_esp32s3_right_rs485rx_1",
+            "logicalId": "io_esp32s3_right_rs485rx_1",
             "side": "right",
             "offset": 390,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_g8_1",
-            "logicalId": "io_esp32s3_right_g8_1",
-            "side": "right",
-            "offset": 430,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_g18_1",
-            "logicalId": "io_esp32s3_right_g18_1",
-            "side": "right",
-            "offset": 470,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_g17_1",
-            "logicalId": "io_esp32s3_right_g17_1",
-            "side": "right",
-            "offset": 510,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_g16_1",
-            "logicalId": "io_esp32s3_right_g16_1",
-            "side": "right",
-            "offset": 550,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_g15_1",
-            "logicalId": "io_esp32s3_right_g15_1",
-            "side": "right",
-            "offset": 590,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_g7_1",
-            "logicalId": "io_esp32s3_right_g7_1",
-            "side": "right",
-            "offset": 630,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_g6_1",
-            "logicalId": "io_esp32s3_right_g6_1",
-            "side": "right",
-            "offset": 670,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_g5_1",
-            "logicalId": "io_esp32s3_right_g5_1",
-            "side": "right",
-            "offset": 710,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_g4_1",
-            "logicalId": "io_esp32s3_right_g4_1",
-            "side": "right",
-            "offset": 750,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_rst_1",
-            "logicalId": "io_esp32s3_right_rst_1",
-            "side": "right",
-            "offset": 790,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_3v3_1",
-            "logicalId": "io_esp32s3_right_3v3_1",
-            "side": "right",
-            "offset": 830,
-            "manualOffset": true
-          },
-          {
-            "id": "prt_esp32s3_right_3v3_2",
-            "logicalId": "io_esp32s3_right_3v3_2",
-            "side": "right",
-            "offset": 870,
             "manualOffset": true
           },
           {
@@ -641,13 +329,13 @@
             "id": "prp_mtg8v3eud",
             "name": "html",
             "kind": "value",
-            "value": "container.style.position = 'relative';\ncontainer.style.display = 'flex';\ncontainer.style.flexDirection = 'column';\ncontainer.style.boxSizing = 'border-box';\ncontainer.style.padding = '8px';\ncontainer.style.fontFamily = 'Inter, sans-serif';\n\nlet row = container.querySelector('.esp-status-row');\nif (!row) {\n  row = document.createElement('div');\n  row.className = 'esp-status-row';\n  row.style.cssText = 'display:flex;align-items:center;gap:6px;max-width:calc(100% - 26px);';\n  const dot = document.createElement('span');\n  dot.className = 'esp-status-dot';\n  dot.style.cssText = 'width:9px;height:9px;border-radius:50%;flex:none;background:var(--border);';\n  const label = document.createElement('span');\n  label.className = 'esp-status-label';\n  label.style.cssText = 'font-size:10px;font-weight:700;letter-spacing:.03em;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';\n  row.append(dot, label);\n\n  const dirty = document.createElement('div');\n  dirty.className = 'esp-dirty-row';\n  dirty.style.cssText = 'font-size:9px;color:#e5b93e;margin-top:2px;';\n\n  const gear = document.createElement('button');\n  gear.type = 'button';\n  gear.className = 'esp-gear';\n  gear.textContent = String.fromCharCode(9881);\n  gear.title = 'Configure';\n  gear.style.cssText = 'position:absolute;top:4px;right:4px;width:20px;height:20px;padding:0;border-radius:5px;border:1px solid var(--border);background:none;color:var(--text-muted);font-size:11px;line-height:1;cursor:pointer;';\n  gear.addEventListener('click', helpers.openDialog);\n\n  container.append(row, dirty, gear);\n}\n\nconst state = String((block.props.find((p) => p.name === 'connectionState') || {}).value || 'disconnected');\nconst dot = container.querySelector('.esp-status-dot');\nconst label = container.querySelector('.esp-status-label');\nif (state === 'connected:running') {\n  dot.style.background = '#3ecf5d';\n  label.textContent = 'Logic Module running';\n} else if (state === 'disconnected' || !state) {\n  dot.style.background = 'var(--border)';\n  label.textContent = 'Not connected';\n} else if (state.indexOf('connected:needs-firmware:') === 0) {\n  dot.style.background = '#e5b93e';\n  label.textContent = state.slice('connected:needs-firmware:'.length) + ' -- needs firmware';\n} else {\n  dot.style.background = '#e5b93e';\n  label.textContent = 'Connected -- firmware unknown';\n}\n\nconst childCount = block.children ? block.children.blocks.size : 0;\nconst snapshot = block.children ? JSON.stringify(Array.from(block.children.blocks.values()).map((c) => ({ id: c.id, props: c.props }))) : '';\nconst lastSent = (block.props.find((p) => p.name === 'lastSentSnapshot') || {}).value || '';\ncontainer.querySelector('.esp-dirty-row').textContent = childCount && snapshot !== lastSent ? 'Circuit changed -- not sent' : '';"
+            "value": "container.style.position = 'absolute';\nlet button = container.querySelector('.esp-connection');\nif (!button) {\n  container.replaceChildren();\n  button = document.createElement('button');\n  button.type = 'button';\n  button.className = 'esp-connection';\n  button.textContent = String.fromCharCode(9881);\n  button.setAttribute('aria-label', 'ESP connection');\n  button.addEventListener('click', helpers.openDialog);\n  container.appendChild(button);\n}\nconst state = block.props.find(p => p.name === 'connectionState')?.value || 'disconnected';\nconst connected = state === 'connected:running';\nconst sent = block.props.find(p => p.name === 'lastSentSnapshot')?.value || '';\nconst dirty = helpers.devkit.snapshot() !== sent;\nconst size = helpers.portSize || 14;\nbutton.style.cssText = 'position:absolute;box-sizing:border-box;padding:0;border:1px solid;border-radius:3px;line-height:1;cursor:pointer;background:var(--bg-well);';\nbutton.style.width = button.style.height = size + 'px';\nbutton.style.top = button.style.right = (4 * (helpers.contentScale || 1)) + 'px';\nbutton.style.fontSize = (size * 0.75) + 'px';\nbutton.style.color = connected ? '#3ecf5d' : '#94a3b8';\nbutton.style.borderColor = connected && dirty ? '#e5b93e' : 'currentColor';\nbutton.title = (connected ? 'Connected' : 'Connect ESP') + (connected && dirty ? ' - circuit not saved' : '') + ' - connection settings';\n"
           },
           {
             "id": "prp_mtg8v3eue",
             "name": "dialog",
             "kind": "value",
-            "value": "container.style.fontFamily = 'Inter, sans-serif';\ncontainer.style.minWidth = '420px';\n\nconst heading = document.createElement('h3');\nheading.textContent = String(block.name || 'ESP32 DEVKIT').toUpperCase();\nheading.style.cssText = 'margin:0 0 14px;color:var(--success,#3ecf5d);font-size:15px;letter-spacing:.03em;';\ncontainer.appendChild(heading);\n\nif (!helpers.serial || !helpers.serial.isSupported()) {\n  const notSupported = document.createElement('p');\n  notSupported.style.cssText = 'margin:0;font-size:12px;color:var(--text-muted);';\n  notSupported.textContent = 'Web Serial is not available in this browser (use Chrome or Edge on desktop).';\n  container.appendChild(notSupported);\n} else {\n  const btnStyle = 'padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text-primary);font-size:12px;cursor:pointer;';\n  const primaryBtnStyle = 'padding:6px 14px;border:1px solid var(--success,#3ecf5d);border-radius:6px;background:var(--success,#3ecf5d);color:#06210f;font-size:12px;font-weight:600;cursor:pointer;';\n  const sectionStyle = 'margin:0 0 16px;padding-bottom:16px;border-bottom:1px solid var(--border);';\n  const labelStyle = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px;';\n\n  function childSnapshot() {\n    if (!block.children) return '';\n    // Connections too, not just the blocks themselves -- rewiring which pin\n    // feeds which (with no other prop change at all) used to leave this\n    // dialog reporting \"Circuit matches what is on the device\" even though\n    // buildMinimalDesign's own belt routing (see serialConsole.js) would\n    // produce a genuinely different design.json for the new wiring.\n    const blocksSnap = Array.from(block.children.blocks.values()).map((c) => ({ id: c.id, props: c.props }));\n    const connsSnap = Array.from(block.children.connections.values()).map((cn) => ({\n      s: cn.sourceBlockId, sp: cn.sourcePortId, t: cn.targetBlockId, tp: cn.targetPortId,\n    }));\n    return JSON.stringify({ blocksSnap, connsSnap });\n  }\n\n  const statusEl = document.createElement('p');\n  statusEl.style.cssText = 'margin:0 0 12px;font-size:12px;color:var(--text-muted);';\n  container.appendChild(statusEl);\n\n  const connectRow = document.createElement('div');\n  connectRow.style.cssText = 'display:flex;gap:8px;margin-bottom:16px;';\n  const connectBtn = document.createElement('button');\n  connectBtn.type = 'button';\n  connectBtn.textContent = 'Connect (COM)';\n  connectBtn.style.cssText = btnStyle;\n  const disconnectBtn = document.createElement('button');\n  disconnectBtn.type = 'button';\n  disconnectBtn.textContent = 'Disconnect';\n  disconnectBtn.style.cssText = btnStyle;\n  disconnectBtn.disabled = true;\n  connectRow.append(connectBtn, disconnectBtn);\n  container.appendChild(connectRow);\n\n  // Shown only once a port is open but no firmware answered 'ping' --\n  // either a genuinely blank chip, or one running something else entirely.\n  const firmwareSection = document.createElement('div');\n  firmwareSection.style.cssText = sectionStyle + 'display:none;';\n  const firmwareLabel = document.createElement('div');\n  firmwareLabel.textContent = 'NO FIRMWARE DETECTED';\n  firmwareLabel.style.cssText = labelStyle;\n  firmwareSection.appendChild(firmwareLabel);\n  const firmwareRow = document.createElement('div');\n  firmwareRow.style.cssText = 'display:flex;gap:8px;align-items:center;';\n  const firmwareSelect = document.createElement('select');\n  firmwareSelect.style.cssText = 'flex:1;padding:5px 6px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;';\n  const presets = (helpers.serial.firmwarePresets || []).filter((p) => !props.chipFamily || p.chip === props.chipFamily);\n  for (const preset of presets) {\n    const option = document.createElement('option');\n    option.value = preset.id;\n    option.textContent = preset.label;\n    firmwareSelect.appendChild(option);\n  }\n  const installBtn = document.createElement('button');\n  installBtn.type = 'button';\n  installBtn.textContent = 'Install firmware';\n  installBtn.style.cssText = primaryBtnStyle;\n  installBtn.disabled = !presets.length;\n  firmwareRow.append(firmwareSelect, installBtn);\n  firmwareSection.appendChild(firmwareRow);\n  if (!presets.length) {\n    const noPresets = document.createElement('p');\n    noPresets.textContent = 'No firmware published yet for this chip.';\n    noPresets.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';\n    firmwareSection.appendChild(noPresets);\n  }\n  const progressEl = document.createElement('div');\n  progressEl.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';\n  firmwareSection.appendChild(progressEl);\n  container.appendChild(firmwareSection);\n\n  // Shown only once the board's own console confirmed it's actually\n  // running -- this is where the \"fixed hardware modules\" live; for now\n  // that's just Digital I/O (see the module's own children), CAN/WiFi etc.\n  // are future, separate submodules, not this one's job.\n  const programSection = document.createElement('div');\n  programSection.style.cssText = sectionStyle + 'display:none;';\n  const programLabel = document.createElement('div');\n  programLabel.textContent = 'DIGITAL I/O';\n  programLabel.style.cssText = labelStyle;\n  programSection.appendChild(programLabel);\n  const programStatus = document.createElement('p');\n  programStatus.style.cssText = 'margin:0 0 8px;font-size:11px;color:var(--text-muted);';\n  programSection.appendChild(programStatus);\n  const sendBtn = document.createElement('button');\n  sendBtn.type = 'button';\n  sendBtn.textContent = 'Save changes to device';\n  sendBtn.style.cssText = btnStyle;\n  programSection.appendChild(sendBtn);\n\n  // Live hardware override -- separate from \"Save changes to device\" above,\n  // which only ever declares pins (see buildMinimalDesign's own doc on why\n  // it can't yet compile real wiring). This talks straight to ioWrite() on\n  // the board (see esp32_logic's `io <gpio> <0|1>` serial command), the same\n  // direct-pin override its own browser circuit editor already does over\n  // WebSocket -- bypasses circuit logic entirely, on both ends.\n  const pinsLabel = document.createElement('div');\n  pinsLabel.textContent = 'LIVE PINS';\n  pinsLabel.style.cssText = labelStyle + 'margin-top:14px;';\n  programSection.appendChild(pinsLabel);\n  const pinsListEl = document.createElement('div');\n  pinsListEl.style.cssText = 'display:flex;flex-direction:column;gap:6px;';\n  programSection.appendChild(pinsListEl);\n  container.appendChild(programSection);\n\n  function updateProgramSection() {\n    const childCount = block.children ? block.children.blocks.size : 0;\n    // Reads block.props directly rather than the `props` shorthand --\n    // that's a one-time snapshot taken when the dialog opened, so it would\n    // still show the *previous* lastSentSnapshot right after a successful\n    // save this same session (helpers.setProp mutates the live block, not\n    // this closure's own copy of it).\n    const lastSent = (block.props.find((p) => p.name === 'lastSentSnapshot') || {}).value || '';\n    const dirty = childCount && childSnapshot() !== lastSent;\n    programStatus.textContent = !childCount\n      ? 'No Digital I/O blocks inside this ' + (block.name || 'ESP32 DevKit') + ' yet -- enter it to add some.'\n      : dirty ? 'Circuit changed -- not yet saved to the device.' : 'Circuit matches what is on the device.';\n    sendBtn.disabled = !childCount;\n  }\n  updateProgramSection();\n\n  // One row per Digital I/O child with a real pin set -- the exact same\n  // filter buildMinimalDesign uses, so \"what Save would send\" and \"what\n  // Live Pins shows\" never disagree about which children count.\n  function pinChildren() {\n    const children = block.children ? Array.from(block.children.blocks.values()) : [];\n    return children\n      .filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'digital-io')\n      .map((c) => {\n        const pin = (c.props || []).find((p) => p.name === 'pin')?.value;\n        const direction = (c.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';\n        const valueProp = (c.props || []).find((p) => p.name === 'value');\n        return { child: c, pin, direction, valueProp };\n      })\n      .filter((entry) => entry.pin !== null && entry.pin !== undefined && entry.pin !== '');\n  }\n\n  const pinRows = new Map(); // childId -> { row, dot, label, btn }\n\n  async function setChildValue(entry, on) {\n    if (entry.valueProp) entry.valueProp.value = on ? 1 : 0;\n    const bd = await import('/nodigraph/src/model/BlockDescription.js');\n    entry.child.description = bd.serializeBlockDescription(entry.child);\n    helpers.refresh();\n  }\n\n  function renderPinsList() {\n    const entries = pinChildren();\n    const seen = new Set();\n    for (const entry of entries) {\n      seen.add(entry.child.id);\n      let ui = pinRows.get(entry.child.id);\n      if (!ui) {\n        const row = document.createElement('div');\n        row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;';\n        const dot = document.createElement('span');\n        dot.style.cssText = 'width:10px;height:10px;border-radius:50%;flex:none;border:2px solid var(--border);box-sizing:border-box;';\n        const label = document.createElement('span');\n        label.style.cssText = 'flex:1;color:var(--text-secondary);';\n        const btn = document.createElement('button');\n        btn.type = 'button';\n        btn.style.cssText = btnStyle + 'padding:3px 10px;font-size:11px;';\n        row.append(dot, label, btn);\n        pinsListEl.appendChild(row);\n        ui = { row, dot, label, btn };\n        pinRows.set(entry.child.id, ui);\n      }\n      const on = Number(entry.valueProp && entry.valueProp.value) >= 1;\n      ui.label.textContent = 'GPIO' + entry.pin + ' · ' + entry.direction.toUpperCase() + ' · ' + (entry.child.name || 'Digital I/O');\n      ui.dot.style.background = on ? '#3ecf5d' : 'transparent';\n      ui.dot.style.borderColor = on ? '#3ecf5d' : 'var(--border)';\n      if (entry.direction === 'output') {\n        ui.btn.style.display = '';\n        ui.btn.textContent = on ? 'Set LOW' : 'Set HIGH';\n        ui.btn.onclick = async () => {\n          const next = !on;\n          ui.btn.disabled = true;\n          try {\n            await helpers.console.setPin(entry.pin, next);\n            await setChildValue(entry, next);\n            renderPinsList();\n          } catch (err) {\n            log('Set GPIO' + entry.pin + ' failed: ' + err.message);\n          } finally {\n            ui.btn.disabled = false;\n          }\n        };\n      } else {\n        ui.btn.style.display = 'none';\n        ui.btn.onclick = null;\n      }\n    }\n    for (const [childId, ui] of pinRows) {\n      if (!seen.has(childId)) {\n        ui.row.remove();\n        pinRows.delete(childId);\n      }\n    }\n    pinsLabel.style.display = entries.length ? '' : 'none';\n  }\n  renderPinsList();\n\n  // Reflects hardware-side changes back into the UI (an input pin toggled\n  // by whatever it's wired to on the board, or another client's own live\n  // control) -- not just this dialog's own writes. Stops itself once the\n  // dialog closes (container.isConnected goes false) or the device stops\n  // answering; no explicit \"dialog closed\" hook exists to unsubscribe from\n  // otherwise (see dialogSystem.js's close(), which just clears innerHTML).\n  let pinsPollTimer = null;\n  function startPinsPoll() {\n    if (pinsPollTimer) return;\n    pinsPollTimer = setInterval(async () => {\n      if (!container.isConnected || programSection.style.display === 'none') {\n        clearInterval(pinsPollTimer);\n        pinsPollTimer = null;\n        return;\n      }\n      try {\n        const livePins = await helpers.console.readPins({ timeoutMs: 1500 });\n        const byGpio = new Map(livePins.map((p) => [p.gpio, p]));\n        for (const entry of pinChildren()) {\n          const live = byGpio.get(Number(entry.pin));\n          if (live && entry.valueProp) entry.valueProp.value = live.state ? 1 : 0;\n        }\n        renderPinsList();\n      } catch (_) {\n        // A missed poll just leaves the UI showing the last known state --\n        // no reason to log every dropped byte on a link that otherwise works.\n      }\n    }, 800);\n  }\n\n  // A truly blank chip also needs its own bootloader/partition table, not\n  // just the app image \"Install firmware\" above assumes is already there\n  // (the ordinary case -- factory-fresh or previously-flashed boards both\n  // already have one). Collapsed since most people never need it.\n  const advanced = document.createElement('details');\n  advanced.style.cssText = 'margin:0 0 12px;';\n  const summary = document.createElement('summary');\n  summary.textContent = 'Advanced: flash files manually';\n  summary.style.cssText = 'cursor:pointer;font-size:11px;color:var(--text-muted);margin-bottom:8px;';\n  advanced.appendChild(summary);\n  const rows = document.createElement('div');\n  advanced.appendChild(rows);\n  const addRowBtn = document.createElement('button');\n  addRowBtn.type = 'button';\n  addRowBtn.textContent = '+ Add file';\n  addRowBtn.style.cssText = btnStyle;\n  advanced.appendChild(addRowBtn);\n  const eraseRow = document.createElement('label');\n  eraseRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin:12px 0;cursor:pointer;font-size:12px;';\n  const eraseCheckbox = document.createElement('input');\n  eraseCheckbox.type = 'checkbox';\n  eraseCheckbox.checked = true;\n  eraseRow.append(eraseCheckbox, document.createTextNode('Erase flash before writing (recommended for a blank board)'));\n  advanced.appendChild(eraseRow);\n  const flashBtn = document.createElement('button');\n  flashBtn.type = 'button';\n  flashBtn.textContent = 'Flash';\n  flashBtn.style.cssText = btnStyle;\n  advanced.appendChild(flashBtn);\n  container.appendChild(advanced);\n\n  const logEl = document.createElement('pre');\n  logEl.style.cssText = 'margin:0;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-well);color:var(--text-secondary);font-family:ui-monospace,Consolas,monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto;';\n  logEl.textContent = String(props.connectionState || 'disconnected');\n  container.appendChild(logEl);\n  function log(line) {\n    logEl.textContent += '\\n' + line;\n    logEl.scrollTop = logEl.scrollHeight;\n  }\n\n  let bootloaderOffset = null;\n\n  function showRunning() {\n    firmwareSection.style.display = 'none';\n    programSection.style.display = '';\n    updateProgramSection();\n    renderPinsList();\n    startPinsPoll();\n  }\n\n  function showNeedsFirmware() {\n    programSection.style.display = 'none';\n    firmwareSection.style.display = '';\n  }\n\n  // The one place that decides what's actually on the other end of the\n  // port: try the console's own 'ping' first (harmless if it's already\n  // running -- just a status line back), and only reset into the ROM\n  // bootloader if nothing answers. Reused after Connect, and again after\n  // Install firmware once the board's had a moment to boot into it.\n  async function afterPortOpen() {\n    statusEl.textContent = 'Connected -- checking for firmware...';\n    try {\n      const info = await helpers.console.identify({ timeoutMs: 1500 });\n      if (info.verified) {\n        statusEl.textContent = 'Logic Module v' + info.version + ' running.';\n        log('ping: v' + info.version + ' build ' + info.build + ', heap=' + info.heap + '.');\n        helpers.setProp('connectionState', 'connected:running');\n        showRunning();\n        return;\n      }\n    } catch (err) {\n      log('Console check failed: ' + err.message);\n    }\n    try {\n      const detected = await helpers.serial.detectChip(log);\n      bootloaderOffset = detected.bootloaderOffset;\n      statusEl.textContent = detected.chipName + ' detected -- no firmware running yet.';\n      log('Detected ' + detected.chipName + ' (bootloader @ 0x' + detected.bootloaderOffset.toString(16) + ').');\n      helpers.setProp('connectionState', 'connected:needs-firmware:' + detected.chipName);\n      showNeedsFirmware();\n    } catch (err) {\n      statusEl.textContent = 'Connected, but could not identify the board.';\n      log('Chip detect failed: ' + err.message);\n      helpers.setProp('connectionState', 'connected:unknown');\n    }\n  }\n\n  const existing = helpers.serial.getSession();\n  if (existing) {\n    disconnectBtn.disabled = false;\n    connectBtn.disabled = true;\n    afterPortOpen();\n  } else {\n    statusEl.textContent = 'Not connected.';\n  }\n\n  connectBtn.addEventListener('click', async () => {\n    connectBtn.disabled = true;\n    try {\n      await helpers.serial.connect(log);\n      log('Serial port opened.');\n      disconnectBtn.disabled = false;\n      await afterPortOpen();\n    } catch (err) {\n      statusEl.textContent = 'Connect failed: ' + err.message;\n      connectBtn.disabled = false;\n    }\n  });\n\n  disconnectBtn.addEventListener('click', async () => {\n    helpers.console.close();\n    await helpers.serial.disconnect();\n    statusEl.textContent = 'Disconnected.';\n    connectBtn.disabled = false;\n    disconnectBtn.disabled = true;\n    firmwareSection.style.display = 'none';\n    programSection.style.display = 'none';\n    helpers.setProp('connectionState', 'disconnected');\n  });\n\n  installBtn.addEventListener('click', async () => {\n    const preset = presets.find((p) => p.id === firmwareSelect.value);\n    if (!preset) return;\n    installBtn.disabled = true;\n    const original = installBtn.textContent;\n    installBtn.textContent = 'Installing...';\n    try {\n      const files = await helpers.serial.fetchPresetParts(preset);\n      log('Fetched ' + preset.label + ' (' + files.map((f) => f.name).join(', ') + ').');\n      // Every part of the preset, written together in one writeFlash call --\n      // never just the app image alone. A board that only ever gets its app\n      // partition rewritten keeps whatever bootloader/partition table it\n      // already has, which is fine right up until one doesn't have either\n      // (a genuinely blank or fully erased chip) -- then the ROM loops\n      // \"invalid header: 0xffffffff\" forever with nothing to hand off to.\n      // Rewriting an unchanged bootloader/partition table on a board that\n      // already had one is a harmless no-op, so always including them here\n      // costs nothing on the common case and fixes the blank-chip one.\n      await helpers.serial.flash(\n        files,\n        false,\n        (fileIndex, written, total) => {\n          progressEl.textContent = 'File ' + (fileIndex + 1) + '/' + files.length + ': ' + Math.round((written / total) * 100) + '%';\n        },\n        log,\n      );\n      progressEl.textContent = '';\n      statusEl.textContent = 'Flashed -- waiting for the board to boot...';\n      await new Promise((resolve) => setTimeout(resolve, 2000));\n      await afterPortOpen();\n    } catch (err) {\n      log('Install failed: ' + err.message);\n    } finally {\n      installBtn.disabled = false;\n      installBtn.textContent = original;\n    }\n  });\n\n  sendBtn.addEventListener('click', async () => {\n    sendBtn.disabled = true;\n    const original = sendBtn.textContent;\n    sendBtn.textContent = 'Saving...';\n    try {\n      const children = block.children ? Array.from(block.children.blocks.values()) : [];\n      const connections = block.children ? Array.from(block.children.connections.values()) : [];\n      const design = helpers.console.buildMinimalDesign(children, connections);\n      if (!design.blocks.length) {\n        log('Nothing to send -- add a Digital I/O block inside this ESP32 DevKit with a real pin set first.');\n      } else {\n        await helpers.console.sendDesign(design);\n        helpers.setProp('lastSentSnapshot', childSnapshot());\n        const pinCount = design.blocks.filter((b) => b.type === 'din' || b.type === 'dout').length;\n        const beltCount = design.blocks.length - pinCount;\n        log('Saved ' + pinCount + ' pin(s)' + (beltCount ? ' and ' + beltCount + ' belt(s)' : '') + ' to the device. It applies immediately and survives reboot.');\n        updateProgramSection();\n      }\n    } catch (err) {\n      log('Save failed: ' + err.message);\n    } finally {\n      sendBtn.disabled = false;\n      sendBtn.textContent = original;\n    }\n  });\n\n  function addFileRow() {\n    const row = document.createElement('div');\n    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';\n    const fileInput = document.createElement('input');\n    fileInput.type = 'file';\n    fileInput.accept = '.bin';\n    fileInput.style.cssText = 'flex:1;font-size:11px;min-width:0;';\n    const addrInput = document.createElement('input');\n    addrInput.type = 'text';\n    addrInput.style.cssText = 'width:90px;flex:none;padding:4px 6px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;font-family:ui-monospace,monospace;box-sizing:border-box;';\n    addrInput.value = '0x10000';\n    const removeBtn = document.createElement('button');\n    removeBtn.type = 'button';\n    removeBtn.textContent = String.fromCharCode(215);\n    removeBtn.style.cssText = 'width:22px;height:22px;flex:none;padding:0;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text-muted);cursor:pointer;';\n    removeBtn.addEventListener('click', () => row.remove());\n    fileInput.addEventListener('change', () => {\n      const f = fileInput.files[0];\n      if (f) addrInput.value = '0x' + helpers.serial.guessAddress(f.name, bootloaderOffset).toString(16);\n    });\n    row.append(fileInput, addrInput, removeBtn);\n    rows.appendChild(row);\n  }\n  addFileRow();\n  addRowBtn.addEventListener('click', () => addFileRow());\n\n  flashBtn.addEventListener('click', async () => {\n    const files = [];\n    for (const row of rows.children) {\n      const addrInput = row.querySelector('input[type=text]');\n      const address = parseInt(addrInput.value, 16) || 0;\n      const fileInput = row.querySelector('input[type=file]');\n      const file = fileInput && fileInput.files[0];\n      if (!file) continue;\n      files.push({ name: file.name, file, address });\n    }\n    if (!files.length) { log('Pick at least one .bin file first.'); return; }\n    flashBtn.disabled = true;\n    try {\n      await helpers.serial.flash(\n        files,\n        eraseCheckbox.checked,\n        (fileIndex, written, total) => {\n          progressEl.textContent = 'File ' + (fileIndex + 1) + ': ' + Math.round((written / total) * 100) + '%';\n        },\n        log,\n      );\n      statusEl.textContent = 'Flashed -- waiting for the board to boot...';\n      await new Promise((resolve) => setTimeout(resolve, 2000));\n      await afterPortOpen();\n    } catch (err) {\n      log('Flash failed: ' + err.message);\n    } finally {\n      flashBtn.disabled = false;\n    }\n  });\n}"
+            "value": "container.style.fontFamily = 'Inter, sans-serif';\ncontainer.style.minWidth = '420px';\n\nconst heading = document.createElement('h3');\nheading.textContent = String(block.name || 'ESP32 DEVKIT').toUpperCase();\nheading.style.cssText = 'margin:0 0 14px;color:var(--success,#3ecf5d);font-size:15px;letter-spacing:.03em;';\ncontainer.appendChild(heading);\n\nif (!helpers.serial || !helpers.serial.isSupported()) {\n  const notSupported = document.createElement('p');\n  notSupported.style.cssText = 'margin:0;font-size:12px;color:var(--text-muted);';\n  notSupported.textContent = 'Web Serial is not available in this browser (use Chrome or Edge on desktop).';\n  container.appendChild(notSupported);\n} else {\n  const btnStyle = 'padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text-primary);font-size:12px;cursor:pointer;';\n  const primaryBtnStyle = 'padding:6px 14px;border:1px solid var(--success,#3ecf5d);border-radius:6px;background:var(--success,#3ecf5d);color:#06210f;font-size:12px;font-weight:600;cursor:pointer;';\n  const sectionStyle = 'margin:0 0 16px;padding-bottom:16px;border-bottom:1px solid var(--border);';\n  const labelStyle = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin-bottom:8px;';\n\n  function childSnapshot() {\n    if (!block.children) return '';\n    // Connections too, not just the blocks themselves -- rewiring which pin\n    // feeds which (with no other prop change at all) used to leave this\n    // dialog reporting \"Circuit matches what is on the device\" even though\n    // buildMinimalDesign's own belt routing (see serialConsole.js) would\n    // produce a genuinely different design.json for the new wiring.\n    const blocksSnap = Array.from(block.children.blocks.values()).map((c) => ({ id: c.id, props: c.props }));\n    const connsSnap = Array.from(block.children.connections.values()).map((cn) => ({\n      s: cn.sourceBlockId, sp: cn.sourcePortId, t: cn.targetBlockId, tp: cn.targetPortId,\n    }));\n    return JSON.stringify({ blocksSnap, connsSnap });\n  }\n\n  const statusEl = document.createElement('p');\n  statusEl.style.cssText = 'margin:0 0 12px;font-size:12px;color:var(--text-muted);';\n  container.appendChild(statusEl);\n\n  const connectRow = document.createElement('div');\n  connectRow.style.cssText = 'display:flex;gap:8px;margin-bottom:16px;';\n  const connectBtn = document.createElement('button');\n  connectBtn.type = 'button';\n  connectBtn.textContent = 'Connect (COM)';\n  connectBtn.style.cssText = btnStyle;\n  const disconnectBtn = document.createElement('button');\n  disconnectBtn.type = 'button';\n  disconnectBtn.textContent = 'Disconnect';\n  disconnectBtn.style.cssText = btnStyle;\n  disconnectBtn.disabled = true;\n  connectRow.append(connectBtn, disconnectBtn);\n  container.appendChild(connectRow);\n\n  // Shown only once a port is open but no firmware answered 'ping' --\n  // either a genuinely blank chip, or one running something else entirely.\n  const firmwareSection = document.createElement('div');\n  firmwareSection.style.cssText = sectionStyle + 'display:none;';\n  const firmwareLabel = document.createElement('div');\n  firmwareLabel.textContent = 'NO FIRMWARE DETECTED';\n  firmwareLabel.style.cssText = labelStyle;\n  firmwareSection.appendChild(firmwareLabel);\n  const firmwareRow = document.createElement('div');\n  firmwareRow.style.cssText = 'display:flex;gap:8px;align-items:center;';\n  const firmwareSelect = document.createElement('select');\n  firmwareSelect.style.cssText = 'flex:1;padding:5px 6px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;';\n  const presets = (helpers.serial.firmwarePresets || []).filter((p) => !p.board || p.board === props.boardVariant);\n  for (const preset of presets) {\n    const option = document.createElement('option');\n    option.value = preset.id;\n    option.textContent = preset.label;\n    firmwareSelect.appendChild(option);\n  }\n  const preferredPreset = presets.find((p) => p.id === props.firmwarePreset) || presets.find((p) => p.chip === props.chipFamily);\n  if (preferredPreset) firmwareSelect.value = preferredPreset.id;\n  const installBtn = document.createElement('button');\n  installBtn.type = 'button';\n  installBtn.textContent = 'Install firmware';\n  installBtn.style.cssText = primaryBtnStyle;\n  installBtn.disabled = !presets.length;\n  firmwareRow.append(firmwareSelect, installBtn);\n  firmwareSection.appendChild(firmwareRow);\n  if (!presets.length) {\n    const noPresets = document.createElement('p');\n    noPresets.textContent = 'No firmware published yet for this chip.';\n    noPresets.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';\n    firmwareSection.appendChild(noPresets);\n  }\n  const progressEl = document.createElement('div');\n  progressEl.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';\n  firmwareSection.appendChild(progressEl);\n  container.appendChild(firmwareSection);\n\n  // Shown only once the board's own console confirmed it's actually\n  // running -- this is where the \"fixed hardware modules\" live; for now\n  // that's just Digital I/O (see the module's own children), CAN/WiFi etc.\n  // are future, separate submodules, not this one's job.\n  const programSection = document.createElement('div');\n  programSection.style.cssText = sectionStyle + 'display:none;';\n  const programLabel = document.createElement('div');\n  programLabel.textContent = 'DIGITAL I/O';\n  programLabel.style.cssText = labelStyle;\n  programSection.appendChild(programLabel);\n  const programStatus = document.createElement('p');\n  programStatus.style.cssText = 'margin:0 0 8px;font-size:11px;color:var(--text-muted);';\n  programSection.appendChild(programStatus);\n  const sendBtn = document.createElement('button');\n  sendBtn.type = 'button';\n  sendBtn.textContent = 'Save changes to device';\n  sendBtn.style.cssText = btnStyle;\n  programSection.appendChild(sendBtn);\n\n  // Live hardware override -- separate from \"Save changes to device\" above,\n  // which only ever declares pins (see buildMinimalDesign's own doc on why\n  // it can't yet compile real wiring). This talks straight to ioWrite() on\n  // the board (see esp32_logic's `io <gpio> <0|1>` serial command), the same\n  // direct-pin override its own browser circuit editor already does over\n  // WebSocket -- bypasses circuit logic entirely, on both ends.\n  const pinsLabel = document.createElement('div');\n  pinsLabel.textContent = 'LIVE PINS';\n  pinsLabel.style.cssText = labelStyle + 'margin-top:14px;';\n  programSection.appendChild(pinsLabel);\n  const pinsListEl = document.createElement('div');\n  pinsListEl.style.cssText = 'display:flex;flex-direction:column;gap:6px;';\n  programSection.appendChild(pinsListEl);\n  container.appendChild(programSection);\n\n  function updateProgramSection() {\n    const childCount = block.children ? block.children.blocks.size : 0;\n    // Reads block.props directly rather than the `props` shorthand --\n    // that's a one-time snapshot taken when the dialog opened, so it would\n    // still show the *previous* lastSentSnapshot right after a successful\n    // save this same session (helpers.setProp mutates the live block, not\n    // this closure's own copy of it).\n    const lastSent = (block.props.find((p) => p.name === 'lastSentSnapshot') || {}).value || '';\n    const dirty = childCount && childSnapshot() !== lastSent;\n    programStatus.textContent = !childCount\n      ? 'No Digital I/O blocks inside this ' + (block.name || 'ESP32 DevKit') + ' yet -- enter it to add some.'\n      : dirty ? 'Circuit changed -- not yet saved to the device.' : 'Circuit matches what is on the device.';\n    sendBtn.disabled = !childCount;\n  }\n  updateProgramSection();\n\n  // One row per Digital I/O child with a real pin set -- the exact same\n  // filter buildMinimalDesign uses, so \"what Save would send\" and \"what\n  // Live Pins shows\" never disagree about which children count.\n  function pinChildren() {\n    const children = block.children ? Array.from(block.children.blocks.values()) : [];\n    return children\n      .filter((c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value === 'digital-io')\n      .map((c) => {\n        const pin = (c.props || []).find((p) => p.name === 'pin')?.value;\n        const direction = (c.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'output' : 'input';\n        const valueProp = (c.props || []).find((p) => p.name === 'value');\n        return { child: c, pin, direction, valueProp };\n      })\n      .filter((entry) => entry.pin !== null && entry.pin !== undefined && entry.pin !== '');\n  }\n\n  const pinRows = new Map(); // childId -> { row, dot, label, btn }\n\n  async function setChildValue(entry, on) {\n    if (entry.valueProp) entry.valueProp.value = on ? 1 : 0;\n    const bd = await import('/nodigraph/src/model/BlockDescription.js');\n    entry.child.description = bd.serializeBlockDescription(entry.child);\n    helpers.refresh();\n  }\n\n  function renderPinsList() {\n    const entries = pinChildren();\n    const seen = new Set();\n    for (const entry of entries) {\n      seen.add(entry.child.id);\n      let ui = pinRows.get(entry.child.id);\n      if (!ui) {\n        const row = document.createElement('div');\n        row.style.cssText = 'display:flex;align-items:center;gap:8px;font-size:12px;';\n        const dot = document.createElement('span');\n        dot.style.cssText = 'width:10px;height:10px;border-radius:50%;flex:none;border:2px solid var(--border);box-sizing:border-box;';\n        const label = document.createElement('span');\n        label.style.cssText = 'flex:1;color:var(--text-secondary);';\n        const btn = document.createElement('button');\n        btn.type = 'button';\n        btn.style.cssText = btnStyle + 'padding:3px 10px;font-size:11px;';\n        row.append(dot, label, btn);\n        pinsListEl.appendChild(row);\n        ui = { row, dot, label, btn };\n        pinRows.set(entry.child.id, ui);\n      }\n      const on = Number(entry.valueProp && entry.valueProp.value) >= 1;\n      ui.label.textContent = 'GPIO' + entry.pin + ' · ' + entry.direction.toUpperCase() + ' · ' + (entry.child.name || 'Digital I/O');\n      ui.dot.style.background = on ? '#3ecf5d' : 'transparent';\n      ui.dot.style.borderColor = on ? '#3ecf5d' : 'var(--border)';\n      if (entry.direction === 'output') {\n        ui.btn.style.display = '';\n        ui.btn.textContent = on ? 'Set LOW' : 'Set HIGH';\n        ui.btn.onclick = async () => {\n          const next = !on;\n          ui.btn.disabled = true;\n          try {\n            await helpers.console.setPin(entry.pin, next);\n            await setChildValue(entry, next);\n            renderPinsList();\n          } catch (err) {\n            log('Set GPIO' + entry.pin + ' failed: ' + err.message);\n          } finally {\n            ui.btn.disabled = false;\n          }\n        };\n      } else {\n        ui.btn.style.display = 'none';\n        ui.btn.onclick = null;\n      }\n    }\n    for (const [childId, ui] of pinRows) {\n      if (!seen.has(childId)) {\n        ui.row.remove();\n        pinRows.delete(childId);\n      }\n    }\n    pinsLabel.style.display = entries.length ? '' : 'none';\n  }\n  renderPinsList();\n\n  // Reflects hardware-side changes back into the UI (an input pin toggled\n  // by whatever it's wired to on the board, or another client's own live\n  // control) -- not just this dialog's own writes. Stops itself once the\n  // dialog closes (container.isConnected goes false) or the device stops\n  // answering; no explicit \"dialog closed\" hook exists to unsubscribe from\n  // otherwise (see dialogSystem.js's close(), which just clears innerHTML).\n  let pinsPollTimer = null;\n  function startPinsPoll() {\n    if (pinsPollTimer) return;\n    pinsPollTimer = setInterval(async () => {\n      if (!container.isConnected || programSection.style.display === 'none') {\n        clearInterval(pinsPollTimer);\n        pinsPollTimer = null;\n        return;\n      }\n      try {\n        const livePins = await helpers.console.readPins({ timeoutMs: 1500 });\n        const byGpio = new Map(livePins.map((p) => [p.gpio, p]));\n        for (const entry of pinChildren()) {\n          const live = byGpio.get(Number(entry.pin));\n          if (live && entry.valueProp) entry.valueProp.value = live.state ? 1 : 0;\n        }\n        renderPinsList();\n      } catch (_) {\n        // A missed poll just leaves the UI showing the last known state --\n        // no reason to log every dropped byte on a link that otherwise works.\n      }\n    }, 800);\n  }\n\n  // A truly blank chip also needs its own bootloader/partition table, not\n  // just the app image \"Install firmware\" above assumes is already there\n  // (the ordinary case -- factory-fresh or previously-flashed boards both\n  // already have one). Collapsed since most people never need it.\n  const advanced = document.createElement('details');\n  advanced.style.cssText = 'margin:0 0 12px;';\n  const summary = document.createElement('summary');\n  summary.textContent = 'Advanced: flash files manually';\n  summary.style.cssText = 'cursor:pointer;font-size:11px;color:var(--text-muted);margin-bottom:8px;';\n  advanced.appendChild(summary);\n  const rows = document.createElement('div');\n  advanced.appendChild(rows);\n  const addRowBtn = document.createElement('button');\n  addRowBtn.type = 'button';\n  addRowBtn.textContent = '+ Add file';\n  addRowBtn.style.cssText = btnStyle;\n  advanced.appendChild(addRowBtn);\n  const eraseRow = document.createElement('label');\n  eraseRow.style.cssText = 'display:flex;align-items:center;gap:8px;margin:12px 0;cursor:pointer;font-size:12px;';\n  const eraseCheckbox = document.createElement('input');\n  eraseCheckbox.type = 'checkbox';\n  eraseCheckbox.checked = true;\n  eraseRow.append(eraseCheckbox, document.createTextNode('Erase flash before writing (recommended for a blank board)'));\n  advanced.appendChild(eraseRow);\n  const flashBtn = document.createElement('button');\n  flashBtn.type = 'button';\n  flashBtn.textContent = 'Flash';\n  flashBtn.style.cssText = btnStyle;\n  advanced.appendChild(flashBtn);\n  container.appendChild(advanced);\n\n  const logEl = document.createElement('pre');\n  logEl.style.cssText = 'margin:0;padding:8px;border:1px solid var(--border);border-radius:6px;background:var(--bg-well);color:var(--text-secondary);font-family:ui-monospace,Consolas,monospace;font-size:11px;white-space:pre-wrap;word-break:break-word;max-height:140px;overflow:auto;';\n  logEl.textContent = String(props.connectionState || 'disconnected');\n  container.appendChild(logEl);\n  function log(line) {\n    logEl.textContent += '\\n' + line;\n    logEl.scrollTop = logEl.scrollHeight;\n  }\n\n  let bootloaderOffset = null;\n\n  function showRunning(info) {\n    const updateAvailable = Boolean(preferredPreset && preferredPreset.build && info && info.build && info.build < preferredPreset.build);\n    firmwareSection.style.display = updateAvailable ? '' : 'none';\n    if (updateAvailable) {\n      firmwareLabel.textContent = 'FIRMWARE UPDATE AVAILABLE';\n      installBtn.textContent = 'Update firmware';\n      progressEl.textContent = 'Installed build ' + info.build + '; available build ' + preferredPreset.build + '.';\n    }\n    programSection.style.display = '';\n    updateProgramSection();\n    renderPinsList();\n    startPinsPoll();\n  }\n\n  function showNeedsFirmware() {\n    programSection.style.display = 'none';\n    firmwareSection.style.display = '';\n  }\n\n  // The one place that decides what's actually on the other end of the\n  // port: try the console's own 'ping' first (harmless if it's already\n  // running -- just a status line back), and only reset into the ROM\n  // bootloader if nothing answers. Reused after Connect, and again after\n  // Install firmware once the board's had a moment to boot into it.\n  async function afterPortOpen() {\n    statusEl.textContent = 'Connected -- checking for firmware...';\n    try {\n      const info = await helpers.console.identify();\n      if (info.verified) {\n        statusEl.textContent = 'Logic Module v' + info.version + ' build ' + info.build + ' running.';\n        log('ping: v' + info.version + ' build ' + info.build + ', heap=' + info.heap + '.');\n        helpers.setProp('connectionState', 'connected:running');\n        showRunning(info);\n        return;\n      }\n    } catch (err) {\n      log('Console check failed: ' + err.message);\n    }\n    try {\n      const detected = await helpers.serial.detectChip(log);\n      bootloaderOffset = detected.bootloaderOffset;\n      const family = detected.chipName.split(' ')[0];\n      const matchingPreset = presets.find((p) => p.chip === family && p.id === props.firmwarePreset) || presets.find((p) => p.chip === family);\n      firmwareSelect.value = matchingPreset ? matchingPreset.id : '';\n      for (const option of firmwareSelect.options) {\n        option.disabled = !presets.some((p) => p.id === option.value && p.chip === family);\n      }\n      installBtn.disabled = !matchingPreset;\n      log('Detected ' + detected.chipName + ' (bootloader @ 0x' + detected.bootloaderOffset.toString(16) + ').');\n      // Detecting the chip is not free: it drives the board into its ROM\n      // bootloader and uploads esptool's stub, and nothing there ever hands\n      // control back to the app. So by this point the board is not running\n      // whatever it has, and asking again while it sits like that would\n      // answer a question about our own doing rather than about the board.\n      // identify() resets it back out (see serialFlash's reopenPlain) and\n      // asks once more -- a board that was running all along says so here,\n      // instead of being reported as blank because we stopped it.\n      try {\n        const after = await helpers.console.identify();\n        if (after.verified) {\n          statusEl.textContent = 'Logic Module v' + after.version + ' build ' + after.build + ' running.';\n          log('ping: v' + after.version + ' build ' + after.build + ', heap=' + after.heap + '.');\n          helpers.setProp('connectionState', 'connected:running');\n          showRunning(after);\n          return;\n        }\n      } catch (err) {\n        log('Console re-check failed: ' + err.message);\n      }\n      statusEl.textContent = detected.chipName + ' detected -- logic firmware did not respond.';\n      helpers.setProp('connectionState', 'connected:needs-firmware:' + detected.chipName);\n      showNeedsFirmware();\n    } catch (err) {\n      statusEl.textContent = 'Connected, but could not identify the board.';\n      log('Chip detect failed: ' + err.message);\n      helpers.setProp('connectionState', 'connected:unknown');\n    }\n  }\n\n  const existing = helpers.serial.getSession();\n  if (existing) {\n    disconnectBtn.disabled = false;\n    connectBtn.disabled = true;\n    afterPortOpen();\n  } else {\n    statusEl.textContent = 'Not connected.';\n  }\n\n  connectBtn.addEventListener('click', async () => {\n    connectBtn.disabled = true;\n    try {\n      await helpers.serial.connect(log);\n      log('Serial port opened.');\n      disconnectBtn.disabled = false;\n      await afterPortOpen();\n    } catch (err) {\n      statusEl.textContent = 'Connect failed: ' + err.message;\n      connectBtn.disabled = false;\n    }\n  });\n\n  disconnectBtn.addEventListener('click', async () => {\n    helpers.console.close();\n    await helpers.serial.disconnect();\n    statusEl.textContent = 'Disconnected.';\n    connectBtn.disabled = false;\n    disconnectBtn.disabled = true;\n    firmwareSection.style.display = 'none';\n    programSection.style.display = 'none';\n    helpers.setProp('connectionState', 'disconnected');\n  });\n\n  installBtn.addEventListener('click', async () => {\n    const preset = presets.find((p) => p.id === firmwareSelect.value);\n    if (!preset) return;\n    installBtn.disabled = true;\n    const original = installBtn.textContent;\n    installBtn.textContent = 'Installing...';\n    try {\n      const files = await helpers.serial.fetchPresetParts(preset);\n      log('Fetched ' + preset.label + ' (' + files.map((f) => f.name).join(', ') + ').');\n      // Every part of the preset, written together in one writeFlash call --\n      // never just the app image alone. A board that only ever gets its app\n      // partition rewritten keeps whatever bootloader/partition table it\n      // already has, which is fine right up until one doesn't have either\n      // (a genuinely blank or fully erased chip) -- then the ROM loops\n      // \"invalid header: 0xffffffff\" forever with nothing to hand off to.\n      // Rewriting an unchanged bootloader/partition table on a board that\n      // already had one is a harmless no-op, so always including them here\n      // costs nothing on the common case and fixes the blank-chip one.\n      await helpers.serial.flash(\n        files,\n        false,\n        (fileIndex, written, total) => {\n          progressEl.textContent = 'File ' + (fileIndex + 1) + '/' + files.length + ': ' + Math.round((written / total) * 100) + '%';\n        },\n        log,\n      );\n      progressEl.textContent = '';\n      statusEl.textContent = 'Flashed -- waiting for the board to boot...';\n      await new Promise((resolve) => setTimeout(resolve, 2000));\n      await afterPortOpen();\n    } catch (err) {\n      log('Install failed: ' + err.message);\n    } finally {\n      installBtn.disabled = false;\n      installBtn.textContent = original;\n    }\n  });\n\n  sendBtn.addEventListener('click', async () => {\n    sendBtn.disabled = true;\n    const original = sendBtn.textContent;\n    sendBtn.textContent = 'Saving...';\n    try {\n      const children = block.children ? Array.from(block.children.blocks.values()) : [];\n      const connections = block.children ? Array.from(block.children.connections.values()) : [];\n      const design = helpers.console.buildMinimalDesign(children, connections);\n      if (!design.blocks.length) {\n        log('Nothing to send -- add a Digital I/O block inside this ESP32 DevKit with a real pin set first.');\n      } else {\n        await helpers.console.sendDesign(design);\n        helpers.setProp('lastSentSnapshot', childSnapshot());\n        const pinCount = design.blocks.filter((b) => b.type === 'din' || b.type === 'dout').length;\n        const beltCount = design.blocks.length - pinCount;\n        log('Saved ' + pinCount + ' pin(s)' + (beltCount ? ' and ' + beltCount + ' belt(s)' : '') + ' to the device. It applies immediately and survives reboot.');\n        updateProgramSection();\n      }\n    } catch (err) {\n      log('Save failed: ' + err.message);\n    } finally {\n      sendBtn.disabled = false;\n      sendBtn.textContent = original;\n    }\n  });\n\n  function addFileRow() {\n    const row = document.createElement('div');\n    row.style.cssText = 'display:flex;align-items:center;gap:8px;margin-bottom:6px;';\n    const fileInput = document.createElement('input');\n    fileInput.type = 'file';\n    fileInput.accept = '.bin';\n    fileInput.style.cssText = 'flex:1;font-size:11px;min-width:0;';\n    const addrInput = document.createElement('input');\n    addrInput.type = 'text';\n    addrInput.style.cssText = 'width:90px;flex:none;padding:4px 6px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;font-family:ui-monospace,monospace;box-sizing:border-box;';\n    addrInput.value = '0x10000';\n    const removeBtn = document.createElement('button');\n    removeBtn.type = 'button';\n    removeBtn.textContent = String.fromCharCode(215);\n    removeBtn.style.cssText = 'width:22px;height:22px;flex:none;padding:0;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text-muted);cursor:pointer;';\n    removeBtn.addEventListener('click', () => row.remove());\n    fileInput.addEventListener('change', () => {\n      const f = fileInput.files[0];\n      if (f) addrInput.value = '0x' + helpers.serial.guessAddress(f.name, bootloaderOffset).toString(16);\n    });\n    row.append(fileInput, addrInput, removeBtn);\n    rows.appendChild(row);\n  }\n  addFileRow();\n  addRowBtn.addEventListener('click', () => addFileRow());\n\n  flashBtn.addEventListener('click', async () => {\n    const files = [];\n    for (const row of rows.children) {\n      const addrInput = row.querySelector('input[type=text]');\n      const address = parseInt(addrInput.value, 16) || 0;\n      const fileInput = row.querySelector('input[type=file]');\n      const file = fileInput && fileInput.files[0];\n      if (!file) continue;\n      files.push({ name: file.name, file, address });\n    }\n    if (!files.length) { log('Pick at least one .bin file first.'); return; }\n    flashBtn.disabled = true;\n    try {\n      await helpers.serial.flash(\n        files,\n        eraseCheckbox.checked,\n        (fileIndex, written, total) => {\n          progressEl.textContent = 'File ' + (fileIndex + 1) + ': ' + Math.round((written / total) * 100) + '%';\n        },\n        log,\n      );\n      statusEl.textContent = 'Flashed -- waiting for the board to boot...';\n      await new Promise((resolve) => setTimeout(resolve, 2000));\n      await afterPortOpen();\n    } catch (err) {\n      log('Flash failed: ' + err.message);\n    } finally {\n      flashBtn.disabled = false;\n    }\n  });\n}"
           },
           {
             "id": "prp_mtg8v3ep8",
@@ -659,19 +347,19 @@
             "id": "prp_esp32s3_pinmap",
             "name": "pinMap",
             "kind": "value",
-            "value": "[{\"label\":\"GND\",\"gpio\":null,\"role\":\"ground\",\"inputOnly\":null,\"side\":\"left\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"G19\",\"gpio\":19,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":1,\"orientation\":\"usb-top\",\"reserved\":\"native USB D− — reconfiguring it breaks the USB port\"},{\"label\":\"G20\",\"gpio\":20,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":2,\"orientation\":\"usb-top\",\"reserved\":\"native USB D+ — reconfiguring it breaks the USB port\"},{\"label\":\"G21\",\"gpio\":21,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"G47\",\"gpio\":47,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"G48\",\"gpio\":48,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":5,\"orientation\":\"usb-top\",\"note\":\"the on-board RGB LED\"},{\"label\":\"G45\",\"gpio\":45,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":6,\"orientation\":\"usb-top\",\"note\":\"strapping pin (VDD_SPI voltage)\"},{\"label\":\"G0\",\"gpio\":0,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":7,\"orientation\":\"usb-top\",\"note\":\"strapping pin, and the BOOT button\"},{\"label\":\"G35\",\"gpio\":35,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":8,\"orientation\":\"usb-top\"},{\"label\":\"G36\",\"gpio\":36,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":9,\"orientation\":\"usb-top\"},{\"label\":\"G37\",\"gpio\":37,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":10,\"orientation\":\"usb-top\"},{\"label\":\"G38\",\"gpio\":38,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":11,\"orientation\":\"usb-top\"},{\"label\":\"G39\",\"gpio\":39,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":12,\"orientation\":\"usb-top\"},{\"label\":\"G40\",\"gpio\":40,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":13,\"orientation\":\"usb-top\"},{\"label\":\"G41\",\"gpio\":41,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":14,\"orientation\":\"usb-top\"},{\"label\":\"G42\",\"gpio\":42,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":15,\"orientation\":\"usb-top\"},{\"label\":\"G2\",\"gpio\":2,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":16,\"orientation\":\"usb-top\"},{\"label\":\"G1\",\"gpio\":1,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"left\",\"row\":17,\"orientation\":\"usb-top\"},{\"label\":\"RX0\",\"gpio\":44,\"role\":\"uart\",\"inputOnly\":false,\"side\":\"left\",\"row\":18,\"orientation\":\"usb-top\",\"note\":\"UART0 RX — the USB-UART console\"},{\"label\":\"TX0\",\"gpio\":43,\"role\":\"uart\",\"inputOnly\":false,\"side\":\"left\",\"row\":19,\"orientation\":\"usb-top\",\"note\":\"UART0 TX — the USB-UART console\"},{\"label\":\"GND\",\"gpio\":null,\"role\":\"ground\",\"inputOnly\":null,\"side\":\"left\",\"row\":20,\"orientation\":\"usb-top\"},{\"label\":\"GND\",\"gpio\":null,\"role\":\"ground\",\"inputOnly\":null,\"side\":\"left\",\"row\":21,\"orientation\":\"usb-top\"},{\"label\":\"GND\",\"gpio\":null,\"role\":\"ground\",\"inputOnly\":null,\"side\":\"right\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"5V\",\"gpio\":null,\"role\":\"power\",\"inputOnly\":null,\"side\":\"right\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"G14\",\"gpio\":14,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"G13\",\"gpio\":13,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"G12\",\"gpio\":12,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"G11\",\"gpio\":11,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"G10\",\"gpio\":10,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"G9\",\"gpio\":9,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":7,\"orientation\":\"usb-top\",\"note\":\"I2C SCL, as the Logic Module configures it on an S3\"},{\"label\":\"G46\",\"gpio\":46,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":8,\"orientation\":\"usb-top\",\"note\":\"strapping pin, input-only on some S3 revisions\"},{\"label\":\"G3\",\"gpio\":3,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":9,\"orientation\":\"usb-top\",\"note\":\"strapping pin (JTAG source select)\"},{\"label\":\"G8\",\"gpio\":8,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":10,\"orientation\":\"usb-top\",\"note\":\"I2C SDA, as the Logic Module configures it on an S3\"},{\"label\":\"G18\",\"gpio\":18,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":11,\"orientation\":\"usb-top\"},{\"label\":\"G17\",\"gpio\":17,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":12,\"orientation\":\"usb-top\"},{\"label\":\"G16\",\"gpio\":16,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":13,\"orientation\":\"usb-top\",\"note\":\"CAN RX by default (see the CAN block)\"},{\"label\":\"G15\",\"gpio\":15,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":14,\"orientation\":\"usb-top\",\"note\":\"CAN TX by default (see the CAN block)\"},{\"label\":\"G7\",\"gpio\":7,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":15,\"orientation\":\"usb-top\"},{\"label\":\"G6\",\"gpio\":6,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":16,\"orientation\":\"usb-top\"},{\"label\":\"G5\",\"gpio\":5,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":17,\"orientation\":\"usb-top\"},{\"label\":\"G4\",\"gpio\":4,\"role\":\"gpio\",\"inputOnly\":false,\"side\":\"right\",\"row\":18,\"orientation\":\"usb-top\"},{\"label\":\"RST\",\"gpio\":null,\"role\":\"enable\",\"inputOnly\":null,\"side\":\"right\",\"row\":19,\"orientation\":\"usb-top\"},{\"label\":\"3V3\",\"gpio\":null,\"role\":\"power\",\"inputOnly\":null,\"side\":\"right\",\"row\":20,\"orientation\":\"usb-top\"},{\"label\":\"3V3\",\"gpio\":null,\"role\":\"power\",\"inputOnly\":null,\"side\":\"right\",\"row\":21,\"orientation\":\"usb-top\"},{\"label\":\"USB\",\"gpio\":null,\"role\":\"usb-serial\",\"inputOnly\":null,\"side\":\"top\",\"row\":null,\"orientation\":\"usb-top\"}]"
+            "value": "[{\"label\":\"DI1\",\"gpio\":4,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"DI2\",\"gpio\":5,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"DI3\",\"gpio\":6,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"DI4\",\"gpio\":7,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"DI5\",\"gpio\":8,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"DI6\",\"gpio\":9,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"DI7\",\"gpio\":10,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"DI8\",\"gpio\":11,\"role\":\"digital-input\",\"inputOnly\":true,\"outputOnly\":false,\"side\":\"left\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"CAN TX\",\"gpio\":2,\"role\":\"can\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":8,\"orientation\":\"usb-top\",\"reserved\":\"CAN TX (TWAI)\"},{\"label\":\"CAN RX\",\"gpio\":3,\"role\":\"can\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":9,\"orientation\":\"usb-top\",\"reserved\":\"CAN RX (TWAI)\"},{\"label\":\"DO1\",\"gpio\":1000,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":1,\"note\":\"TCA9554 EXIO1 / isolated Darlington output\",\"side\":\"right\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"DO2\",\"gpio\":1001,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":2,\"note\":\"TCA9554 EXIO2 / isolated Darlington output\",\"side\":\"right\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"DO3\",\"gpio\":1002,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":3,\"note\":\"TCA9554 EXIO3 / isolated Darlington output\",\"side\":\"right\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"DO4\",\"gpio\":1003,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":4,\"note\":\"TCA9554 EXIO4 / isolated Darlington output\",\"side\":\"right\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"DO5\",\"gpio\":1004,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":5,\"note\":\"TCA9554 EXIO5 / isolated Darlington output\",\"side\":\"right\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"DO6\",\"gpio\":1005,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":6,\"note\":\"TCA9554 EXIO6 / isolated Darlington output\",\"side\":\"right\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"DO7\",\"gpio\":1006,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":7,\"note\":\"TCA9554 EXIO7 / isolated Darlington output\",\"side\":\"right\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"DO8\",\"gpio\":1007,\"role\":\"digital-output\",\"inputOnly\":false,\"outputOnly\":true,\"exio\":8,\"note\":\"TCA9554 EXIO8 / isolated Darlington output\",\"side\":\"right\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"RS485 TX\",\"gpio\":17,\"role\":\"rs485\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":8,\"orientation\":\"usb-top\",\"reserved\":\"RS485 TX\"},{\"label\":\"RS485 RX\",\"gpio\":18,\"role\":\"rs485\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":9,\"orientation\":\"usb-top\",\"reserved\":\"RS485 RX\"},{\"label\":\"USB\",\"gpio\":null,\"role\":\"usb-serial\",\"inputOnly\":null,\"side\":\"top\",\"row\":null,\"orientation\":\"usb-top\"}]"
           },
           {
             "id": "prp_esp32s3_render",
             "name": "render",
             "kind": "value",
-            "value": "const g = block.geometry;\nconst pinMapProp = block.props.find((p) => p.name === 'pinMap');\nlet pins = [];\ntry { pins = JSON.parse(pinMapProp ? pinMapProp.value : '[]'); } catch (_) { pins = []; }\n\nctx.save();\nctx.fillStyle = '#ffffff';\nctx.fillRect(g.x + 12, g.y + 8, g.width - 24, g.height - 16);\n\nctx.fillStyle = '#1f2937';\nctx.font = '20px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.textAlign = 'center';\nctx.textBaseline = 'middle';\nctx.fillText(block.name || 'ESP32-S3 DevKit', g.x + g.width / 2, g.y + g.height / 2 + 30, g.width - 48);\n\n// The USB connector sits under the USB pin, wherever that pin is on the\n// top edge (on the slot nodigraph draws it at), like the BOOT button below.\nconst slotOf = (o) => Math.max(20, Math.min(g.width - 20, Math.round((o - 20) / 40) * 40 + 20));\nconst topPinX = (name, fallback) => {\n  const logical = (block.logicalPorts || []).find((lp) => lp.name === name);\n  const pin = logical && (block.ports || []).find((p) => p.logicalId === logical.id && p.side === 'top');\n  return pin ? g.x + slotOf(Number(pin.offset)) : fallback;\n};\nconst usbX = topPinX('USB', g.x + g.width / 2);\nctx.fillStyle = '#e5e7eb';\nctx.strokeStyle = '#9ca3af';\nctx.lineWidth = 1;\nctx.beginPath();\nctx.roundRect(usbX - 36, g.y + 14, 72, 30, 4);\nctx.fill();\nctx.stroke();\nctx.fillStyle = '#6b7280';\nctx.font = '10px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.fillText('USB', usbX, g.y + 29);\n\nconst topY = g.y + 58;\nfunction drawBoardButton(cx, label, fill) {\n  ctx.beginPath();\n  ctx.arc(cx, topY, 13, 0, Math.PI * 2);\n  ctx.fillStyle = fill;\n  ctx.fill();\n  ctx.lineWidth = 1;\n  ctx.strokeStyle = '#94a3b8';\n  ctx.stroke();\n  ctx.fillStyle = '#6b7280';\n  ctx.font = '9px -apple-system, Segoe UI, Roboto, sans-serif';\n  ctx.textAlign = 'center';\n  ctx.fillText(label, cx, topY + 25);\n}\n// The BOOT button sits under the GPIO0 pin, wherever that pin is on the\n// top edge (nodigraph draws a pin on the nearest 40-unit slot: 20, 60, ...).\nconst bootLogical = (block.logicalPorts || []).find((lp) => lp.name === 'GPIO0');\nconst bootPin = bootLogical && (block.ports || []).find((p) => p.logicalId === bootLogical.id && p.side === 'top');\nconst onSlot = (o) => Math.max(20, Math.min(g.width - 20, Math.round((o - 20) / 40) * 40 + 20));\ndrawBoardButton(bootPin ? g.x + onSlot(Number(bootPin.offset)) : g.x + g.width / 2 - 72, 'GPIO0', '#f8fafc');\ndrawBoardButton(g.x + g.width / 2 + 72, 'RESET', '#f8fafc');\n\nctx.beginPath();\nctx.arc(g.x + g.width / 2, topY, 7, 0, Math.PI * 2);\nctx.fillStyle = '#3ecf5d';\nctx.fill();\nctx.fillStyle = '#6b7280';\nctx.font = '9px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.fillText('RGB GPIO48', g.x + g.width / 2, topY + 25);\n\nctx.font = '15px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.textBaseline = 'middle';\nfor (const pin of pins) {\n  if (pin.side !== 'left' && pin.side !== 'right') continue;\n  const y = g.y + 30 + Number(pin.row || 0) * 40;\n  const left = pin.side === 'left';\n  const labelX = left ? g.x + 26 : g.x + g.width - 26;\n  ctx.fillStyle = pin.role === 'power' ? '#ef4444' : pin.role === 'ground' ? '#6b7280' : (pin.reserved || pin.inputOnly) ? '#94a3b8' : '#1f2937';\n  ctx.textAlign = left ? 'left' : 'right';\n  ctx.fillText(pin.label, labelX, y, 86);\n}\nctx.restore();"
+            "value": "const g = block.geometry;\nconst pinMapProp = block.props.find((p) => p.name === 'pinMap');\nlet pins = [];\ntry { pins = JSON.parse(pinMapProp ? pinMapProp.value : '[]'); } catch (_) { pins = []; }\n\nctx.save();\nctx.fillStyle = '#ffffff';\nctx.fillRect(g.x + 12, g.y + 8, g.width - 24, g.height - 16);\n\nctx.fillStyle = '#1f2937';\nctx.font = '20px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.textAlign = 'center';\nctx.textBaseline = 'middle';\nctx.fillText(block.name || 'esp32-S3', g.x + g.width / 2, g.y + g.height / 2 + 30, g.width - 48);\n\n// The USB connector sits under the USB pin, wherever that pin is on the\n// top edge (on the slot nodigraph draws it at), like the BOOT button below.\nconst slotOf = (o) => Math.max(20, Math.min(g.width - 20, Math.round((o - 20) / 40) * 40 + 20));\nconst topPinX = (name, fallback) => {\n  const logical = (block.logicalPorts || []).find((lp) => lp.name === name);\n  const pin = logical && (block.ports || []).find((p) => p.logicalId === logical.id && p.side === 'top');\n  return pin ? g.x + slotOf(Number(pin.offset)) : fallback;\n};\nconst usbX = topPinX('USB', g.x + g.width / 2);\nctx.fillStyle = '#e5e7eb';\nctx.strokeStyle = '#9ca3af';\nctx.lineWidth = 1;\nctx.beginPath();\nctx.roundRect(usbX - 36, g.y + 14, 72, 30, 4);\nctx.fill();\nctx.stroke();\nctx.fillStyle = '#6b7280';\nctx.font = '10px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.fillText('USB', usbX, g.y + 29);\n\nconst topY = g.y + 58;\nfunction drawBoardButton(cx, label, fill) {\n  ctx.beginPath();\n  ctx.arc(cx, topY, 13, 0, Math.PI * 2);\n  ctx.fillStyle = fill;\n  ctx.fill();\n  ctx.lineWidth = 1;\n  ctx.strokeStyle = '#94a3b8';\n  ctx.stroke();\n  ctx.fillStyle = '#6b7280';\n  ctx.font = '9px -apple-system, Segoe UI, Roboto, sans-serif';\n  ctx.textAlign = 'center';\n  ctx.fillText(label, cx, topY + 25);\n}\n// The BOOT button sits under the GPIO0 pin, wherever that pin is on the\n// top edge (nodigraph draws a pin on the nearest 40-unit slot: 20, 60, ...).\nconst bootLogical = (block.logicalPorts || []).find((lp) => lp.name === 'GPIO0');\nconst bootPin = bootLogical && (block.ports || []).find((p) => p.logicalId === bootLogical.id && p.side === 'top');\nconst onSlot = (o) => Math.max(20, Math.min(g.width - 20, Math.round((o - 20) / 40) * 40 + 20));\ndrawBoardButton(bootPin ? g.x + onSlot(Number(bootPin.offset)) : g.x + g.width / 2 - 72, 'GPIO0', '#f8fafc');\ndrawBoardButton(g.x + g.width / 2 + 72, 'RESET', '#f8fafc');\n\nctx.beginPath();\nctx.arc(g.x + g.width / 2, topY, 7, 0, Math.PI * 2);\nctx.fillStyle = '#3ecf5d';\nctx.fill();\nctx.fillStyle = '#6b7280';\nctx.font = '9px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.fillText('RGB GPIO38', g.x + g.width / 2, topY + 25);\n\nctx.font = '15px -apple-system, Segoe UI, Roboto, sans-serif';\nctx.textBaseline = 'middle';\nfor (const pin of pins) {\n  if (pin.side !== 'left' && pin.side !== 'right') continue;\n  const y = g.y + 30 + Number(pin.row || 0) * 40;\n  const left = pin.side === 'left';\n  const labelX = left ? g.x + 26 : g.x + g.width - 26;\n  ctx.fillStyle = pin.role === 'power' ? '#ef4444' : pin.role === 'ground' ? '#6b7280' : (pin.reserved || pin.inputOnly) ? '#94a3b8' : '#1f2937';\n  ctx.textAlign = left ? 'left' : 'right';\n  ctx.fillText(pin.label, labelX, y, 86);\n}\nctx.restore();"
           },
           {
             "id": "prp_esp32s3_boardvariant",
             "name": "boardVariant",
             "kind": "value",
-            "value": "ESP32-S3-DevKitC-1"
+            "value": "ESP32-S3-POE-ETH-8DI-8DO"
           },
           {
             "id": "prp_esp32s3_usborientation",
@@ -683,7 +371,19 @@
             "id": "prp_esp32s3_onboardcontrols",
             "name": "onboardControls",
             "kind": "value",
-            "value": "{\"buttons\":[{\"label\":\"GPIO0\",\"gpio\":0,\"role\":\"input\"},{\"label\":\"RESET\",\"gpio\":null,\"role\":\"reset\"}],\"led\":{\"label\":\"RGB\",\"gpio\":48,\"role\":\"output\",\"type\":\"addressable\"}}"
+            "value": "{\"buttons\":[{\"label\":\"GPIO0\",\"gpio\":0,\"role\":\"input\"},{\"label\":\"RESET\",\"gpio\":null,\"role\":\"reset\"}],\"led\":{\"label\":\"RGB\",\"gpio\":38,\"role\":\"output\",\"type\":\"addressable\"}}"
+          },
+          {
+            "id": "prp_esp32s3_firmwarepreset",
+            "name": "firmwarePreset",
+            "kind": "value",
+            "value": "logic-esp32-s3-waveshare"
+          },
+          {
+            "id": "prp_esp32s3_canpins",
+            "name": "canPins",
+            "kind": "value",
+            "value": "{\"tx\":2,\"rx\":3}"
           }
         ],
         "hasChildren": true,

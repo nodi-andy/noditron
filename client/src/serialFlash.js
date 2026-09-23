@@ -62,6 +62,19 @@ const FIRMWARE_REPO = { owner: 'nodi-andy', repo: 'noditron', ref: 'main' };
 const BOOT_APP0 = { path: 'firmware-assets/boot_app0.bin', address: 0xe000 };
 export const FIRMWARE_PRESETS = [
   {
+    id: 'logic-esp32-s3-waveshare',
+    label: 'Logic — esp32-S3 (Waveshare 8DI/8DO)',
+    chip: 'ESP32-S3',
+    board: 'ESP32-S3-POE-ETH-8DI-8DO',
+    build: '20260924b',
+    parts: [
+      { path: 'firmware-assets/logic/esp32-s3-bootloader.bin', address: 0x0 },
+      { path: 'firmware-assets/logic/esp32-s3-partitions.bin', address: 0x8000 },
+      BOOT_APP0,
+      { path: 'firmware-assets/logic/esp32-s3-waveshare.bin', address: 0x10000 },
+    ],
+  },
+  {
     id: 'logic-esp32',
     label: 'Logic — ESP32 (classic)',
     chip: 'ESP32',
@@ -95,6 +108,12 @@ export const FIRMWARE_PRESETS = [
 // firmware big enough to blow past that would need the Git Blobs API
 // instead, not handled here yet.
 async function fetchAssetBytes(path, label, token) {
+  // Use the firmware shipped with this app; development builds may not yet
+  // exist on GitHub. Older hosts fall back to the authenticated repository.
+  const local = await fetch(`/${path}`, { cache: 'no-store' });
+  if (local.ok && !local.headers.get('content-type')?.includes('text/html')) {
+    return new Uint8Array(await local.arrayBuffer());
+  }
   const { owner, repo, ref } = FIRMWARE_REPO;
   const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(ref)}`;
   const headers = { Accept: 'application/vnd.github+json' };
@@ -116,6 +135,7 @@ export async function fetchPresetParts(preset, token = getStoredToken()) {
   return Promise.all(
     preset.parts.map(async (part) => ({
       name: part.path.split('/').pop(),
+      chip: preset.chip,
       address: part.address,
       bytes: await fetchAssetBytes(part.path, `${preset.label} (${part.path.split('/').pop()})`, token),
     })),
@@ -163,7 +183,35 @@ export async function connect(blockId, { onLog } = {}) {
 // instead of ever running the app that was just written to it.
 // esptool-js's own classicReset (see esptool-js.bundle.js) ends its own
 // sequence the same way, on the same reasoning.
+// Espressif's own USB vendor id. A chip answering to it is talking over
+// its built-in USB-Serial/JTAG peripheral — there is no bridge chip in
+// front of it, and that changes what DTR and RTS mean (see below).
+const ESPRESSIF_USB_VID = 0x303a;
+
+function usesNativeUsb(port) {
+  return port?.getInfo?.()?.usbVendorId === ESPRESSIF_USB_VID;
+}
+
 async function releaseResetLines(transport) {
+  // Not on a chip whose USB *is* its serial port. On a board with a
+  // CP210x/CH340 in front of it, DTR and RTS are wired through transistors
+  // to GPIO0/EN, and leaving them asserted after an open really does mean
+  // "select the bootloader on the next reset" — hence releasing them here.
+  //
+  // An ESP32-S3 on its native USB has no such wiring: the USB-Serial/JTAG
+  // peripheral watches the CDC line state itself and treats transitions as
+  // reset and boot-mode commands. So "releasing" the lines does not undo a
+  // reset, it *performs* one — measured on a real S3, setting DTR and RTS
+  // low a couple of seconds after opening produced a full ROM boot log
+  // within 100ms.
+  //
+  // Since opening the port already resets such a board, this landed
+  // squarely in the middle of that boot and reset it a second time, and
+  // the probe that followed was talking to a board being restarted out
+  // from under it. What it looked like from outside: a console full of
+  // boot banners, one cut off mid-word, and "no firmware detected" about
+  // a board that was running perfectly well.
+  if (usesNativeUsb(transport?.device)) return;
   await transport.setDTR(false);
   await transport.setRTS(false);
 }
@@ -176,20 +224,77 @@ async function releaseResetLines(transport) {
 // esptool-js — only closing the port itself releases it), so the only way
 // serialConsole.js's plain-text reads can follow a bootloader session on
 // the *same* port is a full close/reopen cycle, not a mode switch.
+// Leaves the ROM bootloader and starts the app that is actually on the
+// board.
+//
+// detectChip puts the chip into download mode and uploads esptool's stub;
+// nothing brings it back out. Releasing DTR/RTS does not — measured on an
+// ESP32-S3 over its native USB-Serial/JTAG, a board parked this way stays
+// silent through a plain reset of the lines, through esptool's own
+// 200ms RTS pulse, and through closing and reopening the port. It answers
+// again only once something talks to the ROM bootloader and asks it to
+// reset, which is exactly what `after('hard_reset')` does.
+//
+// Without this, one failed console probe poisons every later one: the
+// probe falls through to detectChip, detectChip parks the chip, and from
+// then on nothing is running to answer `ping`, so the dialog reports "no
+// firmware" about a board with perfectly good firmware on it — for as
+// long as the board stays powered.
+async function resetIntoApp(session) {
+  if (!session.esploader) return false;
+  try {
+    // Bounded for the same reason every console write is (see
+    // serialConsole's WRITE_TIMEOUT_MS): this talks to a device that may
+    // already have gone, and a reset that never returns would hang the
+    // probe it was meant to rescue.
+    let timer = null;
+    await Promise.race([
+      session.esploader.after('hard_reset'),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('reset timed out')), 3000);
+      }),
+    ]).finally(() => clearTimeout(timer));
+    return true;
+  } catch {
+    // Worth trying and not worth failing over: the caller reopens the
+    // port either way, and a board that ignored this just reads as
+    // "no firmware" exactly as it did before.
+    return false;
+  }
+}
+
 export async function reopenPlain(blockId, baudrate = 115200) {
   const session = sessions.get(blockId);
   if (!session) throw new Error('Not connected — pick a serial port first.');
+  const wasInBootloader = await resetIntoApp(session);
   try {
     await session.transport.disconnect();
   } catch {
     // Already closed, or never fully opened — nothing to release.
   }
-  const transport = new Transport(session.port, TRACE_SERIAL);
-  await transport.connect(baudrate);
+  // A reset takes the S3's native USB port down with it and the device
+  // comes back as a fresh enumeration, so the first reopen can legitimately
+  // fail for a moment. Only worth waiting out when something was actually
+  // reset — an ordinary reopen should be immediate.
+  const transport = await openWithRetry(session.port, baudrate, wasInBootloader ? 4000 : 0);
   await releaseResetLines(transport);
   const fresh = { port: session.port, transport, esploader: null, bootloaderDirty: false, chipName: session.chipName, bootloaderOffset: session.bootloaderOffset };
   sessions.set(blockId, fresh);
   return fresh;
+}
+
+async function openWithRetry(port, baudrate, graceMs) {
+  const deadline = Date.now() + graceMs;
+  for (;;) {
+    const transport = new Transport(port, TRACE_SERIAL);
+    try {
+      await transport.connect(baudrate);
+      return transport;
+    } catch (err) {
+      if (Date.now() >= deadline) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
 }
 
 // The one place serialConsole.js should ever have to reach into serial
@@ -277,6 +382,9 @@ export async function flash(blockId, files, { eraseAll = false, onProgress, onLo
   }
   const fileArray = [];
   for (const f of files) {
+    if (f.chip && f.chip !== session.chipName?.split(' ')[0]) {
+      throw new Error(`Firmware for ${f.chip} cannot be installed on ${session.chipName}. Select matching firmware.`);
+    }
     const data = f.bytes ? f.bytes : new Uint8Array(await f.file.arrayBuffer());
     fileArray.push({ data, address: f.address });
   }

@@ -24,6 +24,7 @@ COPY server ./server
 # the ESP32 DevKit went missing from noditron.com while working in local
 # dev, where the folder is simply there in the checkout.
 COPY modules ./modules
+COPY firmware-assets ./firmware-assets
 
 # Vendor nodigraph's client read-only, the same way local dev points at a
 # sibling checkout (see server/src/app.js's own NODIGRAPH_CLIENT_DIR) — a

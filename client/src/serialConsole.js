@@ -24,8 +24,8 @@ const consoles = new Map(); // blockId -> { queue: Uint8Array, waiters: [] }
 // it out and let the next openConsole() call start clean.
 async function ensurePlain(blockId) {
   const before = getSession(blockId);
+  if (before?.esploader || before?.bootloaderDirty) closeConsole(blockId);
   await ensureOpenPlain(blockId);
-  if (before?.esploader) closeConsole(blockId);
 }
 
 // What a circuit sends to the browser over USB (see buildMinimalDesign's
@@ -38,6 +38,20 @@ async function ensurePlain(blockId) {
 export const USB_SERIAL_PREFIX = '[USB] ';
 const USB_PREFIX_BYTES = new TextEncoder().encode(USB_SERIAL_PREFIX);
 const usbValues = new Map(); // blockId -> { value, at }
+const ioListeners = new Map(); // blockId -> Set<(pins) => void>
+
+export function subscribeIoChanges(blockId, listener) {
+  let listeners = ioListeners.get(blockId);
+  if (!listeners) {
+    listeners = new Set();
+    ioListeners.set(blockId, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) ioListeners.delete(blockId);
+  };
+}
 
 // HIGH/LOW (a Timer's two edges) read as booleans, numbers as numbers,
 // anything else as the text it is — the same kinds a wire carries in the
@@ -55,7 +69,7 @@ export function getUsbValue(blockId) {
   return usbValues.get(blockId);
 }
 
-function takeUsbLines(state, bytes) {
+function takeAsyncLines(state, bytes) {
   const parts = [];
   let keepFrom = 0;
   let lineStart = 0;
@@ -65,9 +79,22 @@ function takeUsbLines(state, bytes) {
     for (let k = 0; match && k < USB_PREFIX_BYTES.length; k += 1) {
       if (bytes[lineStart + k] !== USB_PREFIX_BYTES[k]) match = false;
     }
+    let consumed = false;
     if (match) {
       const text = new TextDecoder().decode(bytes.slice(lineStart + USB_PREFIX_BYTES.length, i)).replace(/\r$/, '');
       usbValues.set(state.blockId, { value: parseUsbValue(text), at: Date.now() });
+      consumed = true;
+    } else {
+      const text = new TextDecoder().decode(bytes.slice(lineStart, i)).replace(/\r$/, '');
+      try {
+        const message = JSON.parse(text);
+        if (message.type === 'io-change' && Array.isArray(message.pins)) {
+          for (const listener of ioListeners.get(state.blockId) || []) listener(message.pins);
+          consumed = true;
+        }
+      } catch { /* Ordinary console line. */ }
+    }
+    if (consumed) {
       parts.push(bytes.slice(keepFrom, lineStart));
       keepFrom = i + 1;
     }
@@ -126,7 +153,7 @@ function appendBytes(state, chunk) {
   const merged = new Uint8Array(state.queue.length + chunk.length);
   merged.set(state.queue);
   merged.set(chunk, state.queue.length);
-  state.queue = takeUsbLines(state, merged);
+  state.queue = takeAsyncLines(state, merged);
   drainWaiters(state);
 }
 
@@ -180,8 +207,33 @@ export function openConsole(blockId) {
   if (state) return state;
   state = { queue: new Uint8Array(0), waiters: [], closed: false, blockId };
   consoles.set(blockId, state);
-  session.transport.rawRead((chunk) => appendBytes(state, chunk), () => state.closed).catch(() => {});
+  state.reading = readConsole(state, session.transport);
   return state;
+}
+
+async function readConsole(state, transport) {
+  // Web Serial replaces readable after a recoverable framing/overflow error.
+  // Resume on that stream without reopening (and resetting) the board.
+  while (!state.closed && transport.device.readable) {
+    let reader;
+    try {
+      reader = transport.device.readable.getReader();
+      state.reader = reader;
+      transport.reader = reader;
+      while (!state.closed) {
+        const { value, done } = await reader.read();
+        if (done) return;
+        if (value) appendBytes(state, value);
+      }
+    } catch (err) {
+      if (!reader) return; // Another operation owns the port.
+      if (!state.closed) console.warn('[serial] Read interrupted:', err.message);
+    } finally {
+      reader?.releaseLock();
+      if (transport.reader === reader) transport.reader = undefined;
+      state.reader = null;
+    }
+  }
 }
 
 // Cancels a read that's already blocked waiting for the device's first
@@ -194,31 +246,80 @@ export function closeConsole(blockId) {
   if (!state) return;
   state.closed = true;
   consoles.delete(blockId);
+  state.reader?.cancel().catch(() => {});
+}
+
+// A write to a port whose device has gone never settles — and an ESP32-S3
+// on its native USB *does* go: opening the port asserts DTR, which resets
+// the chip, which takes its USB device down and brings it back as a fresh
+// enumeration. The handle that survives that points at something no longer
+// there, and `writer.write()` on it simply never returns. Unbounded, that
+// hangs whatever was probing the board forever — the dialog sitting on
+// "checking for firmware..." with nothing to time it out. Nothing here is
+// worth waiting seconds for, so every write gets a deadline.
+const WRITE_TIMEOUT_MS = 1500;
+
+async function writeRaw(blockId, bytes) {
   const session = getSession(blockId);
-  session?.transport?.reader?.cancel().catch(() => {});
+  if (!session?.transport?.device?.writable) throw new Error('the serial port is closed');
+  const writer = session.transport.device.writable.getWriter();
+  let timer = null;
+  try {
+    await Promise.race([
+      writer.write(bytes),
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('the serial port stopped accepting writes')), WRITE_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+    try {
+      writer.releaseLock();
+    } catch {
+      // A writer whose stream already errored cannot be released; the port
+      // is being thrown away either way.
+    }
+  }
 }
 
 async function writeLine(blockId, text) {
-  const session = getSession(blockId);
-  const writer = session.transport.device.writable.getWriter();
-  try {
-    await writer.write(new TextEncoder().encode(`${text}\n`));
-  } finally {
-    writer.releaseLock();
-  }
+  await writeRaw(blockId, new TextEncoder().encode(`${text}\n`));
+}
+
+// "Is anything running over there?", asked the way the firmware is most
+// likely to hear it.
+//
+// `?` is not a command, it is a single character the firmware acts on the
+// moment it reads it (see esp32_logic's pollSerialCommands: `if (c == '?')
+// { printSystemInfo(); continue; }`) — before any line assembly, and so
+// regardless of what half-finished line is sitting in its command buffer
+// from whatever spoke to it last. `ping` has to survive that buffer to be
+// recognised at all: one stray byte with no newline behind it left over
+// from a previous session, and `ping` arrives as `…ping` and matches
+// nothing.
+//
+// Both go, in that order, with a newline between them to close out
+// anything already buffered. Either one answers with the same [INFO] line,
+// and a board that prints it twice costs nothing — identify() returns on
+// the first.
+const PROBE_BYTES = new TextEncoder().encode('?\nping\n');
+
+async function probe(blockId) {
+  await writeRaw(blockId, PROBE_BYTES);
 }
 
 async function writeBytes(blockId, bytes) {
-  const session = getSession(blockId);
-  const writer = session.transport.device.writable.getWriter();
-  try {
-    await writer.write(bytes);
-  } finally {
-    writer.releaseLock();
-  }
+  await writeRaw(blockId, bytes);
 }
 
-const INFO_RE = /^\[INFO] LogicMod v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \| heap=(\d+) \| circuit=(\w+) nCB=(\d+)/;
+// Deliberately not anchored to the start of the line. The firmware answers
+// from inside its own loop, so its reply lands wherever the output happened
+// to be — caught on a real board as
+//   "[I2C] slave [INFO] LogicMod v1.2 build 20260922a | AP=…"
+// where printSystemInfo ran between another message and its newline.
+// Anchored with ^, that answer is thrown away and a board that replied
+// correctly is reported as having no firmware.
+const INFO_RE = /\[INFO] LogicMod v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \| heap=(\d+) \| circuit=(\w+) nCB=(\d+)/;
 
 // Two more lines worth recognising while probing (see identify below).
 // The firmware prints this banner once, out of setup(), a second or more
@@ -260,7 +361,7 @@ const RESET_LOOP_RE = /Brownout detector was triggered|Guru Meditation Error/i;
 // unsolicited output as if it were its own reply (confirmed live: this is
 // exactly what turned a save-design's own READY check into "Unexpected
 // response: [CIRCUIT] Load failed, retrying in 500ms").
-export async function identify(blockId, { timeoutMs = 3000, pingEveryMs = 500, bootGraceMs = 20000 } = {}) {
+async function identifyCommand(blockId, { timeoutMs = 3000, pingEveryMs = 500, bootGraceMs = 20000 } = {}) {
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0);
@@ -280,12 +381,30 @@ export async function identify(blockId, { timeoutMs = 3000, pingEveryMs = 500, b
   let booting = false;
   let banners = 0;
   let version = null;
+  // Nothing here reopens the port while waiting, and that is the point.
+  //
+  // Opening the port resets the board — the S3's USB *is* its serial port,
+  // so the host opening it restarts the chip, which its own ROM log says
+  // outright: `rst:0x15 (USB_UART_CHIP_RESET)`. A reopen while waiting for
+  // the board to boot therefore resets the very boot being waited on. Tried
+  // once, and the console filled with nothing but boot banners: the board
+  // got as far as printing `[I2C] slave ` — the line its answer is appended
+  // to — and was reset again mid-word, over and over.
+  //
+  // The board needs to be left alone. Ask, wait, ask again; the writes that
+  // fail while it is mid-reset are expected and cost nothing but the next
+  // 500ms.
   while (Date.now() < deadline) {
     if (Date.now() >= nextPing) {
       try {
-        await writeLine(blockId, 'ping');
+        await probe(blockId);
       } catch {
-        break; // the port went away under us — nothing left to ask
+        // Expected while the board is mid-reset and its USB device is
+        // away: the write has nowhere to land. Not a reason to do anything
+        // drastic — the board is busy booting, and booting ends with it
+        // listening. Try again on the next tick.
+        nextPing = Date.now() + pingEveryMs;
+        continue;
       }
       nextPing = Date.now() + pingEveryMs;
     }
@@ -352,7 +471,7 @@ export async function identify(blockId, { timeoutMs = 3000, pingEveryMs = 500, b
   return { verified: false, booting };
 }
 
-export async function readDesign(blockId, { timeoutMs = 4000 } = {}) {
+async function readDesignCommand(blockId, { timeoutMs = 4000 } = {}) {
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
@@ -475,6 +594,7 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     if (idByChildId.has(child.id)) return idByChildId.get(child.id);
     const pin = Number((child.props || []).find((p) => p.name === 'pin')?.value);
     const direction = (child.props || []).find((p) => p.name === 'direction')?.value === 'output' ? 'dout' : 'din';
+    const exio = Number((child.props || []).find((p) => p.name === 'exio')?.value);
     const id = nextBlockId;
     nextBlockId += 1;
     idByChildId.set(child.id, id);
@@ -483,7 +603,7 @@ export function buildMinimalDesign(childBlocks, connections = []) {
       type: direction,
       gx,
       gy,
-      data: direction === 'din' ? { gpio: pin, emitOnChange: true } : { gpio: pin },
+      data: direction === 'din' ? { gpio: pin, emitOnChange: true } : exio >= 1 && exio <= 8 ? { exio } : { gpio: pin },
     });
     return id;
   }
@@ -657,7 +777,7 @@ export function buildMinimalDesign(childBlocks, connections = []) {
 // alongside this file). Bypasses circuit logic entirely, same as that
 // message does; not a substitute for sendDesign, which only ever declares
 // pins, never drives them.
-export async function setPin(blockId, gpio, state, { timeoutMs = 2000 } = {}) {
+async function setPinCommand(blockId, gpio, state, { timeoutMs = 2000 } = {}) {
   await ensurePlain(blockId);
   const consoleState = openConsole(blockId);
   consoleState.queue = new Uint8Array(0); // see identify()'s own doc on why
@@ -669,22 +789,24 @@ export async function setPin(blockId, gpio, state, { timeoutMs = 2000 } = {}) {
 
 // Current gpio/output/state for every pin the board's loaded circuit
 // declared — serial mirror of broadcastIO()'s WebSocket payload (see `pins`).
-export async function readPins(blockId, { timeoutMs = 2000 } = {}) {
+async function readPinsCommand(blockId, { timeoutMs = 2000, inputs = [] } = {}) {
   await ensurePlain(blockId);
   const consoleState = openConsole(blockId);
   consoleState.queue = new Uint8Array(0); // see identify()'s own doc on why
-  await writeLine(blockId, 'pins');
-  const line = await readLine(consoleState, timeoutMs);
-  let doc;
-  try {
-    doc = JSON.parse(line);
-  } catch {
-    throw new Error(`Unexpected response: ${line}`);
+  const pins = [...new Set(inputs.filter(pin => Number.isInteger(pin) && pin >= 0 && pin <= 48))];
+  await writeLine(blockId, pins.length ? `pins ${pins.join(',')}` : 'pins');
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const line = await readLine(consoleState, Math.max(1, deadline - Date.now()));
+    try {
+      const doc = JSON.parse(line);
+      if (doc.type === 'io' && Array.isArray(doc.pins)) return doc.pins;
+    } catch { /* Unsolicited boot/circuit log; keep waiting for this reply. */ }
   }
-  return Array.isArray(doc.pins) ? doc.pins : [];
+  throw new Error('Timed out waiting for pin states.');
 }
 
-export async function sendDesign(blockId, design, { timeoutMs = 5000 } = {}) {
+async function sendDesignCommand(blockId, design, { timeoutMs = 5000 } = {}) {
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
@@ -696,4 +818,36 @@ export async function sendDesign(blockId, design, { timeoutMs = 5000 } = {}) {
   const result = await readLine(state, timeoutMs);
   if (!/Saved \d+ bytes OK/.test(result)) throw new Error(result || 'Save failed.');
   return result;
+}
+
+// Every command shares one byte stream. In particular, polling must never
+// consume the READY/Saved reply belonging to a circuit upload.
+const commandQueues = new Map();
+function queueCommand(blockId, run) {
+  const previous = commandQueues.get(blockId) || Promise.resolve();
+  const result = previous.catch(() => {}).then(run);
+  commandQueues.set(blockId, result);
+  const clear = () => { if (commandQueues.get(blockId) === result) commandQueues.delete(blockId); };
+  result.then(clear, clear);
+  return result;
+}
+
+export function identify(blockId, ...args) {
+  return queueCommand(blockId, () => identifyCommand(blockId, ...args));
+}
+
+export function readDesign(blockId, ...args) {
+  return queueCommand(blockId, () => readDesignCommand(blockId, ...args));
+}
+
+export function setPin(blockId, ...args) {
+  return queueCommand(blockId, () => setPinCommand(blockId, ...args));
+}
+
+export function readPins(blockId, ...args) {
+  return queueCommand(blockId, () => readPinsCommand(blockId, ...args));
+}
+
+export function sendDesign(blockId, ...args) {
+  return queueCommand(blockId, () => sendDesignCommand(blockId, ...args));
 }

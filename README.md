@@ -72,3 +72,25 @@ gcloud run deploy noditron --source . --region <region> --allow-unauthenticated
 The server listens on `PORT`, which Cloud Run sets automatically.
 
 **The Dockerfile disables server-side persistence by default** (`NODITRON_DISABLE_PERSISTENCE=true`) — a container built from it never keeps a project in its own memory across requests. This matters because that state is a single variable shared by every request the process handles: without this, every visitor to a shared deployment would silently read and write the *same* diagram. That's fine for the "Run it locally" case above, where you're the only one who can reach the server at all — it's never fine for a container anyone on the internet can open. Only unset or override this variable for a deployment you're certain is single-user and not publicly reachable.
+
+### Waveshare esp32-S3 (8DI/8DO)
+
+The `esp32-S3` library block represents the Waveshare
+[ESP32-S3-POE-ETH-8DI-8DO](https://www.waveshare.com/wiki/ESP32-S3-POE-ETH-8DI-8DO).
+Its library ID remains `esp32-s3-devkit` so existing projects refresh normally.
+DI1?DI8 read GPIO4?GPIO11; DO1?DO8 compile to `dout.data.exio` 1?8,
+using conucon's TCA9554 driver (SDA42, SCL41, address 0x20, active-high).
+Live output IDs are 1000?1007. CAN uses TWAI on TX2/RX3.
+The firmware selector prefers the Waveshare preset for this block.
+
+Build its firmware in conucon with
+`pio run -d modules/esp32_logic -e logic-s3-waveshare`, then copy
+`.pio/build/logic-s3-waveshare/firmware.bin` from that module to
+`firmware-assets/logic/esp32-s3-waveshare.bin` here.
+This profile leaves GPIO8/9 available for DI5/DI6 instead of starting the
+external I2C buses there. Generic ESP32/S3 builds retain their existing bus setup.
+The server supplies bundled firmware directly, with GitHub as a fallback.
+
+Regenerate the board manifest with `node tools/build-esp32-s3-module.mjs`.
+Run `node --test tools/serial-connection.test.mjs tools/waveshare-board.test.mjs`
+to check serial recovery, firmware selection and DI/EXIO export.

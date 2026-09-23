@@ -15,6 +15,7 @@ import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
 import * as livePins from './livePins.js';
 import * as devkitCircuit from './devkitCircuit.js';
+import { createDeviceSaver } from './deviceSave.js';
 
 // noditron's own "primitive" kinds — plain value/logic leaves with no
 // business growing a sub-architecture of their own (unlike Timer, whose
@@ -27,7 +28,7 @@ const NO_SUB_ARCHITECTURE_KINDS = [
   // the firmware runs directly; none has an inside.
   'boot', 'serial', 'serialin', 'can', 'i2cout', 'i2cin', 'pwmout', 'pwmin', 'slice', 'route', 'croute',
 ];
-const ESP32_TEMPLATE_PROP_NAMES = ['render', 'html', 'dialog', 'allowedChildKinds', 'usbOrientation', 'boardVariant', 'pinMap', 'onboardControls'];
+const ESP32_TEMPLATE_PROP_NAMES = ['render', 'html', 'dialog', 'allowedChildKinds', 'usbOrientation', 'boardVariant', 'pinMap', 'onboardControls', 'firmwarePreset', 'canPins'];
 
 function waitForNodigraph() {
   return new Promise((resolve) => {
@@ -157,9 +158,10 @@ async function boot() {
     // board itself is never even considered). That left already-placed
     // boards running whatever dialog/render code they were pasted with,
     // which is what made a stale dialog outlive edits to the module.
-    for (const { block } of devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children)) {
+    for (const { block, level } of devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children)) {
       const templateBlock = await templateFor(moduleNameOf(block));
       if (!templateBlock) continue;
+      if (devkitCircuit.migrateWaveshareBoard(block, templateBlock, level)) changed = true;
       for (const name of ESP32_TEMPLATE_PROP_NAMES) {
         const src = (templateBlock.props || []).find((p) => p.name === name);
         if (!src) continue;
@@ -287,6 +289,23 @@ async function boot() {
     return '#3ecf5d';
   };
 
+  window.nodigraphPortColor = (block, port) => {
+    if (kindOf(block) !== 'esp32-devkit' || !devkitCircuit.isDevkitRunning(block) || !serialFlash.getSession(block.id)) return null;
+    const name = logicalName(block, port.id);
+    const pin = pinMapFor(block).find(p => p.label === name);
+    if (!pin || pin.gpio === null || pin.reserved) return null;
+    const live = livePins.getCachedPins(block.id)?.find(p => Number(p.gpio) === Number(pin.gpio));
+    return live ? (live.state ? '#3ecf5d' : '#64748b') : null;
+  };
+  window.nodigraphPortValue = (block, port) => {
+    if (kindOf(block) !== 'esp32-devkit' || !devkitCircuit.isDevkitRunning(block) || !serialFlash.getSession(block.id)) return undefined;
+    const name = logicalName(block, port.id);
+    const pin = pinMapFor(block).find(p => p.label === name);
+    if (!pin?.inputOnly || pin.gpio === null || pin.gpio === undefined) return undefined;
+    const live = livePins.getCachedPins(block.id)?.find(p => Number(p.gpio) === Number(pin.gpio));
+    return live ? Boolean(live.state) : undefined;
+  };
+
   // Pushes any connected+running ESP32 DevKit's pending circuit changes to
   // its device whenever the user does an explicit project Save (see
   // nodigraph's own main.js — window.nodigraphAfterSave, a new host hook
@@ -398,46 +417,15 @@ async function boot() {
     }
     return out;
   }
-  window.nodigraphAfterSave = async () => {
-    const devkits = devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children);
-    let changed = false;
-    let promptedConnection = false;
-    for (const { block: esp, level } of devkits) {
-      const design = devkitCircuit.buildDevkitDesign(esp, level);
-      if (!design.blocks.length) continue;
-      // No live session for this block right now (never connected this
-      // page load, or the connectionState prop is stale from before a
-      // reload) -- nothing to push to, silently skip rather than error.
-      if (
-        !serialFlash.getSession(esp.id) ||
-        (esp.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running'
-      ) {
-        if (!promptedConnection) {
-          promptedConnection = true;
-          dialogSystem.openDialog(esp);
-        }
-        continue;
-      }
-      // Same shape as the ESP32 DevKit dialog's own childSnapshot() (see
-      // modules/esp32-devkit's dialog prop) -- connections included, not
-      // just the blocks' own props, so rewiring alone (no other prop
-      // change) is still detected as dirty here too. Keeping this an
-      // identical shape to the dialog's own version matters: whichever
-      // path saves first writes lastSentSnapshot, and the other path needs
-      // to recognize that same string as "already up to date," not
-      // mismatch on format and resend on every single trigger.
-      const snapshot = devkitCircuit.devkitSnapshot(esp, level);
-      if (snapshot === ((esp.props || []).find((p) => p.name === 'lastSentSnapshot')?.value || '')) continue;
-      try {
-        await serialConsole.sendDesign(esp.id, design);
-        devkitCircuit.markDevkitSent(esp, snapshot);
-        changed = true;
-      } catch (err) {
-        console.warn(`[noditron] Save-triggered device push failed for "${esp.name}":`, err.message);
-      }
-    }
-    if (changed) nodigraph.persist();
-  };
+  window.nodigraphBeforeSave = createDeviceSaver({
+    project: nodigraph.project,
+    getSession: serialFlash.getSession,
+    sendDesign: serialConsole.sendDesign,
+    persist: nodigraph.persist,
+    openDialog: dialogSystem.openDialog,
+  });
+  window.nodigraphHasUnsavedChanges = () => devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children)
+    .some(({ block, level }) => devkitCircuit.isDevkitDirty(block, level));
 
   // Keeps every Digital I/O (Bool) child's own props.value in sync with
   // its connected board's live GPIO state, regardless of which level is
@@ -481,7 +469,8 @@ async function boot() {
       else clearBoundaryOutput(container.id, port.id);
     }
     if (!live) return;
-    livePins.ensurePolling(container.id);
+    const inputs = pinMapFor(container).filter(p => !p.reserved && !p.outputOnly && p.gpio !== null && p.gpio !== undefined && p.gpio < 1000).map(p => Number(p.gpio));
+    livePins.ensurePolling(container.id, inputs);
     const cached = livePins.getCachedPins(container.id);
     if (!cached) return;
     // The board's own pins carry their live state into the level, so a
@@ -508,7 +497,7 @@ async function boot() {
         changed = true;
       }
     }
-    if (changed) nodigraph.persist();
+    // Live readings are telemetry, not user edits.
   }
 
   // Still the "global timer" for block *values* — runtime.js's own
@@ -531,6 +520,7 @@ async function boot() {
     () => {
       const byId = new Map(nodigraph.project.listBlocks().map((b) => [b.id, b]));
       htmlOverlay.prune(byId);
+      nodigraph.refreshSaved?.();
       nodigraph.renderLoop.requestRender();
 
       const pathJson = addTargetKey();

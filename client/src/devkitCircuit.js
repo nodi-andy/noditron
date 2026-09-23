@@ -22,6 +22,45 @@ function propValue(block, name, fallback = '') {
   return (block.props || []).find((p) => p.name === name)?.value ?? fallback;
 }
 
+// Keep IDs (and wires) for terminals with a known equivalent. Obsolete wired
+// pins remain visible as legacy ports so changing the board cannot lose a wire.
+export function migrateWaveshareBoard(block, template, level) {
+  if (propValue(template, 'boardVariant') !== 'ESP32-S3-POE-ETH-8DI-8DO') return false;
+  let changed = false;
+  if (block.name === 'ESP32-S3 DevKit') { block.name = 'esp32-S3'; changed = true; }
+  const alreadyWaveshare = propValue(block, 'boardVariant') === 'ESP32-S3-POE-ETH-8DI-8DO';
+  const aliases = new Map(Array.from({ length: 8 }, (_, i) => [`G${i + 4}`, `DI${i + 1}`]));
+  aliases.set('G2', 'CAN TX'); aliases.set('G3', 'CAN RX');
+  aliases.set('G17', 'RS485 TX'); aliases.set('G18', 'RS485 RX');
+  const connections = [...(level?.connections?.values?.() || []), ...(block.children?.connections?.values?.() || [])];
+  const retained = new Set();
+  for (const logical of block.logicalPorts || []) {
+    const name = aliases.get(logical.name) || logical.name;
+    const replacement = template.logicalPorts.find(p => p.name === name);
+    const ports = block.ports.filter(p => p.logicalId === logical.id);
+    const wired = ports.some(p => connections.some(c =>
+      (c.sourceBlockId === block.id && c.sourcePortId === p.id) || (c.targetBlockId === block.id && c.targetPortId === p.id)));
+    if (replacement) {
+      if (logical.name !== name || logical.direction !== replacement.direction || logical.description !== replacement.description) changed = true;
+      logical.name = name;
+      logical.direction = replacement.direction;
+      logical.description = replacement.description;
+      const position = template.ports.find(p => p.logicalId === replacement.id);
+      for (const p of ports) Object.assign(p, { side: position.side, offset: position.offset, manualOffset: true });
+      retained.add(logical.id);
+    } else if (wired) {
+      logical.description = 'Legacy DevKit pin; reconnect to a terminal on the Waveshare board.';
+      retained.add(logical.id);
+    }
+  }
+  block.logicalPorts = block.logicalPorts.filter(p => retained.has(p.id));
+  block.ports = block.ports.filter(p => retained.has(p.logicalId));
+  // Existing Waveshare blocks still pass through this sync. Module v1.6.0
+  // exposed signal-flow directions on the outer face; updating the module
+  // alone would otherwise leave already placed blocks reversed forever.
+  return changed || !alreadyWaveshare;
+}
+
 export function findContainingLevel(level, blockId) {
   if (!level) return null;
   if (level.blocks?.has(blockId)) return level;
@@ -48,10 +87,10 @@ export function findContainingLevel(level, blockId) {
 // Timer's `out` into D2 is therefore a complete, uploadable circuit on its
 // own — that's the whole point of the pins being on the block.
 function buildPinMappedDesign(esp, blocks, connections) {
-  const gpioByPortName = new Map(
+  const pinsByPortName = new Map(
     pinMapFor(esp)
       .filter((pin) => pin.gpio !== null && pin.gpio !== undefined)
-      .map((pin) => [pin.label, Number(pin.gpio)]),
+      .map((pin) => [pin.label, pin]),
   );
   const syntheticPins = new Map();
   // The board's USB pin (pinMap role usb-serial): a wire into it sends its
@@ -66,12 +105,13 @@ function buildPinMappedDesign(esp, blocks, connections) {
   };
   let usesUsb = false;
 
-  function syntheticPinBlock(gpio, direction) {
+  function syntheticPinBlock(pin, direction) {
+    const gpio = Number(pin.gpio);
     const key = `${direction}:${gpio}`;
     if (syntheticPins.has(key)) return syntheticPins.get(key);
     const block = {
       id: `${esp.id}:${key}`,
-      name: `GPIO${gpio}`,
+      name: pin.label,
       logicalPorts: [{ id: `${esp.id}:${key}:io`, name: 'value', direction: direction === 'output' ? 'in' : 'out' }],
       ports: [{ id: `${esp.id}:${key}:port`, logicalId: `${esp.id}:${key}:io`, side: direction === 'output' ? 'left' : 'right', offset: 20, manualOffset: true }],
       props: [
@@ -79,6 +119,7 @@ function buildPinMappedDesign(esp, blocks, connections) {
         { id: `${esp.id}:${key}:dir`, name: 'direction', kind: 'value', value: direction },
         { id: `${esp.id}:${key}:value`, name: 'value', kind: 'range', min: 0, max: 1, value: 0 },
         { id: `${esp.id}:${key}:kind`, name: 'noditronKind', kind: 'value', value: 'digital-io' },
+        ...(pin.exio ? [{ id: `${esp.id}:${key}:exio`, name: 'exio', kind: 'value', value: pin.exio }] : []),
       ],
     };
     syntheticPins.set(key, block);
@@ -93,9 +134,17 @@ function buildPinMappedDesign(esp, blocks, connections) {
       usesUsb = true;
       return { blockId: usbTarget.id, portId: usbTarget.ports[0].id };
     }
-    const gpio = gpioByPortName.get(portName);
-    if (gpio === undefined) return null;
-    const pin = syntheticPinBlock(gpio, isTarget ? 'output' : 'input');
+    const mappedPin = pinsByPortName.get(portName);
+    if (!mappedPin) {
+      if (propValue(esp, 'boardVariant') === 'ESP32-S3-POE-ETH-8DI-8DO') {
+        throw new Error(`${portName} is not a digital terminal on this Waveshare board. Reconnect the wire to DI1–DI8 or DO1–DO8.`);
+      }
+      return null;
+    }
+    if (mappedPin.reserved || (isTarget && mappedPin.inputOnly) || (!isTarget && mappedPin.outputOnly)) {
+      throw new Error(`${portName} cannot be used as a digital ${isTarget ? 'output' : 'input'}.`);
+    }
+    const pin = syntheticPinBlock(mappedPin, isTarget ? 'output' : 'input');
     return { blockId: pin.id, portId: pin.ports[0].id };
   }
 
@@ -142,13 +191,20 @@ export function buildDevkitDesign(esp, level) {
 }
 
 export function devkitSnapshot(esp, level) {
+  const snapshotBlock = (block) => ({
+    id: block.id, name: block.name, ports: block.ports, logicalPorts: block.logicalPorts,
+    props: (block.props || []).filter(p => !['connectionState', 'lastSentSnapshot'].includes(p.name)
+      && !(kindOf(block) === 'digital-io' && propValue(block, 'direction') !== 'output' && p.name === 'value')),
+    children: Array.from(block.children?.blocks?.values?.() || []).map(snapshotBlock),
+    connections: Array.from(block.children?.connections?.values?.() || []),
+  });
   const siblings = Array.from(level?.blocks?.values?.() || [])
-    .filter((block) => block.id !== esp.id)
-    .map((block) => ({ id: block.id, props: block.props, ports: block.ports, logicalPorts: block.logicalPorts }));
+    .filter((block) => block.id !== esp.id && kindOf(block) !== 'esp32-devkit')
+    .map(snapshotBlock);
   const levelConnections = Array.from(level?.connections?.values?.() || []).map((cn) => ({
     s: cn.sourceBlockId, sp: cn.sourcePortId, t: cn.targetBlockId, tp: cn.targetPortId,
   }));
-  const children = esp.children ? Array.from(esp.children.blocks.values()).map((block) => ({ id: block.id, props: block.props })) : [];
+  const children = esp.children ? Array.from(esp.children.blocks.values()).map(snapshotBlock) : [];
   const childConnections = esp.children ? Array.from(esp.children.connections.values()).map((cn) => ({
     s: cn.sourceBlockId, sp: cn.sourcePortId, t: cn.targetBlockId, tp: cn.targetPortId,
   })) : [];
@@ -167,9 +223,17 @@ export function isDevkitRunning(esp) {
   return propValue(esp, 'connectionState') === 'connected:running';
 }
 
+export function isDevkitDirty(esp, level) {
+  const sent = propValue(esp, 'lastSentSnapshot');
+  const hasCircuit = Boolean(sent || esp.children?.blocks?.size || esp.children?.connections?.size
+    || Array.from(level?.connections?.values?.() || []).some(c => c.sourceBlockId === esp.id || c.targetBlockId === esp.id));
+  return hasCircuit && devkitSnapshot(esp, level) !== sent;
+}
+
 export function markDevkitSent(esp, snapshot) {
   const lastSentProp = esp.props.find((p) => p.name === 'lastSentSnapshot');
   if (lastSentProp) lastSentProp.value = snapshot;
+  else esp.props.push({ id: `${esp.id}:lastSentSnapshot`, name: 'lastSentSnapshot', kind: 'value', value: snapshot });
   esp.description = serializeBlockDescription(esp);
 }
 

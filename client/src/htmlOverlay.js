@@ -14,8 +14,9 @@
 // "overlays are misplaced if the screen moves" bug. Only *existence*
 // (removing a container for a deleted block, or one whose `html` prop got
 // cleared) is cheap enough to leave on that slower timer — see prune().
-import { getLastResult } from './runtime.js';
+import { getLastResult, kindOf } from './runtime.js';
 import * as devkitCircuit from './devkitCircuit.js';
+import { SOCKET_HALF_OUTER } from '/nodigraph/src/render/BlockRenderer.js';
 
 const LAYER_ID = 'noditron-html-layer';
 
@@ -66,6 +67,8 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
   }
 
   function drawBlock(ctx, block, { contentAlpha = 1, transform = null } = {}) {
+    const board = kindOf(block) === 'esp32-devkit';
+    if (board) contentAlpha = 1;
     const source = block.props?.find((p) => p.name === 'html')?.value;
     if (!source || !String(source).trim()) return;
 
@@ -113,6 +116,8 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
     // real click handler, no canvas hit-testing hack needed for blocks
     // that already have DOM to work with.
     const helpers = {
+      contentScale: place.scale,
+      portSize: SOCKET_HALF_OUTER * 2 * place.scale,
       openDialog: () => openDialogFor(block),
       devkit: {
         buildDesign: () => devkitCircuit.buildDevkitDesign(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),

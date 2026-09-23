@@ -6,9 +6,11 @@
 // actually wants fresh data (see ensurePolling below); if nothing touches a
 // given board for 2s (the dialog closed and no on-canvas block for it is
 // being drawn any more), its loop stops itself rather than polling forever.
-import { readPins } from './serialConsole.js';
+import { readPins, subscribeIoChanges } from './serialConsole.js';
 
-const POLL_GAP_MS = 150;
+// Change events provide normal updates. This slow snapshot is only the
+// initial state and a recovery path if a serial event was lost.
+const POLL_GAP_MS = 5000;
 const IDLE_TIMEOUT_MS = 2000;
 
 const boards = new Map(); // parentBlockId -> { pins, polling, lastTouched }
@@ -33,8 +35,16 @@ export function getCachedPins(parentBlockId) {
 // board's poll loop if it isn't already running, and resets its idle timer
 // either way. A self-scheduling loop, not setInterval, so a slow reply can
 // never stack a second request behind the first on the same serial link.
-export function ensurePolling(parentBlockId) {
+export function ensurePolling(parentBlockId, inputs = null) {
   const entry = entryFor(parentBlockId);
+  if (inputs) entry.inputs = inputs;
+  if (!entry.unsubscribe) {
+    entry.unsubscribe = subscribeIoChanges(parentBlockId, (pins) => {
+      const merged = new Map((entry.pins || []).map(pin => [Number(pin.gpio), pin]));
+      for (const pin of pins) merged.set(Number(pin.gpio), pin);
+      entry.pins = [...merged.values()];
+    });
+  }
   entry.lastTouched = Date.now();
   if (entry.polling) return;
   entry.polling = true;
@@ -45,7 +55,7 @@ export function ensurePolling(parentBlockId) {
         break;
       }
       try {
-        entry.pins = await readPins(parentBlockId, { timeoutMs: 1500 });
+        entry.pins = await readPins(parentBlockId, { timeoutMs: 1500, inputs: entry.inputs || [] });
       } catch (_) {
         // A missed poll just leaves the cache showing the last known state.
       }
