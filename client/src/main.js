@@ -7,7 +7,7 @@
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { mountPalette, rehydrateKindLogic, migrateLegacyDataBlock } from './palette.js';
 import { mountLibrary } from './library.js';
-import { startRuntime, kindOf, getLastResult, getBoundaryOutput, setBoundaryInput, setBoundaryOutput, clearBoundaryOutput } from './runtime.js';
+import { startRuntime, kindOf, getLastResult, getBoundaryOutput, getPortValue, setBoundaryInput, setBoundaryOutput, clearBoundaryOutput } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
 import { installHtmlOverlay } from './htmlOverlay.js';
 import { installDialogSystem } from './dialogSystem.js';
@@ -21,7 +21,12 @@ import * as devkitCircuit from './devkitCircuit.js';
 // whole T_ON/T_OFF design *depends* on being a container). See
 // window.nodigraphCanEnter below and palette.js's own addKindProp calls
 // for where each one gets tagged.
-const NO_SUB_ARCHITECTURE_KINDS = ['digital-io', 'and', 'or', 'gate', 'not', 'data', 'add'];
+const NO_SUB_ARCHITECTURE_KINDS = [
+  'digital-io', 'and', 'or', 'gate', 'not', 'data', 'add',
+  // conucon's Logic Module blocks (see palette.js) — every one is a leaf
+  // the firmware runs directly; none has an inside.
+  'boot', 'serial', 'serialin', 'can', 'i2cout', 'i2cin', 'pwmout', 'pwmin', 'slice', 'route', 'croute',
+];
 const ESP32_TEMPLATE_PROP_NAMES = ['render', 'html', 'dialog', 'allowedChildKinds', 'usbOrientation', 'boardVariant', 'pinMap', 'onboardControls'];
 
 function waitForNodigraph() {
@@ -51,7 +56,7 @@ async function boot() {
   const canvasIndicators = installCanvasIndicators(nodigraph);
   const htmlOverlay = installHtmlOverlay(nodigraph, dialogSystem.openDialog);
 
-  window.nodigraphDrawBlock = (ctx, block, { contentAlpha = 1 } = {}) => {
+  window.nodigraphDrawBlock = (ctx, block, { contentAlpha = 1, transform = null } = {}) => {
     // The infinite canvas fades the block's face as its interior opens.
     // Custom board artwork must fade too, or it paints over the circuit.
     // Keep connection controls visible while the host still blocks entry.
@@ -63,7 +68,7 @@ async function boot() {
       dialogSystem.drawBlock(ctx, block);
     }
     ctx.restore();
-    htmlOverlay.drawBlock(ctx, block, { contentAlpha });
+    htmlOverlay.drawBlock(ctx, block, { contentAlpha, transform });
   };
 
   // The cog button in nodigraph's own bottom-left selection FAB stack (see
@@ -263,11 +268,23 @@ async function boot() {
   // wire's own stored color or the plain default blue, exactly as if this
   // hook didn't exist for that wire at all.
   window.nodigraphConnectionColor = (connection) => {
-    const key = `${connection.sourceBlockId}:${connection.sourcePortId}`;
-    const direct = getLastResult().outputValue?.get(key);
+    // getPortValue, not getLastResult().outputValue: this hook is asked
+    // about every wire nodigraph draws, including the ones inside a
+    // container shown open on the canvas while the current level is still
+    // the one outside it. Those live on a different level, so the
+    // current-level-only result had nothing for them and every such wire
+    // drew as if nothing were flowing (see runtime.js's getPortValue).
+    const direct = getPortValue(connection.sourceBlockId, connection.sourcePortId);
     const value = direct !== undefined ? direct : getBoundaryOutput(connection.sourceBlockId, connection.sourcePortId);
-    if (typeof value !== 'boolean') return null;
-    return value ? '#3ecf5d' : '#4a5568';
+    // Nothing on this wire at all — no opinion, so it draws in its own
+    // stored colour or the plain default.
+    if (value === undefined) return null;
+    if (typeof value === 'boolean') return value ? '#3ecf5d' : '#4a5568';
+    // Any other value present IS a signal on the wire, and reads as one:
+    // a Data block firing its string onto the belt is no less a signal
+    // than a button going high, and used to draw identically to a wire
+    // with nothing on it at all, which made firing invisible.
+    return '#3ecf5d';
   };
 
   // Pushes any connected+running ESP32 DevKit's pending circuit changes to
@@ -450,7 +467,17 @@ async function boot() {
       (container.props || []).find((p) => p.name === 'connectionState')?.value === 'connected:running'
       && Boolean(serialFlash.getSession(container.id)); // never connected this page load, or stale prop from before a reload
     for (const port of usbPorts) {
-      if (live) setBoundaryOutput(container.id, port.id, serialConsole.getUsbValue(container.id)?.value);
+      // A value the board actually SENT wins; anything else leaves the
+      // simulation's own value standing. The test used to be merely "is a
+      // board connected", and an override of `undefined` does not mean
+      // "no opinion" — runtime.js deletes the port's computed value for
+      // it. So plugging a board in made this pin go dark: the circuit in
+      // the browser was still producing a value, and connecting hardware
+      // that had not yet said anything actively suppressed it. Which is
+      // exactly backwards, since a board says nothing until its own
+      // uploaded design has a USB serial chain to say it with.
+      const sent = live ? serialConsole.getUsbValue(container.id)?.value : undefined;
+      if (sent !== undefined) setBoundaryOutput(container.id, port.id, sent);
       else clearBoundaryOutput(container.id, port.id);
     }
     if (!live) return;

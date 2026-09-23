@@ -35,7 +35,21 @@ function addLogicProps(block, fnSource, renderSource) {
   block.props.push({ id: generateId('prp'), name: 'render', kind: 'value', value: renderSource });
 }
 
+// nodigraph draws a block's name centred on it by default — which is
+// exactly where a block that renders its own face wants to put its value
+// (see DATA_HTML and readoutHtml, both of which sit their readout at the
+// bottom of the card). On a block tall enough the two coexist; on a short
+// one — 200x40, say — they land in the same few pixels and the value
+// reads as floating on top of the name. Moving the name to the top keeps
+// both legible at any height, and only ever applies to a block that
+// actually draws a face of its own.
+function titleAtTop(block) {
+  if (!(block.props || []).some((p) => p.name === 'html' && String(p.value || '').trim())) return;
+  block.style = { ...(block.style || {}), titlePos: 'top' };
+}
+
 function finish(nodigraph, block) {
+  titleAtTop(block);
   block.description = serializeBlockDescription(block);
   nodigraph.project.addBlock(block);
   nodigraph.selection.select(block.id);
@@ -701,33 +715,15 @@ if (!val) {
   val.style.cssText = 'font-size:16px;font-weight:700;color:var(--success,#3ecf5d);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
   container.appendChild(val);
 }
-let lamp = container.querySelector('.data-fired');
-if (!lamp) {
-  lamp = document.createElement('div');
-  lamp.className = 'data-fired';
-  lamp.style.cssText = 'position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;border:1px solid var(--border,#8888);box-sizing:border-box;';
-  container.appendChild(lamp);
-}
-// outputs.out, not the raw value prop directly — so a value just latched
-// in over the block's own write port shows up here on the same tick it
-// arrives, before the prop write itself has been committed (see the fn
-// this block is seeded with, and runtime.js's __persist).
-const v = outputs.out;
-val.textContent = typeof v === 'object' && v !== null ? JSON.stringify(v) : String(v);
-
-// The lamp is the trigger's only local tell: in fires this block rather
-// than feeding it, and out already carries the stored value continuously,
-// so without this a signal arriving would look like nothing happening.
-// Driven by outputs.fired, which the fn computes from helpers.changed —
-// html runs every animation frame, not once per tick, so working the edge
-// out here instead would just eat it. The fn's pulse lasts a single tick
-// (~100ms), too brief to be sure of catching, so the moment it is seen is
-// timestamped and the lamp is held lit for a beat past it.
-if (outputs.fired) lamp.dataset.firedAt = String(Date.now());
-const lit = Date.now() - Number(lamp.dataset.firedAt || 0) < 180;
-lamp.style.transition = lit ? 'none' : 'background .3s ease-out, box-shadow .3s ease-out';
-lamp.style.background = lit ? 'var(--success, #3ecf5d)' : 'transparent';
-lamp.style.boxShadow = lit ? '0 0 6px var(--success, #3ecf5d)' : 'none';
+// What this block HOLDS, read from its own value prop — not outputs.out.
+// With something wired to the in port, out carries the value only at the
+// instant the block fires (see DATA_FN) and is empty every tick between,
+// so reading out here drew the word "undefined" for all of those ticks,
+// which looked exactly like a trigger arriving had wiped the block's
+// contents. It never did: in cannot change what this block holds, and
+// only write ever does.
+const stored = (block.props.find((p) => p.name === 'value') || {}).value;
+val.textContent = typeof stored === 'object' && stored !== null ? JSON.stringify(stored) : String(stored);
 `.trim();
 
 // `in` is a trigger only — its value is deliberately never read, so
@@ -737,18 +733,38 @@ lamp.style.boxShadow = lit ? '0 0 6px var(--success, #3ecf5d)' : 'none';
 // changes, and __persist is what writes it onto the `value` prop for real
 // (see runtime.js) instead of only for the tick it showed up in — the
 // same thing typing into the dialog does, just from the diagram.
-// `fired` is not a port — nothing is wired to it and the runtime ignores an
-// outputs key with no port of that name. It exists for this block's own
-// html to draw (see DATA_HTML's lamp): a one-tick pulse marking the moment
-// a signal actually arrived on `in`, which is the only observable thing a
-// trigger does here.
+// `write` sets what this block holds, and is compared against the value
+// the block ALREADY holds rather than against helpers.changed. That
+// distinction is the whole thing: `changed` reports an *edge*, and is
+// false both on the first tick a value is seen and on every tick a steady
+// value stays put — so a constant arriving on a freshly wired write port
+// (a Data block inside an ESP32 sending the same string out over USB, say)
+// was seen once, recorded, and then ignored forever. Comparing against
+// props.value instead means "the wire says this block should hold X, and
+// it doesn't" — which is true until the write actually lands, however long
+// the value has been sitting there, and self-evidently stops being true
+// once it has. Serialized on both sides so an object compares by content.
+//
+// `in` is read nowhere at all: it triggers this block on the firmware side
+// and its own value is discarded, so there is deliberately no path from it
+// to `out` (see this block's own note above).
+// With something wired to `in`, this block is trigger-driven: it puts its
+// value on `out` at the moment a signal arrives and `out` is empty between
+// those moments, which is what makes firing show up as a pulse on the wire
+// rather than a permanently-on one. That is conucon's own data block (see
+// its circuitRecv) rather than an approximation of it.
+//
+// With NOTHING wired to `in` there is nothing that could ever trigger it,
+// so it stays a plain continuous constant instead of going silent — which
+// is the other half of what a Data block is for, and the reason this is a
+// condition rather than one behavior or the other.
 const DATA_FN = `
-const fired = inputs.in !== undefined && helpers.changed('in', inputs.in);
 const incoming = inputs.write;
-if (incoming !== undefined && helpers.changed('write', incoming)) {
-  return { out: incoming, fired, __persist: { value: incoming } };
+if (incoming !== undefined && JSON.stringify(incoming) !== JSON.stringify(props.value)) {
+  return { out: incoming, __persist: { value: incoming } };
 }
-return { out: props.value, fired };
+if (!helpers.isWired('in')) return { out: props.value };
+return helpers.changed('in', inputs.in) ? { out: props.value } : {};
 `.trim();
 
 const DATA_DIALOG = `
@@ -1083,6 +1099,512 @@ export function createJsonFieldBlock(nodigraph) {
   return finish(nodigraph, block);
 }
 
+// ---------------------------------------------------------------------------
+// conucon's Logic Module, block for block
+//
+// Everything esp32_logic's firmware knows how to run (see its own
+// main.cpp) except `belt` and `junc`, which are its grid-routing pieces —
+// here a wire IS the belt, so they have nothing to be. Each block below
+// keeps conucon's own type name as its noditronKind (`croute`, `pwmin`,
+// `serialin`, ...) rather than a prettier one, because that name is the
+// thing a future export has to emit, and a second vocabulary mapped onto
+// the first is a translation table waiting to drift.
+//
+// What they do *here* varies by how much of the block is really hardware.
+// `slice`, `route` and `croute` are pure data handling and run exactly as
+// the firmware runs them, locally, with no board involved. The rest —
+// serial, CAN, I2C, PWM — are hardware endpoints: the block carries the
+// real settings the device needs and shows what last passed through it,
+// but nothing is transmitted from the browser. That is the same split the
+// Digital I/O block already lives with (its `pin` is metadata read by
+// whatever eventually sends this circuit to a board, not a live readout).
+// ---------------------------------------------------------------------------
+
+// A plain settings panel built from a field list. Eleven blocks that are
+// each "a handful of named settings" would otherwise mean eleven
+// near-identical hand-written dialogs; this generates one as ordinary
+// source, stored on the block like any other dialog (see dialogSystem.js)
+// and editable per block afterwards.
+function settingsDialog(title, fields) {
+  return `
+container.style.fontFamily = 'Inter, sans-serif';
+const heading = document.createElement('h3');
+heading.textContent = ${JSON.stringify(title)};
+heading.style.cssText = 'margin:0 0 6px;color:var(--accent,#4f8cff);font-size:15px;letter-spacing:.03em;';
+container.appendChild(heading);
+for (const f of ${JSON.stringify(fields)}) {
+  const label = document.createElement('div');
+  label.textContent = f.label;
+  label.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin:12px 0 4px;';
+  container.appendChild(label);
+  let input;
+  if (f.options) {
+    input = document.createElement('select');
+    for (const opt of f.options) {
+      const o = document.createElement('option');
+      o.value = String(opt);
+      o.textContent = String(opt);
+      o.selected = String(props[f.name]) === String(opt);
+      input.appendChild(o);
+    }
+  } else {
+    input = document.createElement('input');
+    input.type = f.type === 'number' ? 'number' : 'text';
+    input.value = props[f.name] === undefined || props[f.name] === null ? '' : String(props[f.name]);
+  }
+  input.style.cssText = 'width:100%;padding:6px 8px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;box-sizing:border-box;';
+  input.dataset.field = f.name;
+  input.dataset.kind = f.type || 'text';
+  input.addEventListener('change', () => {
+    const raw = input.value;
+    const num = Number(raw);
+    const numeric = input.dataset.kind === 'number' && raw.trim() !== '' && !Number.isNaN(num);
+    helpers.setProp(input.dataset.field, numeric ? num : raw);
+  });
+  container.appendChild(input);
+  if (f.hint) {
+    const hint = document.createElement('p');
+    hint.textContent = f.hint;
+    hint.style.cssText = 'margin:5px 0 0;font-size:11px;color:var(--text-muted);';
+    container.appendChild(hint);
+  }
+}
+`.trim();
+}
+
+// A one-line readout on the block's own card. `expr` is a statement body
+// returning the string to show, so each block decides what its own
+// interesting value is without a second copy of the layout code.
+function readoutHtml(expr) {
+  return `
+container.style.display = 'flex';
+container.style.flexDirection = 'column';
+container.style.alignItems = 'center';
+container.style.justifyContent = 'flex-end';
+container.style.boxSizing = 'border-box';
+container.style.padding = '6px';
+container.style.fontFamily = 'Inter, sans-serif';
+
+let val = container.querySelector('.io-readout');
+if (!val) {
+  val = document.createElement('div');
+  val.className = 'io-readout';
+  val.style.cssText = 'font-size:13px;font-weight:600;color:var(--text-secondary,#8a94a6);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+  container.appendChild(val);
+}
+val.textContent = (function () { ${expr} })();
+`.trim();
+}
+
+// Remembers the last value that actually arrived, so a hardware endpoint
+// can show what it most recently handled rather than going blank between
+// events (nothing is transmitted from the browser — see the section note).
+const LAST_SEEN_HTML = readoutHtml(`
+const v = inputs.in;
+if (v !== undefined) container.dataset.last = typeof v === 'object' ? JSON.stringify(v) : String(v);
+return container.dataset.last === undefined ? 'idle' : 'sent: ' + container.dataset.last;
+`);
+
+export function createBootBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Boot' });
+  block.geometry.width = 150;
+  block.geometry.height = 90;
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'boot');
+  block.props.push({ id: generateId('prp'), name: 'delay', kind: 'value', value: 0 });
+  // Not a setting — where this block records the moment it first ran, so
+  // `delay` has something to count from. Clearing it re-arms the block
+  // (see the dialog), which is the local stand-in for power-cycling the
+  // board the firmware version actually fires on.
+  block.props.push({ id: generateId('prp'), name: 'startedAt', kind: 'value', value: 0 });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'fn',
+    kind: 'value',
+    value: [
+      'const startedAt = Number(props.startedAt) || 0;',
+      'if (!startedAt) return { out: false, __persist: { startedAt: Date.now() } };',
+      'return { out: Date.now() - startedAt >= (Number(props.delay) || 0) };',
+    ].join('\n'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('return outputs.out ? "fired" : "waiting";'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('BOOT', [
+      { name: 'delay', label: 'DELAY (MS)', type: 'number', hint: 'How long after start-up this fires. On the device that is power-on; here it is counted from when the block first ran.' },
+      { name: 'startedAt', label: 'STARTED AT', type: 'number', hint: 'Set to 0 to re-arm — the local stand-in for power-cycling the board.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+export function createSerialOutBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Serial TX' });
+  block.geometry.width = 170;
+  block.geometry.height = 90;
+  addNamedPort(block, 'in', 'in');
+  addKindProp(block, 'serial');
+  for (const [name, value] of [['uart', 2], ['tx', 17], ['rx', 16], ['baud', 115200], ['prefix', '']]) {
+    block.props.push({ id: generateId('prp'), name, kind: 'value', value });
+  }
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: LAST_SEEN_HTML });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('SERIAL TX', [
+      { name: 'uart', label: 'UART', type: 'number', options: [0, 1, 2] },
+      { name: 'tx', label: 'TX PIN', type: 'number' },
+      { name: 'rx', label: 'RX PIN', type: 'number' },
+      { name: 'baud', label: 'BAUD', type: 'number' },
+      { name: 'prefix', label: 'PREFIX', hint: 'Written before every value the device sends.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+export function createSerialInBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Serial RX' });
+  block.geometry.width = 170;
+  block.geometry.height = 90;
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'serialin');
+  for (const [name, value] of [['uart', 2], ['tx', 17], ['rx', 16], ['baud', 115200], ['prefix', '']]) {
+    block.props.push({ id: generateId('prp'), name, kind: 'value', value });
+  }
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('return outputs.out === undefined ? "no data" : String(outputs.out);'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('SERIAL RX', [
+      { name: 'uart', label: 'UART', type: 'number', options: [0, 1, 2] },
+      { name: 'tx', label: 'TX PIN', type: 'number' },
+      { name: 'rx', label: 'RX PIN', type: 'number' },
+      { name: 'baud', label: 'BAUD', type: 'number' },
+      { name: 'prefix', label: 'PREFIX', hint: 'Lines arriving behind this prefix are what reach out.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+export function createCanBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'CAN' });
+  block.geometry.width = 170;
+  block.geometry.height = 90;
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'can');
+  for (const [name, value] of [['tx', 15], ['rx', 16], ['bitrate', 500000], ['textId', 2032], ['format', 'hex']]) {
+    block.props.push({ id: generateId('prp'), name, kind: 'value', value });
+  }
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: LAST_SEEN_HTML });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('CAN', [
+      { name: 'tx', label: 'TX PIN', type: 'number' },
+      { name: 'rx', label: 'RX PIN', type: 'number' },
+      { name: 'bitrate', label: 'BITRATE', type: 'number' },
+      { name: 'textId', label: 'TEXT ID', type: 'number', hint: 'The dedicated id auto-fragmented plain text is sent under.' },
+      { name: 'format', label: 'FORMAT', options: ['hex', 'string'], hint: 'hex is raw ID#DATA frames; string auto-fragments plain text.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+export function createI2cOutBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'I2C Out' });
+  block.geometry.width = 160;
+  block.geometry.height = 90;
+  addNamedPort(block, 'in', 'in');
+  addKindProp(block, 'i2cout');
+  block.props.push({ id: generateId('prp'), name: 'addr', kind: 'value', value: 8 });
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: LAST_SEEN_HTML });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('I2C OUT', [
+      { name: 'addr', label: 'ADDRESS', type: 'number', hint: 'The 7-bit device address written to.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+export function createI2cInBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'I2C In' });
+  block.geometry.width = 160;
+  block.geometry.height = 90;
+  // `in` is a trigger: a signal arriving is what makes the device read.
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'i2cin');
+  block.props.push({ id: generateId('prp'), name: 'addr', kind: 'value', value: 8 });
+  block.props.push({ id: generateId('prp'), name: 'bytes', kind: 'value', value: 1 });
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('return outputs.out === undefined ? "no read" : String(outputs.out);'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('I2C IN', [
+      { name: 'addr', label: 'ADDRESS', type: 'number' },
+      { name: 'bytes', label: 'BYTES', type: 'number', hint: 'How many bytes each read requests. A signal on in is what triggers it.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+export function createPwmOutBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'PWM Out' });
+  block.geometry.width = 160;
+  block.geometry.height = 90;
+  addNamedPort(block, 'in', 'in');
+  addKindProp(block, 'pwmout');
+  for (const [name, value] of [['gpio', -1], ['freq', 1000], ['duty', 50]]) {
+    block.props.push({ id: generateId('prp'), name, kind: 'value', value });
+  }
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('return (inputs.in ? "on " : "off ") + (props.duty === undefined ? "" : props.duty + "%");'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('PWM OUT', [
+      { name: 'gpio', label: 'GPIO', type: 'number', hint: '-1 for none.' },
+      { name: 'freq', label: 'FREQUENCY (HZ)', type: 'number' },
+      { name: 'duty', label: 'DUTY (%)', type: 'number', hint: 'Applied while in is high; the pin is off while it is low.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+export function createPwmInBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'PWM In' });
+  block.geometry.width = 160;
+  // Two outputs on the right edge need two slots to sit in (one per 40
+  // units — see nodigraph's grid.getPortSlotOffsets).
+  block.geometry.height = 120;
+  addNamedPort(block, 'out', 'freq');
+  addNamedPort(block, 'out', 'duty');
+  addKindProp(block, 'pwmin');
+  block.props.push({ id: generateId('prp'), name: 'gpio', kind: 'value', value: -1 });
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('return outputs.freq === undefined ? "no signal" : outputs.freq + "Hz " + outputs.duty + "%";'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('PWM IN', [
+      { name: 'gpio', label: 'GPIO', type: 'number', hint: 'The pin measured. Frequency and duty leave on their own outputs.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+// Pure data handling — runs here exactly as the firmware runs it.
+export function createSliceBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Slice' });
+  block.geometry.width = 160;
+  block.geometry.height = 120;
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'out', 'L');
+  addNamedPort(block, 'out', 'R');
+  addKindProp(block, 'slice');
+  block.props.push({ id: generateId('prp'), name: 'splitAt', kind: 'value', value: 1 });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'fn',
+    kind: 'value',
+    value: [
+      'const v = inputs.in;',
+      'if (v === undefined) return {};',
+      AS_BELT_TEXT,
+      'const s = asText(v);',
+      'const n = Math.max(0, Math.min(Number(props.splitAt) || 0, s.length));',
+      'return { L: s.slice(0, n), R: s.slice(n) };',
+    ].join('\n'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('return outputs.L === undefined ? "—" : JSON.stringify(outputs.L) + " | " + JSON.stringify(outputs.R);'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('SLICE', [
+      { name: 'splitAt', label: 'SPLIT AT', type: 'number', hint: 'Characters before this index leave on L, the rest on R.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+// conucon's belts carry text, and a digital signal on one is the string
+// "1" or "0" — that is literally what its `din` block puts on the belt
+// (see circuitFireAll in its main.cpp). noditron carries the same signal
+// as a JS boolean, so anything here that matches or slices a value as
+// TEXT has to render a boolean the way the belt would, or a perfectly
+// reasonable rule like "route the 1s here and the 0s there" silently
+// compares against "true"/"false" and never matches anything.
+const AS_BELT_TEXT = 'const asText = (v) => (typeof v === "boolean" ? (v ? "1" : "0") : String(v));';
+
+// A true demux: `sel` picks which output the value on `in` is forwarded
+// to, counting from 0 the way conucon's own route does. out3/out4 ship
+// hidden — two ways is the ordinary case (see addNamedPort).
+export function createRouteBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Route' });
+  block.geometry.width = 170;
+  block.geometry.height = 170;
+  addNamedPort(block, 'in', 'sel');
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'out', 'out1');
+  addNamedPort(block, 'out', 'out2');
+  addNamedPort(block, 'out', 'out3', { hidden: true });
+  addNamedPort(block, 'out', 'out4', { hidden: true });
+  addKindProp(block, 'route');
+  block.props.push({
+    id: generateId('prp'),
+    name: 'fn',
+    kind: 'value',
+    value: [
+      'const v = inputs.in;',
+      'const sel = Math.trunc(Number(inputs.sel));',
+      'if (v === undefined || !Number.isFinite(sel) || sel < 0) return {};',
+      '// Selected from 0, the way conucon\'s own route counts. Resolved',
+      '// against this block\'s real output names so renaming one in the',
+      '// Inspector keeps working (see runtime.js\'s helpers.outputNames).',
+      'const names = helpers.outputNames();',
+      'return sel < names.length ? { [names[sel]]: v } : {};',
+    ].join('\n'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('const s = Number(inputs.sel); return Number.isFinite(s) ? "→ out" + (Math.trunc(s) + 1) : "no sel";'),
+  });
+  return finish(nodigraph, block);
+}
+
+// Routes by what the value IS rather than by an index: it goes to every
+// output whose match text it contains, and to the "else" outputs (those
+// with an empty match) only when nothing matched at all — conucon's own
+// rule, substring and all.
+//
+// Named "Match" rather than conucon's "content route": what it does is
+// match a value against a list, and "Route" is already the other block
+// here (pick an output by number). Its kind stays `croute` — the name on
+// the card is cosmetic, the kind is what an export has to emit.
+//
+// Routes default to ["1", "0"] because a digital signal is the archetypal
+// thing to split this way, and that is exactly what those signals look
+// like on the belt (see AS_BELT_TEXT).
+export function createContentRouteBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Match' });
+  block.geometry.width = 180;
+  block.geometry.height = 170;
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'out', 'out1');
+  addNamedPort(block, 'out', 'out2');
+  addNamedPort(block, 'out', 'out3', { hidden: true });
+  addNamedPort(block, 'out', 'out4', { hidden: true });
+  addKindProp(block, 'croute');
+  block.props.push({ id: generateId('prp'), name: 'routes', kind: 'value', value: '["1", "0"]' });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'fn',
+    kind: 'value',
+    value: [
+      'const v = inputs.in;',
+      'if (v === undefined) return {};',
+      AS_BELT_TEXT,
+      'const text = asText(v);',
+      'let routes = [];',
+      'try { routes = JSON.parse(props.routes || "[]"); } catch (err) { routes = []; }',
+      'if (!Array.isArray(routes)) routes = [];',
+      '// Against the real output names, so renaming one in the Inspector',
+      '// keeps working (see runtime.js\'s helpers.outputNames).',
+      'const names = helpers.outputNames();',
+      'const out = {};',
+      'let matched = false;',
+      'routes.forEach((m, i) => {',
+      '  if (i >= names.length) return;',
+      '  if (m !== "" && m !== null && m !== undefined && text.includes(String(m))) {',
+      '    out[names[i]] = v;',
+      '    matched = true;',
+      '  }',
+      '});',
+      '// An empty match is an "else" row: it fires only when nothing else did.',
+      'if (!matched) routes.forEach((m, i) => {',
+      '  if (i < names.length && (m === "" || m === null || m === undefined)) out[names[i]] = v;',
+      '});',
+      'return out;',
+    ].join('\n'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('const hit = Object.keys(outputs); return hit.length ? "→ " + hit.join(", ") : "no match";'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('MATCH', [
+      { name: 'routes', label: 'MATCHES (JSON)', hint: 'One entry per output, in port order — e.g. ["1","0"] to split a digital signal, or ["ok","err",""] for text. A value goes to every output whose text it contains; an empty entry is "else" and fires only when nothing matched. A digital signal reads as "1" or "0", the same as on conucon\'s own belt.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
 // nodigraph's own slim YAML format (model/slimFormat.js over there) is
 // generic — built before noditron existed, with no idea `fn`/`render`/
 // `html`/`dialog`/`noditronKind` mean anything, so it never wrote them out
@@ -1128,6 +1650,18 @@ const CREATE_BY_KIND = {
   timer: createTimerBlock,
   weather: createWeatherBlock,
   'json-field': createJsonFieldBlock,
+  // conucon's own type names, deliberately (see that section's note).
+  boot: createBootBlock,
+  serial: createSerialOutBlock,
+  serialin: createSerialInBlock,
+  can: createCanBlock,
+  i2cout: createI2cOutBlock,
+  i2cin: createI2cInBlock,
+  pwmout: createPwmOutBlock,
+  pwmin: createPwmInBlock,
+  slice: createSliceBlock,
+  route: createRouteBlock,
+  croute: createContentRouteBlock,
 };
 
 const CODE_PROP_NAMES = ['fn', 'render', 'html', 'dialog'];
@@ -1144,9 +1678,10 @@ function setProp(block, name, value) {
 // been hand-edited, which is what makes it safe to move onto the current
 // behavior (see createDataBlock's own note on what changed).
 // Each entry is a *previous built-in default*, never anything a person
-// typed: the original pass-through, then the first trigger version, which
-// had the `write` latch but computed no `fired` pulse yet and so left the
-// block with no way to show that it had been triggered at all.
+// typed: the original pass-through, then the first trigger version, then
+// the one that added a `fired` pulse for an on-canvas lamp. The latter two
+// both latched `write` through helpers.changed, which silently ignored a
+// steady value — see DATA_FN on why that had to go.
 const LEGACY_DATA_FN_SOURCES = [
   'return { out: inputs.in !== undefined ? inputs.in : props.value };',
   [
@@ -1156,14 +1691,52 @@ const LEGACY_DATA_FN_SOURCES = [
     '}',
     'return { out: props.value };',
   ].join('\n'),
+  [
+    "const fired = inputs.in !== undefined && helpers.changed('in', inputs.in);",
+    'const incoming = inputs.write;',
+    "if (incoming !== undefined && helpers.changed('write', incoming)) {",
+    '  return { out: incoming, fired, __persist: { value: incoming } };',
+    '}',
+    'return { out: props.value, fired };',
+  ].join('\n'),
+  // Fixed the write latch, but `out` was still continuous, so a trigger
+  // arriving produced no visible change on the wire at all.
+  [
+    'const incoming = inputs.write;',
+    'if (incoming !== undefined && JSON.stringify(incoming) !== JSON.stringify(props.value)) {',
+    '  return { out: incoming, __persist: { value: incoming } };',
+    '}',
+    'return { out: props.value };',
+  ].join('\n'),
+  // Pulsed, but decided trigger-vs-constant from whether a value happened
+  // to be in flight rather than from whether `in` is wired at all — so a
+  // block wired to something momentarily quiet fell back to behaving like
+  // a constant (see helpers.isWired).
+  [
+    'const incoming = inputs.write;',
+    'if (incoming !== undefined && JSON.stringify(incoming) !== JSON.stringify(props.value)) {',
+    '  return { out: incoming, __persist: { value: incoming } };',
+    '}',
+    'if (inputs.in === undefined) return { out: props.value };',
+    "return helpers.changed('in', inputs.in) ? { out: props.value } : {};",
+  ].join('\n'),
 ];
 
-// Brings a Data block placed before that change up to what a freshly
-// created one now is: the current fn and html (so its trigger lamp exists
-// at all), plus the hidden `write` port it never had. Nothing here ever
-// overwrites a fn someone actually wrote — an unrecognised one means the
-// block is left completely alone, the same principle rehydrateKindLogic
-// below already works on. Returns whether it changed anything.
+// Brings an existing Data block up to what a freshly created one is now:
+// current fn and html, plus the hidden `write` port it may predate.
+//
+// "Stock" is the gate, and it is deliberately strict — the block's fn has
+// to be byte-identical to the current default or to one of the previous
+// ones above. A fn someone actually wrote matches none of them and the
+// block is left completely alone, code and markup both, which is the same
+// principle rehydrateKindLogic below works on. Once a block IS stock, both
+// props are refreshed rather than only the one that happened to change, so
+// a fix to the html alone (the card reading `out` instead of the stored
+// value, say) still reaches blocks already placed.
+//
+// Returns whether it actually changed anything — a block already current
+// reports false, so this can run on every load without marking the project
+// dirty and re-persisting it each time.
 //
 // This exists because the alternative is worse: an older diagram would
 // otherwise hold two kinds of Data block that look identical and behave
@@ -1171,18 +1744,35 @@ const LEGACY_DATA_FN_SOURCES = [
 export function migrateLegacyDataBlock(block) {
   if ((block.props || []).find((p) => p.name === KIND_PROP)?.value !== 'data') return false;
   const fn = (block.props || []).find((p) => p.name === 'fn');
-  if (!fn || !LEGACY_DATA_FN_SOURCES.includes(String(fn.value).trim())) return false;
-  fn.value = DATA_FN;
-  setProp(block, 'html', DATA_HTML);
+  if (!fn) return false;
+  const source = String(fn.value).trim();
+  if (source !== DATA_FN && !LEGACY_DATA_FN_SOURCES.includes(source)) return false;
+
+  let changed = false;
+  if (source !== DATA_FN) {
+    fn.value = DATA_FN;
+    changed = true;
+  }
+  if (String((block.props || []).find((p) => p.name === 'html')?.value ?? '') !== DATA_HTML) {
+    setProp(block, 'html', DATA_HTML);
+    changed = true;
+  }
   // A Data block living as a container's named child has no ports at all
   // and wants none (see createDataBlock's `withPort`) — but such a child
-  // never carried the legacy fn above either, so reaching here at all
+  // never carried one of the fns above either, so reaching here at all
   // means this is a standalone one.
   if (!(block.ports || []).some((pin) => logicalPortOf(block, pin)?.name === 'write')) {
     addNamedPort(block, 'in', 'write', { hidden: true });
+    changed = true;
   }
-  block.description = serializeBlockDescription(block);
-  return true;
+  // Blocks placed before the name moved off the centre of the card (see
+  // titleAtTop) would otherwise keep drawing their value on top of it.
+  if (block.style?.titlePos !== 'top') {
+    titleAtTop(block);
+    changed = true;
+  }
+  if (changed) block.description = serializeBlockDescription(block);
+  return changed;
 }
 
 // Only ever fills in what's actually missing — a block that already has
@@ -1269,6 +1859,19 @@ export function mountPalette(nodigraph, container) {
   paletteButton('#3ecf5d', 'Timer', 'timer', () => createTimerBlock(nodigraph));
   paletteButton('#2f6fed', 'Weather', 'weather', () => createWeatherBlock(nodigraph));
   paletteButton('#c98a2f', 'JSON Field', 'json-field', () => createJsonFieldBlock(nodigraph));
+
+  // conucon's Logic Module blocks (see that section in this file).
+  paletteButton('#7c5cff', 'Boot', 'boot', () => createBootBlock(nodigraph));
+  paletteButton('#c98a2f', 'Slice', 'slice', () => createSliceBlock(nodigraph));
+  paletteButton('#c98a2f', 'Route', 'route', () => createRouteBlock(nodigraph));
+  paletteButton('#c98a2f', 'Match', 'croute', () => createContentRouteBlock(nodigraph));
+  paletteButton('#3ecf5d', 'PWM Out', 'pwmout', () => createPwmOutBlock(nodigraph));
+  paletteButton('#3ecf5d', 'PWM In', 'pwmin', () => createPwmInBlock(nodigraph));
+  paletteButton('#2f6fed', 'Serial TX', 'serial', () => createSerialOutBlock(nodigraph));
+  paletteButton('#2f6fed', 'Serial RX', 'serialin', () => createSerialInBlock(nodigraph));
+  paletteButton('#2f6fed', 'CAN', 'can', () => createCanBlock(nodigraph));
+  paletteButton('#2f6fed', 'I2C Out', 'i2cout', () => createI2cOutBlock(nodigraph));
+  paletteButton('#2f6fed', 'I2C In', 'i2cin', () => createI2cInBlock(nodigraph));
 
   // Called on every navigation (see main.js's own level-change poll) --
   // hides any button whose kind isn't in the current container's own

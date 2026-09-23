@@ -153,6 +153,27 @@ export function getBoundaryOutput(containerId, portId) {
   return boundaryOutputCache.get(containerId)?.get(portId);
 }
 
+// What every port on every level is carrying this tick, keyed exactly the
+// way a level's own `outputValue` is (`${blockId}:${portId}`).
+//
+// The whole-tree counterpart to getLastResult(), which only ever holds the
+// one level currently being edited (see startRuntime). That is fine for
+// anything asking about the level it is standing in, and useless for
+// anything asking about a level it is merely *looking at*: a container
+// drawn open on the canvas shows its children and their wires (see
+// nodigraph's SubPreviewRenderer) while the current level is still the one
+// outside it, so every wire in there had no value to find and read as
+// carrying nothing at all — the live colours only appeared once you had
+// zoomed in far enough for that level to actually become the current one.
+//
+// Rebuilt from scratch each tick rather than accumulated, so a block that
+// has been deleted takes its entries with it instead of leaving a value
+// that will never be updated again.
+const portValues = new Map();
+export function getPortValue(blockId, portId) {
+  return portValues.get(`${blockId}:${portId}`);
+}
+
 // The mirror image of boundaryOutputCache above, for the direction that
 // used to have no path through this file at all: a container's own
 // boundary *input* — fed from *outside* it — reaching an internal child
@@ -346,6 +367,32 @@ function evaluateBlocksAndConnections(blocks, connections, outputValue = new Map
       childValue: (name) => childValue(block, name),
       changed: (key, value) => changed(pendingChanges, block.id, key, value),
       portsSignature: () => wiringSignature(block, connections),
+      // This block's own output port names, in the order its pins sit on
+      // it. A block that fans a value out to "whichever output matched"
+      // (see palette.js's Match and Route) has to name the key it returns,
+      // and hard-coding out1/out2/... means the moment someone renames a
+      // port in the Inspector the block quietly stops emitting anything:
+      // the returned key no longer matches any port. Reading the real
+      // names instead makes renaming free, and adding an output work with
+      // nothing in the block's own code to change.
+      outputNames: () => portsBySide(block).outs.map((o) => o.name),
+      // Whether a named port actually has a wire on it — as opposed to
+      // being wired to something that happens to be sending nothing right
+      // now, which `inputs[name] === undefined` cannot tell apart. A block
+      // that behaves differently when a port is connected at all (Data:
+      // trigger-driven when something is wired to `in`, a plain constant
+      // when nothing is) needs the distinction to be about the wiring,
+      // not about whether a value happens to be in flight this tick.
+      isWired: (name) => {
+        const { ins, outs } = portsBySide(block);
+        const pin = [...ins, ...outs].find((p) => p.name === name)?.pin;
+        if (!pin) return false;
+        return connections.some(
+          (c) =>
+            (c.targetBlockId === block.id && c.targetPortId === pin.id) ||
+            (c.sourceBlockId === block.id && c.sourcePortId === pin.id),
+        );
+      },
       // This container's OWN boundary output, already fresh for this same
       // tick (see evaluateSubtree's post-order walk — a container's
       // children, and so its own boundaryOutputCache entry, are always
@@ -497,6 +544,10 @@ function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
     else boundaryOut.set(portId, value);
   }
   boundaryOutputCache.set(container.id, boundaryOut);
+  // Mirrored out of this level's own (deliberately cross-tick persistent)
+  // outputValue so every level's values are reachable by block+port from
+  // anywhere — see getPortValue.
+  for (const [key, value] of result.outputValue) portValues.set(key, value);
   if (container === currentLevelBlock) results.current = result;
 }
 
@@ -514,6 +565,7 @@ export function getLastResult() {
 export function startRuntime(nodigraph, onTick, intervalMs = 100, beforeLevel) {
   const timer = setInterval(() => {
     const results = {};
+    portValues.clear(); // see getPortValue — rebuilt from every level below
     // rootBlock stands in as the top-level "container" — Project.js's own
     // doc: "the whole product is itself a Block" — so evaluating from here
     // covers every level uniformly, root included, with no special case.

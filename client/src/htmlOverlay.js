@@ -65,7 +65,7 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
     return el;
   }
 
-  function drawBlock(ctx, block, { contentAlpha = 1 } = {}) {
+  function drawBlock(ctx, block, { contentAlpha = 1, transform = null } = {}) {
     const source = block.props?.find((p) => p.name === 'html')?.value;
     if (!source || !String(source).trim()) return;
 
@@ -78,14 +78,32 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
     const canvas = document.getElementById('scene-canvas');
     const rect = canvas.getBoundingClientRect();
     const { camera } = nodigraph;
-    const topLeft = camera.worldToScreen(block.geometry.x, block.geometry.y);
+    // `transform` is the live canvas matrix for the level this block sits
+    // in (see nodigraph's SubPreviewRenderer), which is the only thing
+    // that places a block correctly when it is NOT in the level being
+    // edited — a child of an open container, or a block on the level
+    // above the one you are standing in. It already carries the camera and
+    // every enclosing level's own scale, so it replaces the camera math
+    // rather than adding to it; the device-pixel ratio is the one part it
+    // still includes that CSS pixels must not.
+    //
+    // camera.worldToScreen stays the fallback for a host or context that
+    // supplies no matrix, which is exactly what this did before.
+    const dpr = window.devicePixelRatio || 1;
+    const place = transform
+      ? {
+        x: (transform.a * block.geometry.x + transform.c * block.geometry.y + transform.e) / dpr,
+        y: (transform.b * block.geometry.x + transform.d * block.geometry.y + transform.f) / dpr,
+        scale: transform.a / dpr,
+      }
+      : { ...camera.worldToScreen(block.geometry.x, block.geometry.y), scale: camera.zoom };
     const el = containerFor(block.id);
     el.style.visibility = 'visible';
     el.style.opacity = String(contentAlpha);
-    el.style.left = `${rect.left + topLeft.x}px`;
-    el.style.top = `${rect.top + topLeft.y}px`;
-    el.style.width = `${block.geometry.width * camera.zoom}px`;
-    el.style.height = `${block.geometry.height * camera.zoom}px`;
+    el.style.left = `${rect.left + place.x}px`;
+    el.style.top = `${rect.top + place.y}px`;
+    el.style.width = `${block.geometry.width * place.scale}px`;
+    el.style.height = `${block.geometry.height * place.scale}px`;
 
     const result = getLastResult();
     const inputs = result.inputsByBlock.get(block.id) || {};
