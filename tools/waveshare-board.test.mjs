@@ -162,3 +162,85 @@ test('existing DevKit input wires retain their IDs and obsolete wired pins survi
   assert.deepEqual(old.ports.map(p => p.id), ['a', 'b']);
   assert.match(old.logicalPorts[1].description, /Legacy/);
 });
+
+test('a placed Waveshare board keeps its own slot positions across reloads', () => {
+  const placed = structuredClone(board);
+  const di1 = placed.logicalPorts.find(p => p.name === 'DI1');
+  const port = placed.ports.find(p => p.logicalId === di1.id);
+  Object.assign(port, { side: 'top', offset: 123 });
+  circuit.migrateWaveshareBoard(placed, board, { connections: new Map() });
+  assert.deepEqual({ side: port.side, offset: port.offset }, { side: 'top', offset: 123 });
+});
+
+test('DI1 into a Data block\'s write drives DO2 from its out', () => {
+  const esp = structuredClone(board);
+  const data = {
+    id: 'data',
+    logicalPorts: ['write', 'in', 'out'].map(name => ({ id: `data-${name}`, name, direction: name === 'out' ? 'out' : 'in' })),
+    ports: ['write', 'in', 'out'].map(name => ({ id: `data-${name}-port`, logicalId: `data-${name}` })),
+    props: [{ name: 'noditronKind', value: 'data' }, { name: 'value', value: '0' }],
+  };
+  const port = label => esp.ports.find(p => esp.logicalPorts.find(lp => lp.id === p.logicalId)?.name === label).id;
+  esp.children = {
+    blocks: new Map([[data.id, data]]),
+    connections: new Map([
+      ['di1', { sourceBlockId: esp.id, sourcePortId: port('DI1'), targetBlockId: data.id, targetPortId: 'data-write-port' }],
+      ['do2', { sourceBlockId: data.id, sourcePortId: 'data-out-port', targetBlockId: esp.id, targetPortId: port('DO2') }],
+    ]),
+  };
+  const design = circuit.buildInternalDevkitDesign(esp);
+  assert.deepEqual(design.blocks.map(({ type, data }) => ({ type, data })), [
+    { type: 'din', data: { gpio: 4, emitOnChange: true } },
+    { type: 'dout', data: { exio: 2 } },
+    { type: 'belt', data: { dir: 'E' } },
+  ]);
+});
+
+// DI → Match → Data → CAN Out: conucon's own GUI layout for driving the grbl
+// controller over CAN — each input's croute rows end in Data blocks that all
+// run into one tall CAN block.
+function matchToCan({ writeToo = false } = {}) {
+  const esp = structuredClone(board);
+  const port = label => esp.ports.find(p => esp.logicalPorts.find(lp => lp.id === p.logicalId)?.name === label).id;
+  const block = (id, kind, ports, props = []) => ({
+    id,
+    logicalPorts: ports.map(([name, direction]) => ({ id: `${id}-${name}`, name, direction })),
+    ports: ports.map(([name]) => ({ id: `${id}-${name}-port`, logicalId: `${id}-${name}` })),
+    props: [{ name: 'noditronKind', value: kind }, ...props],
+  });
+  const match = block('match', 'croute', [['in', 'in'], ['1', 'out'], ['0', 'out']], [{ name: 'routes', value: '["1", "0"]' }]);
+  const data = (id, value) => block(id, 'data', [['in', 'in'], ['write', 'in'], ['out', 'out']], [{ name: 'value', value }]);
+  const on = data('on', 'X100');
+  const off = data('off', 'X0');
+  const wire = (id, s, sp, t, tp) => [id, { sourceBlockId: s, sourcePortId: sp, targetBlockId: t, targetPortId: tp }];
+  esp.children = {
+    blocks: new Map([match, on, off].map(b => [b.id, b])),
+    connections: new Map([
+      wire('di', esp.id, port('DI1'), 'match', 'match-in-port'),
+      wire('m1', 'match', 'match-1-port', 'on', 'on-in-port'),
+      wire('m0', 'match', 'match-0-port', 'off', 'off-in-port'),
+      wire('c1', 'on', 'on-out-port', esp.id, port('CAN Out')),
+      wire('c0', 'off', 'off-out-port', esp.id, port('CAN Out')),
+      ...(writeToo ? [wire('w1', 'match', 'match-1-port', 'on', 'on-write-port')] : []),
+    ]),
+  };
+  return circuit.buildInternalDevkitDesign(esp);
+}
+
+test('DI → Match → Data → CAN Out compiles to din → croute → data rows → one tall can block', () => {
+  const design = matchToCan();
+  const at = (type, gx, gy) => design.blocks.find(b => b.type === type && b.gx === gx && b.gy === gy);
+  assert.deepEqual(at('din', 0, 0).data, { gpio: 4, emitOnChange: true });
+  assert.deepEqual(at('croute', 3, 0).data, { routes: ['1', '0'] });
+  assert.equal(at('data', 6, 0).data.value, 'X100');
+  assert.equal(at('data', 6, 1).data.value, 'X0');
+  assert.deepEqual({ ...at('can', 9, 0), id: 0 }, { id: 0, type: 'can', gx: 9, gy: 0, w: 2, h: 2, data: { tx: 2, rx: 3, bitrate: 250000, format: 'string' } });
+  for (const [gx, gy] of [[2, 0], [5, 0], [8, 0], [5, 1], [8, 1]]) assert.ok(at('belt', gx, gy), `belt at ${gx},${gy}`);
+  assert.equal(design.blocks.filter(b => b.type === 'boot').length, 0, 'nothing is sent unprompted at boot');
+});
+
+test('a Data also written from its Match forwards the signal, so its row cannot sit beside a Data row', () => {
+  const design = matchToCan({ writeToo: true });
+  const rows = design.blocks.filter(b => b.type === 'data').map(b => b.data.value);
+  assert.deepEqual(rows, ['X0'], 'the written Data is a pass-through, dropped next to the triggered one');
+});

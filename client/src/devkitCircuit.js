@@ -42,12 +42,17 @@ export function migrateWaveshareBoard(block, template, level) {
     const wired = ports.some(p => connections.some(c =>
       (c.sourceBlockId === block.id && c.sourcePortId === p.id) || (c.targetBlockId === block.id && c.targetPortId === p.id)));
     if (replacement) {
-      if (logical.name !== name || logical.direction !== replacement.direction || logical.description !== replacement.description) changed = true;
+      const renamed = logical.name !== name;
+      if (renamed || logical.direction !== replacement.direction || logical.description !== replacement.description) changed = true;
       logical.name = name;
       logical.direction = replacement.direction;
       logical.description = replacement.description;
-      const position = template.ports.find(p => p.logicalId === replacement.id);
-      for (const p of ports) Object.assign(p, { side: position.side, offset: position.offset, manualOffset: true });
+      // Template positions only when a pin first becomes a Waveshare
+      // terminal. After that the user's own slot placement is kept.
+      if (!alreadyWaveshare || renamed) {
+        const position = template.ports.find(p => p.logicalId === replacement.id);
+        for (const p of ports) Object.assign(p, { side: position.side, offset: position.offset, manualOffset: true });
+      }
       retained.add(logical.id);
     } else if (wired) {
       logical.description = 'Legacy DevKit pin; reconnect to a terminal on the Waveshare board.';

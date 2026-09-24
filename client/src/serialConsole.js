@@ -516,8 +516,9 @@ async function readDesignCommand(blockId, { timeoutMs = 4000 } = {}) {
 // second belt, since this simple per-row layout has no way to route two
 // different partners to the same fixed position without risking a
 // collision.
+const propOf = (block, name) => (block.props || []).find((p) => p.name === name)?.value;
+
 function collapsePassThroughs(childBlocks, connections) {
-  const propOf = (block, name) => (block.props || []).find((p) => p.name === name)?.value;
   const pinlessBools = new Set(
     childBlocks
       .filter((b) => propOf(b, 'noditronKind') === 'digital-io')
@@ -527,30 +528,45 @@ function collapsePassThroughs(childBlocks, connections) {
       })
       .map((b) => b.id),
   );
-  // Data.in is a trigger, not a pass-through. Keep Data blocks in the
-  // generated circuit so firmware can emit their stored value when triggered.
-  const passThrough = pinlessBools;
-  if (!passThrough.size) return connections;
   const byId = new Map(childBlocks.map((b) => [b.id, b]));
   const portNameOf = (blockId, portId) => {
     const block = byId.get(blockId);
     const pin = (block?.ports || []).find((p) => p.id === portId);
     return (block?.logicalPorts || []).find((l) => l.id === pin?.logicalId)?.name ?? null;
   };
-  const feedOf = (blockId) => connections.find((c) => c.targetBlockId === blockId && portNameOf(blockId, c.targetPortId) === 'in');
+  const fedThrough = (blockId, name) => connections.some((c) => c.targetBlockId === blockId && portNameOf(blockId, c.targetPortId) === name);
+  // Block id -> the input whose value it passes on unchanged.
+  const passThrough = new Map([...pinlessBools].map((id) => [id, 'in']));
+  // Data.in is a trigger: firmware's own data block emits its stored value
+  // when triggered. Data.write instead makes `out` carry whatever was written
+  // (see DATA_FN in palette.js), whatever is on `in` — the firmware data
+  // block (one input, no write) cannot store it, but forwarding `write`
+  // unchanged is what `out` shows, so DI → write → DO is DI → DO on the
+  // board. Several wires into `write` make the block a merge point: each of
+  // them feeds whatever `out` drives.
+  for (const b of childBlocks) {
+    if (propOf(b, 'noditronKind') === 'data' && fedThrough(b.id, 'write')) passThrough.set(b.id, 'write');
+  }
+  if (!passThrough.size) return connections;
+  const feedsOf = (blockId) => connections.filter((c) => c.targetBlockId === blockId && portNameOf(blockId, c.targetPortId) === passThrough.get(blockId));
+  // Every real source a wire leaving `conn`'s source traces back to.
+  const sourcesOf = (conn, seen) => {
+    if (!passThrough.has(conn.sourceBlockId)) return [conn];
+    if (seen.has(conn.sourceBlockId)) return [];
+    const next = new Set(seen).add(conn.sourceBlockId);
+    return feedsOf(conn.sourceBlockId).flatMap((feed) => sourcesOf(feed, next));
+  };
   const out = [];
+  const added = new Set();
   for (const conn of connections) {
     if (passThrough.has(conn.targetBlockId)) continue;
-    let source = conn;
-    const seen = new Set();
-    while (passThrough.has(source.sourceBlockId) && !seen.has(source.sourceBlockId)) {
-      seen.add(source.sourceBlockId);
-      const feed = feedOf(source.sourceBlockId);
-      if (!feed) break;
-      source = feed;
+    for (const source of sourcesOf(conn, new Set())) {
+      if (pinlessBools.has(source.sourceBlockId)) continue; // a Bool fed by nothing: a manual value the board cannot hold
+      const key = `${source.sourceBlockId}:${source.sourcePortId}>${conn.targetBlockId}:${conn.targetPortId}`;
+      if (added.has(key)) continue;
+      added.add(key);
+      out.push({ ...conn, sourceBlockId: source.sourceBlockId, sourcePortId: source.sourcePortId });
     }
-    if (pinlessBools.has(source.sourceBlockId)) continue; // a Bool fed by nothing: a manual value the board cannot hold
-    out.push({ ...conn, sourceBlockId: source.sourceBlockId, sourcePortId: source.sourcePortId });
   }
   return out;
 }
@@ -673,6 +689,96 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     placeBool(target, 6, base);
     blocks.push({ id: nextBlockId++, type: 'belt', gx: 5, gy: base, data: { dir: 'E' } });
     row += 1;
+  }
+
+  // Match (conucon's `croute`) chains, laid out the way conucon's own Logic
+  // Module GUI lays out its CAN designs (see esp32_logic/data/design.json):
+  //   source @ (0,r) → belt (2,r) → croute @ (3,r), one row per route
+  //   route row i → belt (5,r+i) → data @ (6,r+i) 2x1 → belt (8,r+i)
+  //                (no Data between: belts (5..8,r+i) straight through)
+  //   → one sink @ (9, first row), tall enough to span every row into it.
+  // The firmware delivers a belt arriving anywhere inside a block's box to
+  // its input, so one tall CAN/DO block takes every chain at once. A
+  // croute sends out of row i at (gx+bw, gy+i), so each Data sits on its
+  // own route's row, one row high so neighbouring rows never overlap.
+  const crouteChildren = childBlocks.filter((c) => propOf(c, 'noditronKind') === 'croute');
+  const outputIndex = (block, portId) => {
+    const outs = (block.ports || [])
+      .map((pin) => (block.logicalPorts || []).find((lp) => lp.id === pin.logicalId))
+      .filter((lp) => lp?.name && lp.direction === 'out')
+      .map((lp) => lp.name);
+    return outs.indexOf(portName(block, portId));
+  };
+  const chainsByTarget = new Map(); // target pin block -> [{ source, croute, rows: [{ index, data }] }]
+  for (const croute of crouteChildren) {
+    const inConn = connections.find((c) => c.targetBlockId === croute.id && portName(croute, c.targetPortId) === 'in');
+    const source = inConn && childBlocks.find((c) => c.id === inConn.sourceBlockId);
+    if (!source || !(pinChildren.includes(source) || timerChildren.includes(source))) continue;
+    if (pinChildren.includes(source) && propOf(source, 'direction') === 'output') continue;
+    for (const outConn of connections.filter((c) => c.sourceBlockId === croute.id)) {
+      const index = outputIndex(croute, outConn.sourcePortId);
+      if (index < 0) continue;
+      let data = null;
+      let targetConn = outConn;
+      const next = dataChildren.find((c) => c.id === outConn.targetBlockId);
+      if (next) {
+        if (portName(next, outConn.targetPortId) !== 'in') continue;
+        data = next;
+        targetConn = connections.find((c) => c.sourceBlockId === next.id && portName(next, c.sourcePortId) === 'out');
+        if (!targetConn) continue;
+      }
+      const target = pinChildren.find((c) => c.id === targetConn.targetBlockId);
+      if (!target || propOf(target, 'direction') !== 'output') continue;
+      if (!chainsByTarget.has(target)) chainsByTarget.set(target, []);
+      const chains = chainsByTarget.get(target);
+      let chain = chains.find((ch) => ch.croute === croute);
+      if (!chain) chains.push((chain = { source, croute, rows: [] }));
+      // One row per route: a second Data on the same route would need the
+      // same grid cell.
+      if (!chain.rows.some((r) => r.index === index)) chain.rows.push({ index, data });
+    }
+  }
+  for (const [target, chains] of chainsByTarget) {
+    if (idByChildId.has(target.id)) continue;
+    const top = row * 3;
+    let y = top;
+    for (const { source, croute, rows } of chains) {
+      let routes = [];
+      try { routes = JSON.parse(propOf(croute, 'routes') || '[]'); } catch { routes = []; }
+      if (!Array.isArray(routes)) routes = [];
+      const height = Math.max(2, routes.length, ...rows.map((r) => r.index + 1));
+      // A data block fires every belt along its edges that leads away from
+      // it, so a straight-through row's belts beside a Data row would carry
+      // that Data's value too. Such a mix keeps only its Data rows.
+      const kept = rows.some((r) => r.data) ? rows.filter((r) => r.data) : rows;
+      if (!idByChildId.has(source.id)) {
+        if (pinChildren.includes(source)) placeBool(source, 0, y);
+        else placeTimer(source, 0, y);
+      }
+      blocks.push({ id: nextBlockId++, type: 'belt', gx: 2, gy: y, data: { dir: 'E' } });
+      const crouteId = nextBlockId++;
+      idByChildId.set(croute.id, crouteId);
+      blocks.push({ id: crouteId, type: 'croute', gx: 3, gy: y, w: 2, h: height, data: { routes: routes.map((m) => (m === null || m === undefined ? '' : String(m))) } });
+      for (const { index, data } of kept) {
+        const gy = y + index;
+        blocks.push({ id: nextBlockId++, type: 'belt', gx: 5, gy, data: { dir: 'E' } });
+        if (data) {
+          const dataId = nextBlockId++;
+          idByChildId.set(data.id, dataId);
+          blocks.push({ id: dataId, type: 'data', gx: 6, gy, w: 2, h: 1, data: { value: String(propOf(data, 'value') ?? '') } });
+        } else {
+          blocks.push({ id: nextBlockId++, type: 'belt', gx: 6, gy, data: { dir: 'E' } });
+          blocks.push({ id: nextBlockId++, type: 'belt', gx: 7, gy, data: { dir: 'E' } });
+        }
+        blocks.push({ id: nextBlockId++, type: 'belt', gx: 8, gy, data: { dir: 'E' } });
+      }
+      y += height + 1;
+    }
+    const sinkId = placeBool(target, 9, top);
+    const sink = blocks.find((b) => b.id === sinkId);
+    sink.w = 2;
+    sink.h = y - 1 - top;
+    row = Math.ceil(y / 3);
   }
 
   // AND: two inputs need two separate source blocks landing on two
@@ -852,25 +958,41 @@ async function readPinsCommand(blockId, { timeoutMs = 2000, inputs = [] } = {}) 
   throw new Error('Timed out waiting for pin states.');
 }
 
+// The ESP32-S3's native USB console (HWCDC) queues only 256 received bytes
+// and silently drops whatever arrives while that queue is full. A design
+// written in one go overruns it: the firmware keeps waiting for bytes that
+// never come, swallowing every later command (ping included) as payload, so
+// the board looks dead. Paced chunks stay well inside that queue.
+const DESIGN_CHUNK_BYTES = 64;
+const DESIGN_CHUNK_GAP_MS = 25;
+
+// Unsolicited log lines (io broadcasts, driver messages) can arrive before a
+// reply, so skip until one matches — never treat the first line as the answer.
+async function readReply(state, pattern, failure, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    const line = await readLine(state, Math.max(1, deadline - Date.now()));
+    if (pattern.test(line)) return line;
+    if (failure.test(line)) throw new Error(line);
+  }
+}
+
 async function sendDesignCommand(blockId, design, { timeoutMs = 5000 } = {}) {
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
   const bytes = new TextEncoder().encode(JSON.stringify(design));
   await writeLine(blockId, `save-design ${bytes.length}`);
-  const ready = await readLine(state, timeoutMs);
-  if (!/^\[DESIGN] READY/.test(ready)) throw new Error(`Unexpected response: ${ready}`);
-  await writeBytes(blockId, bytes);
+  await readReply(state, /\[DESIGN] READY/, /\[DESIGN] SAVE_FAILED/, timeoutMs);
+  for (let i = 0; i < bytes.length; i += DESIGN_CHUNK_BYTES) {
+    if (i) await new Promise((resolve) => setTimeout(resolve, DESIGN_CHUNK_GAP_MS));
+    await writeBytes(blockId, bytes.slice(i, i + DESIGN_CHUNK_BYTES));
+  }
   try {
-    const result = await readLine(state, timeoutMs);
-    if (/^Saved \d+ bytes OK/.test(result)) return result;
-    throw new Error(result || 'Save acknowledgement failed.');
+    return await readReply(state, /\[DESIGN] Saved \d+ bytes OK/, /\[DESIGN] (SAVE_FAILED|SPIFFS write failed)/, timeoutMs);
   } catch (err) {
-    // The firmware writes design.json before emitting its final line. A USB
-    // console can lose that acknowledgement during the reload it schedules,
-    // so the payload has still been sent successfully once READY was seen.
-    if (/Timed out waiting for the device/.test(err.message)) return `[DESIGN] Sent ${bytes.length} bytes`;
-    throw err;
+    if (!/Timed out waiting for the device/.test(err.message)) throw err;
+    throw new Error(`The board did not confirm the ${bytes.length}-byte design. Reset the board, reconnect and save again.`);
   }
 }
 

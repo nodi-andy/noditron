@@ -52,6 +52,58 @@ test('unsolicited input-change messages reach the Web UI without a poll command'
   await state.reading;
 });
 
+test('a design larger than the S3 USB receive queue is paced and must be acknowledged', async () => {
+  const encoder = new TextEncoder();
+  let controller;
+  const readable = new ReadableStream({ start(c) { controller = c; } });
+  const chunks = [];
+  let expected = 0, received = 0;
+  const writable = new WritableStream({
+    write(bytes) {
+      const text = new TextDecoder().decode(bytes);
+      const announce = text.match(/^save-design (\d+)\n$/);
+      if (announce) {
+        expected = Number(announce[1]);
+        controller.enqueue(encoder.encode('{"type":"io","pins":[]}\n[DESIGN] READY ' + expected + '\n'));
+        return;
+      }
+      chunks.push(bytes.length);
+      received += bytes.length;
+      if (received === expected) controller.enqueue(encoder.encode(`[DESIGN] Saved ${received} bytes OK\n`));
+    },
+  });
+  const api = new Function('getSession', 'ensureOpenPlain', source
+    .replace(/^import .*;$/gm, '')
+    .replace(/export /g, '') + '\nreturn { sendDesign, setLogIncoming, closeConsole };')(
+      () => ({ transport: { device: { readable, writable } } }), async () => {},
+    );
+  api.setLogIncoming(false);
+  const design = { blocks: Array.from({ length: 12 }, (_, id) => ({ id, type: 'din', gx: 0, gy: id * 3, data: { gpio: 4 } })) };
+  const result = await api.sendDesign('board', design);
+  assert.ok(expected > 256, 'test design exceeds the 256-byte HWCDC queue');
+  assert.match(result, /\[DESIGN] Saved \d+ bytes OK/);
+  assert.ok(chunks.length > 1 && chunks.every(n => n <= 64));
+  api.closeConsole('board');
+});
+
+test('a design the board never confirms is reported as a failure', async () => {
+  let controller;
+  const stream = new ReadableStream({ start(c) { controller = c; } });
+  const writable = new WritableStream({
+    write(bytes) {
+      if (/^save-design/.test(new TextDecoder().decode(bytes))) controller.enqueue(new TextEncoder().encode('[DESIGN] READY 10\n'));
+    },
+  });
+  const api = new Function('getSession', 'ensureOpenPlain', source
+    .replace(/^import .*;$/gm, '')
+    .replace(/export /g, '') + '\nreturn { sendDesign, setLogIncoming, closeConsole };')(
+      () => ({ transport: { device: { readable: stream, writable } } }), async () => {},
+    );
+  api.setLogIncoming(false);
+  await assert.rejects(api.sendDesign('board', { blocks: [] }, { timeoutMs: 100 }), /did not confirm/);
+  api.closeConsole('board');
+});
+
 test('closing an old console does not cancel a replacement transport reader', async () => {
   const device = { readable: new ReadableStream() };
   const session = { transport: { device } };
