@@ -527,12 +527,9 @@ function collapsePassThroughs(childBlocks, connections) {
       })
       .map((b) => b.id),
   );
-  // A Data block fed through its `in` passes that value on too — its own
-  // fn is `inputs.in !== undefined ? inputs.in : props.value` — and so is
-  // traced through the same way. One fed by nothing is a real source: its
-  // own value (see the USB serial chains in buildMinimalDesign).
-  const dataBlocks = new Set(childBlocks.filter((b) => propOf(b, 'noditronKind') === 'data').map((b) => b.id));
-  const passThrough = new Set([...pinlessBools, ...dataBlocks]);
+  // Data.in is a trigger, not a pass-through. Keep Data blocks in the
+  // generated circuit so firmware can emit their stored value when triggered.
+  const passThrough = pinlessBools;
   if (!passThrough.size) return connections;
   const byId = new Map(childBlocks.map((b) => [b.id, b]));
   const portNameOf = (blockId, portId) => {
@@ -645,6 +642,38 @@ export function buildMinimalDesign(childBlocks, connections = []) {
   }
 
   let row = 0;
+
+  // Preserve a source -> Data.in -> hardware output chain. The firmware's
+  // data block owns the stored value and emits it when its input is triggered;
+  // collapsing this chain would incorrectly bypass that behavior.
+  for (const dataChild of dataChildren) {
+    if (idByChildId.has(dataChild.id)) continue;
+    const inputConn = connections.find((c) => c.targetBlockId === dataChild.id && portName(dataChild, c.targetPortId) === 'in');
+    const outputConn = connections.find((c) => c.sourceBlockId === dataChild.id && portName(dataChild, c.sourcePortId) === 'out');
+    if (!inputConn || !outputConn) continue;
+    const source = pinChildren.find((c) => c.id === inputConn.sourceBlockId) || timerChildren.find((c) => c.id === inputConn.sourceBlockId);
+    const target = pinChildren.find((c) => c.id === outputConn.targetBlockId);
+    if (!source || !target) continue;
+    const sourceDir = propOf(source, 'direction') === 'output' ? 'output' : 'input';
+    const targetDir = propOf(target, 'direction') === 'output' ? 'output' : 'input';
+    if (sourceDir !== 'input' || targetDir !== 'output') continue;
+
+    const base = row * 3;
+    placeSource(source, 0, base);
+    const dataId = nextBlockId++;
+    idByChildId.set(dataChild.id, dataId);
+    blocks.push({
+      id: dataId,
+      type: 'data',
+      gx: 3,
+      gy: base,
+      data: { value: String(propOf(dataChild, 'value') ?? '') },
+    });
+    blocks.push({ id: nextBlockId++, type: 'belt', gx: 2, gy: base, data: { dir: 'E' } });
+    placeBool(target, 6, base);
+    blocks.push({ id: nextBlockId++, type: 'belt', gx: 5, gy: base, data: { dir: 'E' } });
+    row += 1;
+  }
 
   // AND: two inputs need two separate source blocks landing on two
   // different rows of its own 2-tall footprint (conucon's own `and` block
@@ -832,9 +861,17 @@ async function sendDesignCommand(blockId, design, { timeoutMs = 5000 } = {}) {
   const ready = await readLine(state, timeoutMs);
   if (!/^\[DESIGN] READY/.test(ready)) throw new Error(`Unexpected response: ${ready}`);
   await writeBytes(blockId, bytes);
-  const result = await readLine(state, timeoutMs);
-  if (!/Saved \d+ bytes OK/.test(result)) throw new Error(result || 'Save failed.');
-  return result;
+  try {
+    const result = await readLine(state, timeoutMs);
+    if (/^Saved \d+ bytes OK/.test(result)) return result;
+    throw new Error(result || 'Save acknowledgement failed.');
+  } catch (err) {
+    // The firmware writes design.json before emitting its final line. A USB
+    // console can lose that acknowledgement during the reload it schedules,
+    // so the payload has still been sent successfully once READY was seen.
+    if (/Timed out waiting for the device/.test(err.message)) return `[DESIGN] Sent ${bytes.length} bytes`;
+    throw err;
+  }
 }
 
 // Every command shares one byte stream. In particular, polling must never

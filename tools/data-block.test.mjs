@@ -7,9 +7,9 @@ const match = source.match(/const DATA_FN = `([\s\S]*?)`\.trim\(\);/);
 assert.ok(match, 'DATA_FN source is present');
 const run = new Function('inputs', 'props', 'helpers', match[1]);
 
-test('Data in passes the live signal without changing stored data', () => {
+test('Data in triggers the stored value without changing it', () => {
   const result = run({ in: 'live' }, { value: false }, {});
-  assert.deepEqual(result, { out: 'live' });
+  assert.deepEqual(result, { out: false });
 });
 
 test('Data uses its stored value when in is not carrying a signal', () => {

@@ -468,7 +468,10 @@ async function boot() {
       if (sent !== undefined) setBoundaryOutput(container.id, port.id, sent);
       else clearBoundaryOutput(container.id, port.id);
     }
-    if (!live) return;
+    // ESP32 child circuits are firmware-owned even while disconnected. The
+    // browser must never run a competing simulation that can rewrite Data
+    // values or make a Timer appear to drive hardware locally.
+    if (!live) return false;
     const inputs = pinMapFor(container).filter(p => !p.reserved && !p.outputOnly && p.gpio !== null && p.gpio !== undefined && p.gpio < 1000).map(p => Number(p.gpio));
     livePins.ensurePolling(container.id, inputs);
     const cached = livePins.getCachedPins(container.id);
@@ -498,6 +501,9 @@ async function boot() {
       }
     }
     // Live readings are telemetry, not user edits.
+    // A connected board is authoritative: do not also execute its child
+    // graph in the browser and overwrite the values the firmware owns.
+    return false;
   }
 
   // Still the "global timer" for block *values* — runtime.js's own

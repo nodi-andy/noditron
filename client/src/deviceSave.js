@@ -1,4 +1,4 @@
-import { collectEsp32DevkitBlocks, isDevkitDirty, isDevkitRunning, buildDevkitDesign, devkitSnapshot, markDevkitSent } from './devkitCircuit.js';
+import { collectEsp32DevkitBlocks, isDevkitRunning, buildDevkitDesign, devkitSnapshot, markDevkitSent } from './devkitCircuit.js';
 
 // A device acknowledgement is part of an explicit Save, including deleting
 // the final block. Keep concurrent Save requests on the same ordered path.
@@ -7,7 +7,6 @@ export function createDeviceSaver({ project, getSession, sendDesign, persist, op
   return () => {
     const result = pending.then(async () => {
       for (const { block, level } of collectEsp32DevkitBlocks(project.rootBlock.children)) {
-        if (!isDevkitDirty(block, level)) continue;
         if (!getSession(block.id) || !isDevkitRunning(block)) {
           openDialog(block);
           throw new Error(`Connect ${block.name} to save its circuit.`);

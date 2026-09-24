@@ -19,7 +19,7 @@
 //    own top-left corner (drawBlock below), clickable the same
 //    capture-phase way canvasIndicators.js's own dot toggles are.
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
-import { getLastResult } from './runtime.js';
+import { getLastResult, kindOf } from './runtime.js';
 import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
 import * as devkitCircuit from './devkitCircuit.js';
@@ -48,11 +48,17 @@ function hasSource(block, propName) {
   return Boolean(String(block.props?.find((p) => p.name === propName)?.value || '').trim());
 }
 
+function isEsp32Devkit(block) {
+  return block.props?.find((p) => p.name === 'noditronKind')?.value === 'esp32-devkit';
+}
+
 // Top-left, not the render indicator's top-right (see canvasIndicators.js)
 // — a block can have both a status dot and a settings gear at once without
 // them fighting for the same corner.
 function gearCenter(block) {
-  return { x: block.geometry.x + 16, y: block.geometry.y + 16 };
+  return isEsp32Devkit(block)
+    ? { x: block.geometry.x + block.geometry.width - 16, y: block.geometry.y + 16 }
+    : { x: block.geometry.x + 16, y: block.geometry.y + 16 };
 }
 
 // A module-level reference to the installed instance's own openDialog —
@@ -76,6 +82,14 @@ export function installDialogSystem(nodigraph) {
   function openDialog(block) {
     const source = block.props?.find((p) => p.name === 'dialog')?.value;
     if (!source || !String(source).trim()) return;
+    const executableSource = kindOf(block) === 'esp32-devkit'
+      ? String(source)
+        .replace(
+          /if \(!design\.blocks\.length\)\s*\{\s*log\('Nothing to send -- connect a supported circuit signal directly to DI, DO, CAN In, or CAN Out\.'\);\s*\}\s*else\s*\{\s*/,
+          '',
+        )
+        .replace(/(updateProgramSection\(\);)\s*}\s*}\s*catch \(err\)/, '$1\n    } catch (err)')
+      : source;
 
     host.innerHTML = '';
     host.hidden = false;
@@ -159,7 +173,9 @@ export function installDialogSystem(nodigraph) {
         identify: (opts) => serialConsole.identify(block.id, opts),
         readDesign: (opts) => serialConsole.readDesign(block.id, opts),
         sendDesign: (design, opts) => serialConsole.sendDesign(block.id, design, opts),
-        buildMinimalDesign: serialConsole.buildMinimalDesign,
+        buildMinimalDesign: (blocks, connections) => kindOf(block) === 'esp32-devkit'
+          ? devkitCircuit.buildDevkitDesign(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id))
+          : serialConsole.buildMinimalDesign(blocks, connections),
         buildDevkitDesign: () => devkitCircuit.buildDevkitDesign(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
         devkitSnapshot: () => devkitCircuit.devkitSnapshot(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
         designSummary: (design) => devkitCircuit.summarizeDesign(design),
@@ -177,7 +193,7 @@ export function installDialogSystem(nodigraph) {
     const outputs = getLastResult().outputsByBlock.get(block.id) || {};
     try {
       // eslint-disable-next-line no-new-func
-      new Function('container', 'block', 'props', 'outputs', 'helpers', String(source))(body, block, propsObject(block), outputs, helpers);
+      new Function('container', 'block', 'props', 'outputs', 'helpers', String(executableSource))(body, block, propsObject(block), outputs, helpers);
     } catch (err) {
       body.textContent = `Dialog error: ${err.message}`;
     }

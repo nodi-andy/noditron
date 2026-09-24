@@ -715,14 +715,13 @@ if (!val) {
   val.style.cssText = 'font-size:16px;font-weight:700;color:var(--success,#3ecf5d);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
   container.appendChild(val);
 }
-// Show the live pass-through value when `in` carries one. This does not
-// change the stored fallback; only `write` does that.
+// Show the live pass-through value when the input carries one. This does not
+// change the stored fallback; only the write input does that.
 const stored = (block.props.find((p) => p.name === 'value') || {}).value;
-const shown = inputs.in !== undefined ? inputs.in : stored;
-val.textContent = typeof shown === 'object' && shown !== null ? JSON.stringify(shown) : String(shown);
+val.textContent = typeof stored === 'object' && stored !== null ? JSON.stringify(stored) : String(stored);
 `.trim();
 
-// `in` is a live pass-through and never changes what this block holds.
+// `in` is a trigger and never changes what this block holds or what it emits.
 // `write` is the one input that changes the stored value; __persist writes
 // it onto the prop for real, the same as typing it into the dialog.
 // `write` sets what this block holds, and is compared against the value
@@ -736,13 +735,13 @@ val.textContent = typeof shown === 'object' && shown !== null ? JSON.stringify(s
 // it doesn't" — which is true until the write actually lands, however long
 // the value has been sitting there, and self-evidently stops being true
 // once it has. Serialized on both sides so an object compares by content.
-// With no value on `in`, `out` carries the stored fallback.
+// `out` always carries the stored value; a signal on `in` is only a trigger.
 const DATA_FN = `
 const incoming = inputs.write;
 if (incoming !== undefined && JSON.stringify(incoming) !== JSON.stringify(props.value)) {
   return { out: incoming, __persist: { value: incoming } };
 }
-return { out: inputs.in !== undefined ? inputs.in : props.value };
+return { out: props.value };
 `.trim();
 
 const DATA_DIALOG = `

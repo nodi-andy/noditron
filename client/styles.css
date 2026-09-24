@@ -3,24 +3,28 @@
    --border, --bg-well, ...) are reused here rather than redeclared, so
    this stays in sync with nodigraph's light canvas and editor chrome. */
 
-/* Keep the palette below the top-right HUD and clear of the Inspector.
-   On small screens it sits above nodigraph's bottom control bar. */
+/* Keep the palette in a predictable, high-contrast position on the right.
+  It stays clear of the top HUD and leaves the canvas center unobstructed. */
 #noditron-palette {
   position: fixed;
   top: calc(var(--topbar-height, 44px) + 22px);
   right: 12px;
-  z-index: 30;
+  bottom: auto;
+  left: auto;
+  transform: none;
+  z-index: 60;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 6px;
   padding: 8px;
   background: var(--bg-surface, #fff);
-  border: 1px solid var(--border);
+  border: 2px solid var(--border);
   border-radius: 8px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  transition: right 0.22s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.24);
+  max-width: min(280px, calc(100vw - 24px));
   max-height: calc(100dvh - var(--topbar-height, 44px) - 104px);
-  overflow: auto;
+  overflow-y: auto;
 }
 
 @media (min-width: 769px) {
@@ -50,6 +54,7 @@
   font-size: 13px;
   text-align: left;
   cursor: pointer;
+  white-space: nowrap;
 }
 
 #noditron-palette button:hover {
@@ -67,14 +72,14 @@
 @media (max-width: 768px) {
   #noditron-palette {
     top: auto;
-    left: 12px;
     right: 12px;
     bottom: calc(78px + env(safe-area-inset-bottom, 0px));
-    flex-direction: row;
-    align-items: center;
+    max-width: calc(100vw - 24px);
     max-height: none;
     overflow-x: auto;
     overflow-y: hidden;
+    flex-direction: row;
+    align-items: center;
     padding: 6px;
     border-radius: 22px;
   }
@@ -168,6 +173,13 @@
 .noditron-html-block textarea,
 .noditron-html-block a {
   pointer-events: auto;
+}
+
+.noditron-html-block .esp-connection {
+  min-width: 28px !important;
+  min-height: 28px !important;
+  font-size: 20px !important;
+  border-width: 2px !important;
 }
 
 /* The `dialog` prop's own modal (see src/dialogSystem.js) — a plain

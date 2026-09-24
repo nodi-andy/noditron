@@ -517,14 +517,21 @@ export function evaluateLevel(project) {
 // from changeTracker/compiledCache elsewhere in this file).
 const levelOutputValueCache = new Map(); // containerId -> outputValue Map
 function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
-    if (!container.children) {
-      beforeLevel?.(container, []);
-      return;
-    }
+  if (!container.children) {
+    beforeLevel?.(container, []);
+    return;
+  }
   const blocks = [...container.children.blocks.values()];
-  for (const block of blocks) evaluateSubtree(block, currentLevelBlock, results, beforeLevel);
-
-  if (beforeLevel) beforeLevel(container, blocks);
+  const evaluateChildren = beforeLevel?.(container, blocks) !== false;
+  if (evaluateChildren) {
+    for (const block of blocks) evaluateSubtree(block, currentLevelBlock, results, beforeLevel);
+  }
+  if (!evaluateChildren) {
+    const boundaryOut = new Map(boundaryOutputOverrides.get(container.id) || []);
+    boundaryOutputCache.set(container.id, boundaryOut);
+    if (container === currentLevelBlock) results.current = { blocks, inputsByBlock: new Map(), outputsByBlock: new Map(), errors: new Map() };
+    return;
+  }
 
   let outputValue = levelOutputValueCache.get(container.id);
   if (!outputValue) {
