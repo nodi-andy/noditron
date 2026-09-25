@@ -19,7 +19,7 @@ function wired(from, to) {
 }
 
 test('Waveshare name, eight isolated inputs, eight driver outputs and CAN pins', () => {
-  assert.equal(module.version, '1.7.1');
+  assert.equal(module.version, '1.8.0');
   assert.equal(module.displayName, 'esp32-S3');
   assert.equal(board.name, 'esp32-S3');
   assert.deepEqual(pins.filter(p => p.role === 'digital-input').map(p => p.gpio), [4,5,6,7,8,9,10,11]);
@@ -29,6 +29,23 @@ test('Waveshare name, eight isolated inputs, eight driver outputs and CAN pins',
   assert.equal(pins.find(p => p.label === 'CAN Out').gpio, 2);
   assert.equal(pins.find(p => p.label === 'CAN In').gpio, 3);
   assert.equal(board.logicalPorts.find(p => p.name === 'CAN speed').direction, 'out');
+});
+
+test('the board face keeps the USB pin, drops the USB box, and shows its connection state', () => {
+  const render = board.props.find(p => p.name === 'render').value;
+  const html = board.props.find(p => p.name === 'html').value;
+  const dialog = board.props.find(p => p.name === 'dialog').value;
+  assert.ok(board.logicalPorts.some(p => p.name === 'USB'));
+  assert.doesNotMatch(render, /fillText\('USB'/);
+  assert.doesNotMatch(render, /roundRect\(usbX/);
+  assert.match(html, /className = 'esp-status'/);
+  for (const state of ['Not connected', 'Connecting', 'Logic Module running', 'needs firmware', 'circuit not saved']) {
+    assert.match(html, new RegExp(state));
+  }
+  assert.match(html, /helpers\.openDialog/);
+  assert.match(dialog, /helpers\.serial\.disconnect\(true\)/);
+  assert.match(dialog, /Connect \(WiFi\)/);
+  assert.match(dialog, /helpers\.serial\.connectWifi\(host, log\)/);
 });
 
 test('the device dialog accepts circuits wired directly to board terminals', () => {
@@ -145,7 +162,7 @@ test('an older running build exposes the firmware update action', () => {
   assert.match(source, /info\.build < preferredPreset\.build/);
   assert.match(source, /showRunning\(info\)/);
   const flashSource = read('../client/src/serialFlash.js');
-  assert.match(flashSource, /build: '20260924e'/);
+  assert.match(flashSource, /build: '20260925i'/);
 });
 
 test('existing DevKit input wires retain their IDs and obsolete wired pins survive', () => {

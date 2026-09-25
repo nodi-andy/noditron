@@ -14,7 +14,7 @@
 // "overlays are misplaced if the screen moves" bug. Only *existence*
 // (removing a container for a deleted block, or one whose `html` prop got
 // cleared) is cheap enough to leave on that slower timer — see prune().
-import { getLastResult, kindOf } from './runtime.js';
+import { getLastResult, getBlockOutputs, kindOf } from './runtime.js';
 import * as devkitCircuit from './devkitCircuit.js';
 import { SOCKET_HALF_OUTER } from '/nodigraph/src/render/BlockRenderer.js';
 
@@ -66,15 +66,36 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
     return el;
   }
 
+  // A container is only ever as current as the last frame that placed it.
+  // A block nodigraph stopped drawing — a child of a level that just
+  // closed (its board disconnected, the camera zoomed out) — gets no
+  // drawBlock call at all, so nothing here would ever hide it, and its
+  // last value would sit on screen over whatever is drawn there now.
+  // main.js brackets every scene paint with beginFrame/endFrame; a
+  // container not touched in between is hidden at endFrame.
+  let frame = 0;
+  function beginFrame() {
+    frame += 1;
+  }
+  function endFrame() {
+    const current = String(frame);
+    for (const el of containers.values()) {
+      if (el.dataset.frame !== current) el.style.visibility = 'hidden';
+    }
+  }
+
   function drawBlock(ctx, block, { contentAlpha = 1, transform = null } = {}) {
     const board = kindOf(block) === 'esp32-devkit';
     if (board) contentAlpha = 1;
     const source = block.props?.find((p) => p.name === 'html')?.value;
     if (!source || !String(source).trim()) return;
 
-    if (contentAlpha <= 0) {
+    if (contentAlpha <= 0.02) {
       const el = containers.get(block.id);
-      if (el) el.style.visibility = 'hidden';
+      if (el) {
+        el.dataset.frame = String(frame);
+        el.style.visibility = 'hidden';
+      }
       return;
     }
 
@@ -101,6 +122,7 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
       }
       : { ...camera.worldToScreen(block.geometry.x, block.geometry.y), scale: camera.zoom };
     const el = containerFor(block.id);
+    el.dataset.frame = String(frame);
     el.style.visibility = 'visible';
     el.style.opacity = String(contentAlpha);
     el.style.left = `${rect.left + place.x}px`;
@@ -110,7 +132,9 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
 
     const result = getLastResult();
     const inputs = result.inputsByBlock.get(block.id) || {};
-    const outputs = result.outputsByBlock.get(block.id) || {};
+    // Same fallback as canvasIndicators.js: a block off the level being
+    // edited still has its tree-wide values.
+    const outputs = result.outputsByBlock.get(block.id) || getBlockOutputs(block);
     // `openDialog()` lets html content put its own settings/gear button
     // wherever it wants (see dialogSystem.js) — a real DOM element with a
     // real click handler, no canvas hit-testing hack needed for blocks
@@ -122,6 +146,9 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
       devkit: {
         buildDesign: () => devkitCircuit.buildDevkitDesign(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
         snapshot: () => devkitCircuit.devkitSnapshot(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
+        // Whether what this board would send differs from what the device
+        // holds (see devkitCircuit.isDevkitDirty).
+        dirty: () => devkitCircuit.isDevkitDirty(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
         summary: (design) => devkitCircuit.summarizeDesign(design),
       },
       setProp(name, value) {
@@ -150,5 +177,5 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
     }
   }
 
-  return { drawBlock, prune };
+  return { drawBlock, prune, beginFrame, endFrame };
 }

@@ -22,6 +22,8 @@ import { ESPLoader, Transport } from '../vendor/esptool-js/esptool-js.bundle.js'
 // separately and legibly (see serialConsole.js).
 const TRACE_SERIAL = false;
 import { getStoredToken } from '/nodigraph/src/model/githubSync.js';
+import { rememberPort, forgetPort, describePortIdentity, rememberWifi, forgetWifi } from './serialMemory.js';
+import { openWifiDevice } from './wifiTransport.js';
 
 const sessions = new Map(); // blockId -> { port, transport, esploader, chipName, bootloaderOffset }
 const ESPRESSIF_USB_JTAG_SERIAL_PID = 0x1001;
@@ -67,7 +69,7 @@ export const FIRMWARE_PRESETS = [
     label: 'Logic — esp32-S3 (Waveshare 8DI/8DO)',
     chip: 'ESP32-S3',
     board: 'ESP32-S3-POE-ETH-8DI-8DO',
-    build: '20260924e',
+    build: '20260925i',
     parts: [
       { path: 'firmware-assets/logic/esp32-s3-bootloader.bin', address: 0x0 },
       { path: 'firmware-assets/logic/esp32-s3-partitions.bin', address: 0x8000 },
@@ -156,21 +158,80 @@ export function guessAddress(filename, bootloaderOffset) {
   return 0x10000; // firmware.bin / app.bin, or a merged single image's app part
 }
 
-function describePort(port) {
-  const info = port.getInfo?.() || {};
-  if (info.usbVendorId !== undefined) {
-    return `USB ${info.usbVendorId.toString(16).padStart(4, '0')}:${info.usbProductId.toString(16).padStart(4, '0')}`;
-  }
-  return 'serial port';
-}
-
-export async function connect(blockId, { onLog } = {}) {
-  const port = await navigator.serial.requestPort();
+// `port` skips the browser's picker for a port the page already holds a
+// grant for — the reconnect offer's path (see serialReconnect.js). Either
+// way the port is remembered for this block, so the next page load can
+// offer it again without a picker.
+export async function connect(blockId, { onLog, port: givenPort = null } = {}) {
+  const port = givenPort || await navigator.serial.requestPort();
+  // One link per block: a session still open from before (a COM port, a
+  // WiFi socket) is closed rather than left behind holding its port.
+  await disconnect(blockId);
   const transport = new Transport(port, TRACE_SERIAL);
   const session = { port, transport, esploader: null, chipName: null, bootloaderOffset: null };
   sessions.set(blockId, session);
-  onLog?.(`Port selected: ${describePort(port)}`);
+  rememberPort(blockId, port);
+  onLog?.(`Port selected: ${describePortIdentity(port)}`);
   return session;
+}
+
+// The same session, over the air: the board's WebSocket console wrapped
+// as the byte streams the console layer expects (see wifiTransport.js),
+// under a `kind: 'wifi'` that the few serial-only paths (chip detection,
+// the raw design upload, the flasher) check for. `port.readable` is a
+// standing true so ensureOpenPlain never tries to open it.
+export function cleanHost(host) {
+  return String(host || '').trim().replace(/^[a-z]+:\/\//i, '').replace(/[/?#].*$/, '');
+}
+
+export async function connectWifi(blockId, host, { onLog } = {}) {
+  const target = cleanHost(host);
+  if (!target) throw new Error('enter the board\'s address (its IP, or 192.168.0.1 on its own access point)');
+  const link = openWifiDevice(target);
+  await link.ready;
+  await disconnect(blockId); // see connect(): never two links for one block
+  const session = {
+    kind: 'wifi',
+    host: target,
+    port: { readable: true, getInfo: () => ({}) },
+    transport: { device: link.device, disconnect: link.disconnect },
+    esploader: null,
+    chipName: null,
+    bootloaderOffset: null,
+  };
+  sessions.set(blockId, session);
+  rememberWifi(blockId, target);
+  onLog?.(`Connected to ${target} over WiFi.`);
+  return session;
+}
+
+export function isWifiSession(session) {
+  return session?.kind === 'wifi';
+}
+
+// Over WiFi a new firmware goes through the board's own OTA endpoint: the
+// application image alone, since bootloader and partition table are
+// already on the board and only USB could rewrite them anyway.
+async function flashOverWifi(session, files, { onProgress, onLog } = {}) {
+  const app = files.find((f) => f.address === 0x10000) || files.reduce((best, f) => (f.bytes.length > (best?.bytes.length || 0) ? f : best), null);
+  if (!app) throw new Error('no application image to send');
+  onLog?.(`Sending ${app.name || 'firmware.bin'} (${app.bytes.length} bytes) to ${session.host} over WiFi...`);
+  const form = new FormData();
+  form.append('firmware', new Blob([app.bytes], { type: 'application/octet-stream' }), app.name || 'firmware.bin');
+  const res = await fetch(`http://${session.host}/updatefw`, { method: 'POST', body: form });
+  const text = await res.text().catch(() => '');
+  if (!res.ok || !/OK/.test(text)) throw new Error(`the board rejected the update: ${res.status} ${text}`);
+  onProgress?.(0, app.bytes.length, app.bytes.length);
+  onLog?.('Update accepted — the board is rebooting. Reconnect in a few seconds.');
+}
+
+// Which block's session holds `port`, if any — how an unplugged port is
+// traced back to the board block that was using it.
+export function findSessionByPort(port) {
+  for (const [blockId, session] of sessions) {
+    if (session.port === port) return { blockId, session };
+  }
+  return null;
 }
 
 // Most ESP32 boards' auto-reset circuit wires DTR/RTS straight into
@@ -305,6 +366,7 @@ async function openWithRetry(port, baudrate, graceMs) {
 export async function ensureOpenPlain(blockId, baudrate = 115200) {
   const session = sessions.get(blockId);
   if (!session) throw new Error('Not connected — pick a serial port first.');
+  if (session.kind === 'wifi') return session;
   // `bootloaderDirty`, not just `esploader`: a detect that *failed* leaves
   // the port just as tainted as one that worked — esptool-js has already
   // opened it and started its read loop by the time the sync gives up —
@@ -327,6 +389,7 @@ export async function ensureOpenPlain(blockId, baudrate = 115200) {
 export async function detectChip(blockId, { onLog } = {}) {
   const session = sessions.get(blockId);
   if (!session) throw new Error('Not connected — pick a serial port first.');
+  if (session.kind === 'wifi') throw new Error('chip detection needs the USB cable; over WiFi a board is either running its firmware or out of reach');
   try {
     await session.transport.disconnect();
   } catch {
@@ -384,6 +447,8 @@ export async function detectChip(blockId, { onLog } = {}) {
 // a board whose flash chip might be anything; the dialog never asks the
 // user to pick those, only the per-file address.
 export async function flash(blockId, files, { eraseAll = false, onProgress, onLog } = {}) {
+  const wifi = sessions.get(blockId);
+  if (wifi?.kind === 'wifi') return flashOverWifi(wifi, files, { onProgress, onLog });
   let session = sessions.get(blockId);
   if (!session) throw new Error('Not connected — pick a serial port first.');
   // Install is reachable with no live bootloader session behind it: the
@@ -421,7 +486,14 @@ export async function flash(blockId, files, { eraseAll = false, onProgress, onLo
   onLog?.('Flash complete — device reset.');
 }
 
-export async function disconnect(blockId) {
+// `forget` is for a deliberate Disconnect: the board is not offered again
+// on the next load. A session dropped for any other reason (an unplugged
+// cable, a failed probe) keeps the port remembered.
+export async function disconnect(blockId, { forget = false } = {}) {
+  if (forget) {
+    forgetPort(blockId);
+    forgetWifi(blockId);
+  }
   const session = sessions.get(blockId);
   if (!session) return;
   sessions.delete(blockId);

@@ -148,8 +148,55 @@ function logCompleteLines(state, chunk) {
   }
 }
 
+// Every complete console line, to whoever wants to watch the link — the
+// dialog's shell box. `unsolicited` is true for a line that arrived while
+// no command was waiting on this board: a CAN reply coming back after
+// `can <text>` has already been answered with `ok`, a circuit's [USB]
+// line, a board log. Lines inside a command's reply are that command's
+// and reach its caller through the command itself.
+const lineListeners = new Map(); // blockId -> Set<({ line, unsolicited }) => void>
+const activeCommands = new Map(); // blockId -> count of commands in flight
+
+export function subscribeConsoleLines(blockId, listener) {
+  let set = lineListeners.get(blockId);
+  if (!set) {
+    set = new Set();
+    lineListeners.set(blockId, set);
+  }
+  set.add(listener);
+  return () => {
+    set.delete(listener);
+    if (!set.size) lineListeners.delete(blockId);
+  };
+}
+
+function dispatchLines(state, chunk) {
+  const listeners = lineListeners.get(state.blockId);
+  if (!listeners?.size) {
+    state.lineBuf = '';
+    return;
+  }
+  const text = (state.lineBuf || '') + new TextDecoder().decode(chunk);
+  const parts = text.split('\n');
+  const tail = parts.pop();
+  state.lineBuf = tail.length > MAX_LOG_BUFFER ? tail.slice(-MAX_LOG_BUFFER) : tail;
+  const unsolicited = !(activeCommands.get(state.blockId) > 0);
+  for (const part of parts) {
+    const line = part.replace(/\r$/, '');
+    if (!line) continue;
+    for (const listener of listeners) {
+      try {
+        listener({ line, unsolicited });
+      } catch {
+        // A listener's own error is not the link's problem.
+      }
+    }
+  }
+}
+
 function appendBytes(state, chunk) {
   logCompleteLines(state, chunk);
+  dispatchLines(state, chunk);
   const merged = new Uint8Array(state.queue.length + chunk.length);
   merged.set(state.queue);
   merged.set(chunk, state.queue.length);
@@ -319,13 +366,22 @@ async function writeBytes(blockId, bytes) {
 // where printSystemInfo ran between another message and its newline.
 // Anchored with ^, that answer is thrown away and a board that replied
 // correctly is reported as having no firmware.
-const INFO_RE = /\[INFO] LogicMod v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \| heap=(\d+) \| circuit=(\w+) nCB=(\d+)/;
+// Two families answer this way: the Logic Module (`circuit=… nCB=…` tail)
+// and the CNC module (`state=…` tail, see esp32_cnc's Module.cpp) — the
+// same first line otherwise, so one identify() covers both and reports
+// which it found as `kind`.
+const INFO_RE = /\[INFO] (LogicMod|CncMod) v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \| heap=(\d+) \| (.*)$/;
 
 // Two more lines worth recognising while probing (see identify below).
 // The firmware prints this banner once, out of setup(), a second or more
 // before it can answer anything — it is proof the app image is there and
 // running, and the only thing that justifies waiting out a slow boot.
 const BOOTING_RE = /^Logic Module v(\S+) \(build (\S+)\) booting/;
+// The CNC module's core says it is starting differently: grbl's banner, and
+// then its WiFi join chatter for up to twenty seconds while the port that
+// was just opened (which reset the board) is still being brought up. Any
+// of these earns the same patience the Logic Module's banner does.
+const GRBL_BOOTING_RE = /^Grbl \S+ \[|^\[MSG:(Connecting|Client Started|Cannot connect|Local access point|HTTP Started)/;
 // The ROM's own boot loop on a chip with no valid app image. No amount of
 // asking will produce an answer, so stop asking and let the caller offer
 // the firmware installer straight away.
@@ -416,21 +472,30 @@ async function identifyCommand(blockId, { timeoutMs = 3000, pingEveryMs = 500, b
     }
     const m = line.match(INFO_RE);
     if (m) {
+      const tail = m[7];
+      const circuit = tail.match(/circuit=(\w+) nCB=(\d+)/);
+      const machine = tail.match(/state=(\S+)/);
       return {
         verified: true,
-        version: m[1],
-        build: m[2],
-        ap: m[3],
-        ip: m[4],
-        heap: Number(m[5]),
-        circuitActive: m[6] === 'active',
-        blockCount: Number(m[7]),
+        kind: m[1] === 'CncMod' ? 'cnc' : 'logic',
+        version: m[2],
+        build: m[3],
+        ap: m[4],
+        ip: m[5],
+        heap: Number(m[6]),
+        circuitActive: circuit ? circuit[1] === 'active' : false,
+        blockCount: circuit ? Number(circuit[2]) : 0,
+        machineState: machine ? machine[1] : null,
       };
     }
     // The boot banner says the app image is there and starting: from here
     // the wait is for a boot to finish rather than for a board that may
     // have nothing on it at all, which earns far more patience than the
     // caller's own budget — a first boot after a flash formats SPIFFS.
+    if (!booting && GRBL_BOOTING_RE.test(line)) {
+      booting = true;
+      deadline = Math.max(deadline, Date.now() + bootGraceMs);
+    }
     const boot = line.match(BOOTING_RE);
     if (boot) {
       banners += 1;
@@ -471,7 +536,29 @@ async function identifyCommand(blockId, { timeoutMs = 3000, pingEveryMs = 500, b
   return { verified: false, booting };
 }
 
+// Over WiFi the design goes by HTTP: `save-design`'s raw byte phase is a
+// serial thing, and the board serves and takes design.json directly (the
+// same two endpoints its own page uses).
+async function readDesignOverHttp(session) {
+  const res = await fetch(`http://${session.host}/design.json`, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`design.json: HTTP ${res.status}`);
+  const text = await res.text();
+  return text.trim() ? JSON.parse(text) : { blocks: [] };
+}
+
+async function sendDesignOverHttp(session, design) {
+  const text = JSON.stringify(design);
+  const form = new FormData();
+  form.append('design', new Blob([text], { type: 'application/json' }), 'design.json');
+  const res = await fetch(`http://${session.host}/save-design`, { method: 'POST', body: form });
+  const reply = await res.text().catch(() => '');
+  if (!res.ok || !/OK/.test(reply)) throw new Error(`The board did not accept the ${text.length}-byte design: ${res.status} ${reply}`.trim());
+  return `[DESIGN] Saved ${text.length} bytes OK`;
+}
+
 async function readDesignCommand(blockId, { timeoutMs = 4000 } = {}) {
+  const session = getSession(blockId);
+  if (session?.kind === 'wifi') return readDesignOverHttp(session);
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
@@ -893,7 +980,21 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     const belt = (gx) => ({ id: nextBlockId++, type: 'belt', gx, gy: base, data: { dir: 'E' } });
     if (kindOfBlock(source) === 'data') {
       const value = String((source.props || []).find((p) => p.name === 'value')?.value ?? '');
-      blocks.push({ id: nextBlockId++, type: 'timer', gx: 0, gy: base, data: { onTime: USB_RESEND_MS, offTime: USB_RESEND_MS, mode: 'periodic' } });
+      // A Data whose `in` is fed sends on that trigger: DI1 → Data → USB
+      // says its text when DI1 changes, not on a clock of its own. Only a
+      // Data nothing feeds gets the resend clock — marked `role` so a
+      // load from the device (see designImport.js) can tell that clock
+      // from a Timer the user actually drew, since both tick 500/500.
+      const trigger = connections.find((c) => c.targetBlockId === source.id && portName(source, c.targetPortId) === 'in');
+      const triggerSource = trigger && childBlocks.find((c) => c.id === trigger.sourceBlockId);
+      if (triggerSource) {
+        // Its trigger already placed in another row, or not something the
+        // board can run: this simple layout cannot reach it (see the
+        // fan-out note above), and a clock instead would send unasked.
+        if (!placeSource(triggerSource, 0, base)) continue;
+      } else {
+        blocks.push({ id: nextBlockId++, type: 'timer', gx: 0, gy: base, data: { onTime: USB_RESEND_MS, offTime: USB_RESEND_MS, mode: 'periodic', role: 'usb-resend' } });
+      }
       blocks.push(belt(2));
       const dataId = nextBlockId++;
       idByChildId.set(source.id, dataId);
@@ -978,6 +1079,8 @@ async function readReply(state, pattern, failure, timeoutMs) {
 }
 
 async function sendDesignCommand(blockId, design, { timeoutMs = 5000 } = {}) {
+  const session = getSession(blockId);
+  if (session?.kind === 'wifi') return sendDesignOverHttp(session, design);
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
@@ -1001,11 +1104,50 @@ async function sendDesignCommand(blockId, design, { timeoutMs = 5000 } = {}) {
 const commandQueues = new Map();
 function queueCommand(blockId, run) {
   const previous = commandQueues.get(blockId) || Promise.resolve();
-  const result = previous.catch(() => {}).then(run);
+  const counted = async () => {
+    activeCommands.set(blockId, (activeCommands.get(blockId) || 0) + 1);
+    try {
+      return await run();
+    } finally {
+      activeCommands.set(blockId, Math.max(0, (activeCommands.get(blockId) || 1) - 1));
+    }
+  };
+  const result = previous.catch(() => {}).then(counted);
   commandQueues.set(blockId, result);
   const clear = () => { if (commandQueues.get(blockId) === result) commandQueues.delete(blockId); };
   result.then(clear, clear);
   return result;
+}
+
+// One line to the board's shell, its reply back: every shell command ends
+// with `ok` or `error: <why>` (firmware build 20260925a and later), which
+// is where this stops reading. Lines the board prints on its own in the
+// meantime (a pin change, a CAN frame) come back too, as they would on a
+// terminal. A firmware without the terminator answers by timing out with
+// whatever it printed.
+async function shellCommand(blockId, line, { timeoutMs = 4000 } = {}) {
+  await ensurePlain(blockId);
+  const state = openConsole(blockId);
+  state.queue = new Uint8Array(0); // see identify()'s own doc on why
+  await writeLine(blockId, line);
+  const lines = [];
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    let reply;
+    try {
+      reply = await readLine(state, Math.max(1, deadline - Date.now()));
+    } catch {
+      break;
+    }
+    if (reply === 'ok') return { ok: true, lines };
+    if (reply.startsWith('error:')) return { ok: false, error: reply.slice(6).trim(), lines };
+    lines.push(reply);
+  }
+  return { ok: false, error: 'no reply', lines };
+}
+
+export function shell(blockId, ...args) {
+  return queueCommand(blockId, () => shellCommand(blockId, ...args));
 }
 
 export function identify(blockId, ...args) {

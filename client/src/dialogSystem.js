@@ -23,6 +23,8 @@ import { getLastResult, kindOf } from './runtime.js';
 import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
 import * as devkitCircuit from './devkitCircuit.js';
+import { reconcileWithDevice, loadFromDevice } from './deviceSync.js';
+import { rememberedWifi } from './serialMemory.js';
 
 const HOST_ID = 'noditron-dialog-host';
 const GEAR_RADIUS = 8;
@@ -154,9 +156,16 @@ export function installDialogSystem(nodigraph) {
       serial: {
         isSupported: serialFlash.isSupported,
         connect: (onLog) => serialFlash.connect(block.id, { onLog }),
+        // The same session over the air (see serialFlash.connectWifi):
+        // `host` is the board's IP or name; the last one used is offered.
+        connectWifi: (host, onLog) => serialFlash.connectWifi(block.id, host, { onLog }),
+        rememberedWifi: () => rememberedWifi(block.id),
+        linkKind: () => serialFlash.getSession(block.id)?.kind || 'serial',
         detectChip: (onLog) => serialFlash.detectChip(block.id, { onLog }),
         flash: (files, eraseAll, onProgress, onLog) => serialFlash.flash(block.id, files, { eraseAll, onProgress, onLog }),
-        disconnect: () => serialFlash.disconnect(block.id),
+        // `forget` (true from a dialog's own Disconnect button) also drops
+        // the remembered port, so the next load does not offer it again.
+        disconnect: (forget) => serialFlash.disconnect(block.id, { forget: Boolean(forget) }),
         guessAddress: serialFlash.guessAddress,
         getSession: () => serialFlash.getSession(block.id),
         firmwarePresets: serialFlash.FIRMWARE_PRESETS,
@@ -179,12 +188,25 @@ export function installDialogSystem(nodigraph) {
         buildDevkitDesign: () => devkitCircuit.buildDevkitDesign(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
         devkitSnapshot: () => devkitCircuit.devkitSnapshot(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
         designSummary: (design) => devkitCircuit.summarizeDesign(design),
-        markDevkitSent: (snapshot) => {
-          devkitCircuit.markDevkitSent(block, snapshot);
+        // `design` is what was just sent (see devkitCircuit.markDevkitSent).
+        markDevkitSent: (design) => {
+          devkitCircuit.markDevkitSent(block, design);
           nodigraph.renderLoop.requestRender();
           nodigraph.persist();
         },
+        isDirty: () => devkitCircuit.isDevkitDirty(block, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id)),
+        // Reads the circuit on the device and settles this block against
+        // it (see deviceSync.js) — run once a board is known to be running.
+        reconcile: () => reconcileWithDevice(nodigraph, block),
+        loadFromDevice: () => loadFromDevice(nodigraph, block),
         setPin: (gpio, state, opts) => serialConsole.setPin(block.id, gpio, state, opts),
+        // The board's own shell (see serialConsole.shell): `nodes`, `wifi
+        // status`, `can <text>` — anything `help` lists.
+        shell: (line, opts) => serialConsole.shell(block.id, line, opts),
+        // Every line on the link, with `unsolicited` for the ones no command
+        // asked for (a CAN reply after `can <text>`, a [USB] line); returns
+        // the unsubscribe function.
+        subscribeLines: (listener) => serialConsole.subscribeConsoleLines(block.id, listener),
         readPins: (opts) => serialConsole.readPins(block.id, opts),
         close: () => serialConsole.closeConsole(block.id),
       },

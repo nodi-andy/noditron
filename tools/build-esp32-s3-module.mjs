@@ -94,11 +94,19 @@ function build() {
   return { pins, ports, logicalPorts, geometry: { x: 0, y: 0, width: 300, height } };
 }
 
+// The classic drawing's USB connector box under the USB pin. This board
+// keeps the USB *pin* — it is the serial link a circuit can talk over —
+// but not a drawn socket for it: the pin on the edge already says where
+// USB is, and the box was a second, larger label for the same thing.
+const USB_BOX = /\n\/\/ The USB connector sits under[\s\S]*?ctx\.fillText\('USB', usbX, g\.y \+ 29\);\n/;
+
 // Reuse the board drawing with this PCB's name, reset button and RGB pin.
 function renderSource(boardName) {
   const classic = JSON.parse(fs.readFileSync(CLASSIC_PATH, 'utf8'));
   const source = Object.values(classic.block.blocks)[0].props.find((p) => p.name === 'render').value;
+  if (!USB_BOX.test(source)) throw new Error('classic render no longer has the USB connector box this strips');
   return source
+    .replace(USB_BOX, '\n')
     .replace("block.name || 'ESP32 DevKit'", `block.name || '${boardName}'`)
     .replace(
       "drawBoardButton(g.x + g.width / 2 + 72, 'GPIO35', '#f8fafc');",
@@ -110,6 +118,59 @@ function renderSource(boardName) {
       "ctx.fillStyle = pin.role === 'power' ? '#ef4444' : pin.role === 'ground' ? '#6b7280' : (pin.reserved || pin.inputOnly) ? '#94a3b8' : '#1f2937';",
     );
 }
+
+// The one control on the board's face: a pill at the bottom with a status
+// light, what the state means in words, and the gear that opens the
+// device dialog (styled by client/styles.css's .esp-status rules). Runs
+// every frame like any `html` prop, so it only builds its DOM once and
+// then updates text and tone. `connectionState` values come from the
+// dialog script and serialReconnect.js.
+const STATUS_HTML = `
+container.style.position = 'absolute';
+let pill = container.querySelector('.esp-status');
+if (!pill) {
+  container.replaceChildren();
+  pill = document.createElement('button');
+  pill.type = 'button';
+  pill.className = 'esp-status';
+  pill.setAttribute('aria-label', 'Connection settings');
+  pill.innerHTML = '<span class="esp-status-dot"></span><span class="esp-status-text"></span>'
+    + '<svg class="esp-status-gear" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+    + '<circle cx="12" cy="12" r="3"></circle>'
+    + '<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>'
+    + '</svg>';
+  pill.addEventListener('click', helpers.openDialog);
+  container.appendChild(pill);
+}
+const state = String(block.props.find((p) => p.name === 'connectionState')?.value || 'disconnected');
+let tone = 'off';
+let text = 'Not connected';
+let hint = 'Connect over USB';
+if (state === 'connecting') {
+  tone = 'wait';
+  text = 'Connecting\\u2026';
+  hint = 'Opening the serial port';
+} else if (state === 'connected:running') {
+  // What this board would send against what the device holds (see
+  // devkitCircuit.isDevkitDirty) -- read from the device on connect.
+  const dirty = helpers.devkit.dirty ? helpers.devkit.dirty() : false;
+  tone = dirty ? 'warn' : 'on';
+  text = dirty ? 'Running \\u00b7 circuit not saved' : 'Logic Module running';
+  hint = dirty ? 'Save the circuit to the device' : 'Connected';
+} else if (state.startsWith('connected:needs-firmware:')) {
+  tone = 'warn';
+  text = state.slice('connected:needs-firmware:'.length) + ' \\u00b7 needs firmware';
+  hint = 'Install the Logic Module firmware';
+} else if (state.startsWith('connected')) {
+  tone = 'warn';
+  text = 'Connected \\u00b7 no firmware answer';
+  hint = 'The board did not answer ping';
+}
+pill.dataset.tone = tone;
+pill.querySelector('.esp-status-text').textContent = text;
+pill.style.setProperty('--esp-scale', String(helpers.contentScale || 1));
+pill.title = hint + ' \\u2014 connection settings';
+`.trim();
 
 const module_ = JSON.parse(fs.readFileSync(MODULE_PATH, 'utf8'));
 const block = Object.values(module_.block.blocks)[0];
@@ -127,8 +188,12 @@ function setProp(name, value) {
 
 setProp('pinMap', JSON.stringify(pins));
 setProp('render', renderSource('esp32-S3'));
+setProp('html', STATUS_HTML);
 const currentDialog = (block.props || []).find((p) => p.name === 'dialog')?.value || '';
 setProp('dialog', currentDialog
+  // The dialog's own Disconnect is the one deliberate "stop offering this
+  // port on the next load" (see serialFlash.disconnect's `forget`).
+  .replace("    await helpers.serial.disconnect();\n    statusEl.textContent = 'Disconnected.';", "    await helpers.serial.disconnect(true);\n    statusEl.textContent = 'Disconnected.';")
   .replace("programLabel.textContent = 'DIGITAL I/O';", "programLabel.textContent = 'CIRCUIT';")
   .replace(
     "    const childCount = block.children ? block.children.blocks.size : 0;",
@@ -150,7 +215,7 @@ setProp('dialog', currentDialog
     "log('Nothing to send -- connect a supported circuit signal directly to DI, DO, CAN In, or CAN Out.');",
   ));
 module_.displayName = block.name = 'esp32-S3';
-module_.version = '1.7.1';
+module_.version = '1.8.0';
 setProp('boardVariant', 'ESP32-S3-POE-ETH-8DI-8DO');
 setProp('firmwarePreset', 'logic-esp32-s3-waveshare');
 setProp('canPins', JSON.stringify({ tx: 2, rx: 3 }));

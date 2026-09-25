@@ -6,7 +6,7 @@ const source = fs.readFileSync(new URL('../client/src/serialConsole.js', import.
 function consoleFor(session) {
   return new Function('getSession', 'ensureOpenPlain', source
     .replace(/^import .*;$/gm, '')
-    .replace(/export /g, '') + '\nreturn { identify, openConsole, closeConsole, setLogIncoming, subscribeIoChanges };')(
+    .replace(/export /g, '') + '\nreturn { identify, openConsole, closeConsole, setLogIncoming, subscribeIoChanges, shell, subscribeConsoleLines };')(
       () => session, async () => session,
     );
 }
@@ -153,3 +153,63 @@ for (const name of ['esp32-devkit', 'esp32-s3-devkit']) {
     assert.equal(button.disabled, false);
   });
 }
+
+// The board's shell ends every reply with `ok` or `error: ...` (see
+// serialConsole.shell); lines the board prints on its own in between come
+// back with the reply, as they would on a terminal.
+function shellDevice(replies) {
+  const encoder = new TextEncoder();
+  let controller;
+  const readable = new ReadableStream({ start(c) { controller = c; } });
+  const written = [];
+  const device = {
+    get readable() { return readable; },
+    writable: new WritableStream({ write(chunk) {
+      written.push(new TextDecoder().decode(chunk));
+      const line = written[written.length - 1].trim();
+      const reply = replies[line];
+      if (reply) setTimeout(() => controller.enqueue(encoder.encode(reply)), 5);
+    } }),
+  };
+  // Something the board says on its own, unprompted.
+  const push = (text) => controller.enqueue(encoder.encode(text));
+  return { device, written, push };
+}
+
+test('a shell command collects its reply up to ok, or reports the error line', async () => {
+  const { device } = shellDevice({
+    nodes: 'logic a1d148c4 esp32-s3 v1.2 self\n[TCA9554] EXIO01 pin -> LOW\ncnc 0badf00d v1.4 seen 1s ago via can\nok\n',
+    'wifi pw': 'error: select a network first: wifi select <n|ssid>\n',
+  });
+  const api = consoleFor({ transport: { device } });
+  api.setLogIncoming(false);
+  const nodes = await api.shell('board', 'nodes', { timeoutMs: 500 });
+  assert.equal(nodes.ok, true);
+  assert.deepEqual(nodes.lines, ['logic a1d148c4 esp32-s3 v1.2 self', '[TCA9554] EXIO01 pin -> LOW', 'cnc 0badf00d v1.4 seen 1s ago via can']);
+  const failed = await api.shell('board', 'wifi pw', { timeoutMs: 500 });
+  assert.equal(failed.ok, false);
+  assert.match(failed.error, /select a network first/);
+  const silent = await api.shell('board', 'nothing', { timeoutMs: 100 });
+  assert.equal(silent.ok, false);
+  assert.equal(silent.error, 'no reply');
+  api.closeConsole('board');
+});
+
+test('lines the board sends on its own are marked unsolicited; a command reply is not', async () => {
+  const { device, push } = shellDevice({ 'can ?': '[CAN] tx ?\nok\n' });
+  const api = consoleFor({ transport: { device } });
+  api.setLogIncoming(false);
+  const seen = [];
+  const stop = api.subscribeConsoleLines('board', (entry) => seen.push(entry));
+  const sent = await api.shell('board', 'can ?', { timeoutMs: 500 });
+  assert.equal(sent.ok, true);
+  // The CNC module answers over CAN a moment later, after the ok, while
+  // nothing is waiting on the board.
+  api.openConsole('board');
+  push('[CAN] rx <Idle|MPos:0.000,0.000,0.000>\n');
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(seen.filter((e) => !e.unsolicited).map((e) => e.line), ['[CAN] tx ?', 'ok']);
+  assert.deepEqual(seen.filter((e) => e.unsolicited).map((e) => e.line), ['[CAN] rx <Idle|MPos:0.000,0.000,0.000>']);
+  stop();
+  api.closeConsole('board');
+});

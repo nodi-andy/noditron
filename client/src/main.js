@@ -7,7 +7,7 @@
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { mountPalette, rehydrateKindLogic, migrateLegacyDataBlock } from './palette.js';
 import { mountLibrary } from './library.js';
-import { startRuntime, kindOf, getLastResult, getBoundaryOutput, getPortValue, setBoundaryInput, setBoundaryOutput, clearBoundaryOutput } from './runtime.js';
+import { startRuntime, kindOf, getLastResult, getBoundaryOutput, getPortValue, setBoundaryInput, setBoundaryOutput, clearBoundaryOutput, setChildOutput, clearChildOutputs } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
 import { installHtmlOverlay } from './htmlOverlay.js';
 import { installDialogSystem } from './dialogSystem.js';
@@ -16,6 +16,7 @@ import * as serialConsole from './serialConsole.js';
 import * as livePins from './livePins.js';
 import * as devkitCircuit from './devkitCircuit.js';
 import { createDeviceSaver } from './deviceSave.js';
+import { installSerialReconnect } from './serialReconnect.js';
 
 // noditron's own "primitive" kinds — plain value/logic leaves with no
 // business growing a sub-architecture of their own (unlike Timer, whose
@@ -27,6 +28,8 @@ const NO_SUB_ARCHITECTURE_KINDS = [
   // conucon's Logic Module blocks (see palette.js) — every one is a leaf
   // the firmware runs directly; none has an inside.
   'boot', 'serial', 'serialin', 'can', 'i2cout', 'i2cin', 'pwmout', 'pwmin', 'slice', 'route', 'croute',
+  // A CNC module is grbl behind a gcode input: nothing to build inside.
+  'cnc-module',
 ];
 const ESP32_TEMPLATE_PROP_NAMES = ['render', 'html', 'dialog', 'allowedChildKinds', 'usbOrientation', 'boardVariant', 'pinMap', 'onboardControls', 'firmwarePreset', 'canPins'];
 
@@ -58,6 +61,13 @@ async function boot() {
   const htmlOverlay = installHtmlOverlay(nodigraph, dialogSystem.openDialog);
 
   window.nodigraphDrawBlock = (ctx, block, { contentAlpha = 1, transform = null } = {}) => {
+    // `ctx` arrives already faded by the level this block sits in (see
+    // nodigraph's drawSubPreview: a level opening inside its block fades
+    // in, and everything drawn straight onto ctx fades with it). Real DOM
+    // does not draw onto ctx, so it has to be handed that fade explicitly
+    // or a Data block's value pops in at full strength while the level
+    // around it is still a ghost.
+    const levelAlpha = typeof ctx.globalAlpha === 'number' ? ctx.globalAlpha : 1;
     // The infinite canvas fades the block's face as its interior opens.
     // Custom board artwork must fade too, or it paints over the circuit.
     // Keep connection controls visible while the host still blocks entry.
@@ -69,7 +79,21 @@ async function boot() {
       dialogSystem.drawBlock(ctx, block);
     }
     ctx.restore();
-    htmlOverlay.drawBlock(ctx, block, { contentAlpha, transform });
+    htmlOverlay.drawBlock(ctx, block, { contentAlpha: contentAlpha * levelAlpha, transform });
+  };
+
+  // Every scene paint is bracketed so the overlay can tell which of its
+  // containers nodigraph actually drew this frame and hide the rest (see
+  // htmlOverlay's own beginFrame/endFrame). RenderLoop calls drawFn as a
+  // plain property, so wrapping it here needs nothing from nodigraph.
+  const drawScene = nodigraph.renderLoop.drawFn;
+  nodigraph.renderLoop.drawFn = () => {
+    htmlOverlay.beginFrame();
+    try {
+      drawScene();
+    } finally {
+      htmlOverlay.endFrame();
+    }
   };
 
   // The cog button in nodigraph's own bottom-left selection FAB stack (see
@@ -158,7 +182,7 @@ async function boot() {
     // board itself is never even considered). That left already-placed
     // boards running whatever dialog/render code they were pasted with,
     // which is what made a stale dialog outlive edits to the module.
-    for (const { block, level } of devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children)) {
+    for (const { block, level } of devkitCircuit.collectBoardBlocks(nodigraph.project.rootBlock.children)) {
       const templateBlock = await templateFor(moduleNameOf(block));
       if (!templateBlock) continue;
       if (devkitCircuit.migrateWaveshareBoard(block, templateBlock, level)) changed = true;
@@ -241,9 +265,9 @@ async function boot() {
   // until Connect actually runs again.
   function resetStaleConnectionStates() {
     let changed = false;
-    for (const { block } of devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children)) {
+    for (const { block } of devkitCircuit.collectBoardBlocks(nodigraph.project.rootBlock.children)) {
       const prop = (block.props || []).find((p) => p.name === 'connectionState');
-      if (!prop || !String(prop.value || '').startsWith('connected')) continue;
+      if (!prop || !String(prop.value || '').startsWith('connect')) continue;
       prop.value = 'disconnected';
       block.description = serializeBlockDescription(block);
       changed = true;
@@ -254,6 +278,12 @@ async function boot() {
     }
   }
   resetStaleConnectionStates();
+
+  // With every board honestly "Not connected", offer the ones that were
+  // connected last time their port back — a card at the bottom of the
+  // page, connecting on request (see serialReconnect.js for why not
+  // silently).
+  installSerialReconnect(nodigraph, { openDialog: dialogSystem.openDialog });
 
   // Colors a wire by whatever boolean value it's actually carrying right
   // now — green while true/high, dim gray while false/low — read straight
@@ -471,6 +501,9 @@ async function boot() {
     // ESP32 child circuits are firmware-owned even while disconnected. The
     // browser must never run a competing simulation that can rewrite Data
     // values or make a Timer appear to drive hardware locally.
+    // Refilled below from this tick's readings; a board that is no longer
+    // live keeps nothing stale on its children.
+    clearChildOutputs(container.id);
     if (!live) return false;
     const inputs = pinMapFor(container).filter(p => !p.reserved && !p.outputOnly && p.gpio !== null && p.gpio !== undefined && p.gpio < 1000).map(p => Number(p.gpio));
     livePins.ensurePolling(container.id, inputs);
@@ -485,6 +518,26 @@ async function boot() {
       const gpio = gpioByName.get(logicalName(container, port.id));
       const live = gpio === undefined ? null : cached.find((p) => Number(p.gpio) === gpio);
       if (live) setBoundaryInput(container.id, port.id, Boolean(live.state));
+    }
+    // The browser does not run a board's children (see the return below),
+    // so nothing inside would ever show a value. What the board reports
+    // for an output pin, or sends over USB, IS what the child wired to
+    // that pin is putting out: the Timer driving DO1 blinks with the
+    // board's own DO1, and its wire colours with it (see runtime.js's
+    // setChildOutput).
+    const usbSent = serialConsole.getUsbValue(container.id)?.value;
+    for (const conn of container.children?.connections?.values?.() || []) {
+      if (conn.targetBlockId !== container.id || conn.sourceBlockId === container.id) continue;
+      const name = logicalName(container, conn.targetPortId);
+      let value;
+      if (usbPortNames.has(name)) {
+        value = usbSent;
+      } else {
+        const gpio = gpioByName.get(name);
+        const livePin = gpio === undefined ? null : cached.find((p) => Number(p.gpio) === gpio);
+        if (livePin) value = Boolean(livePin.state);
+      }
+      if (value !== undefined) setChildOutput(container.id, conn.sourceBlockId, conn.sourcePortId, value);
     }
     let changed = false;
     for (const child of blocks) {
@@ -521,10 +574,46 @@ async function boot() {
   // as well as with navigation — so both are part of the key.
   const addTargetKey = () => JSON.stringify([nodigraph.project.path, nodigraph.addTarget?.()?.id ?? null]);
   let lastPathJson = addTargetKey();
+  // A CNC module's `gcode` input is the machine's feed: whatever value
+  // sits on it is sent as `g <line>` through the board's shell each time
+  // it changes (a Data block's text, a Match output) — grbl answers ok or
+  // error: on the shell, and the dialog's shell box shows both.
+  const lastGcodeSent = new Map(); // blockId -> last text sent
+  function forwardGcodeToCncModules() {
+    for (const { block, level } of devkitCircuit.collectBoardBlocks(nodigraph.project.rootBlock.children)) {
+      if (kindOf(block) !== 'cnc-module') continue;
+      if (!serialFlash.getSession(block.id) || !devkitCircuit.isDevkitRunning(block)) {
+        lastGcodeSent.delete(block.id);
+        continue;
+      }
+      const port = (block.ports || []).find((p) => logicalName(block, p.id) === 'gcode');
+      const conn = port && [...(level?.connections?.values?.() || [])].find((c) => c.targetBlockId === block.id && c.targetPortId === port.id);
+      if (!conn) continue;
+      const direct = getPortValue(conn.sourceBlockId, conn.sourcePortId);
+      const value = direct !== undefined ? direct : getBoundaryOutput(conn.sourceBlockId, conn.sourcePortId);
+      if (value === undefined || value === null || value === false) continue;
+      const text = String(value).trim();
+      if (!text || lastGcodeSent.get(block.id) === text) continue;
+      lastGcodeSent.set(block.id, text);
+      serialConsole.shell(block.id, `g ${text}`).catch((err) => console.warn(`[noditron] ${block.name}: gcode not sent:`, err.message));
+    }
+  }
+
   startRuntime(
     nodigraph,
     () => {
-      const byId = new Map(nodigraph.project.listBlocks().map((b) => [b.id, b]));
+      forwardGcodeToCncModules();
+      // The whole tree, not listBlocks(): that is only the level being
+      // edited, so standing inside a board pruned the board's own overlay
+      // every tick and the next frame built it again — its pill flickered
+      // ten times a second for as long as you stayed inside.
+      const byId = new Map();
+      (function collect(level) {
+        for (const block of level?.blocks?.values?.() || []) {
+          byId.set(block.id, block);
+          if (block.children) collect(block.children);
+        }
+      })(nodigraph.project.rootBlock.children);
       htmlOverlay.prune(byId);
       nodigraph.refreshSaved?.();
       nodigraph.renderLoop.requestRender();

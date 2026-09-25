@@ -25,7 +25,7 @@
 // getLastResult) — only *position* needed to move to every frame; how
 // often the numbers themselves change is a separate, much less
 // perceptible question.
-import { kindOf, getLastResult } from './runtime.js';
+import { kindOf, getLastResult, getBlockOutputs } from './runtime.js';
 
 const RADIUS = 9;
 const OFF_FILL = '#3a3f2e';
@@ -87,7 +87,11 @@ export function installCanvasIndicators(nodigraph) {
 
     const result = getLastResult();
     const inputs = result.inputsByBlock.get(block.id) || {};
-    const outputs = result.outputsByBlock.get(block.id) || {};
+    // A block on another level than the one being edited (a child shown
+    // open inside its container) has no entry in the current-level
+    // result; its values are still known tree-wide (see runtime.js's
+    // getBlockOutputs), so its indicator reads the same either way.
+    const outputs = result.outputsByBlock.get(block.id) || getBlockOutputs(block);
     const { x, y } = indicatorCenter(block);
     // `helpers.dot(on, color)` covers the common "just show a status
     // light" case in one line (`color` optional); the render function

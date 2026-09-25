@@ -1,6 +1,7 @@
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { kindOf } from './runtime.js';
 import * as serialConsole from './serialConsole.js';
+import { traceDesign } from './designImport.js';
 
 function logicalName(block, portId) {
   const pin = (block.ports || []).find((p) => p.id === portId);
@@ -237,7 +238,7 @@ export function buildDevkitDesign(esp, level) {
 export function devkitSnapshot(esp, level) {
   const snapshotBlock = (block) => ({
     id: block.id, name: block.name, ports: block.ports, logicalPorts: block.logicalPorts,
-    props: (block.props || []).filter(p => !['connectionState', 'lastSentSnapshot'].includes(p.name)
+    props: (block.props || []).filter(p => !['connectionState', 'lastSentSnapshot', 'lastSentDesign', 'deviceDesign'].includes(p.name)
       && !(kindOf(block) === 'digital-io' && propValue(block, 'direction') !== 'output' && p.name === 'value')),
     children: Array.from(block.children?.blocks?.values?.() || []).map(snapshotBlock),
     connections: Array.from(block.children?.connections?.values?.() || []),
@@ -267,17 +268,83 @@ export function isDevkitRunning(esp) {
   return propValue(esp, 'connectionState') === 'connected:running';
 }
 
-export function isDevkitDirty(esp, level) {
-  const sent = propValue(esp, 'lastSentSnapshot');
-  const hasCircuit = Boolean(sent || esp.children?.blocks?.size || esp.children?.connections?.size
-    || Array.from(level?.connections?.values?.() || []).some(c => c.sourceBlockId === esp.id || c.targetBlockId === esp.id));
-  return hasCircuit && devkitSnapshot(esp, level) !== sent;
+// A design as the circuit it runs — which block feeds which, with what
+// data — so what this compiles and what the board reads back (see
+// serialConsole.readDesign) compare as circuits. Layout is not circuit:
+// the belts are followed (see designImport.traceDesign) and only the
+// connections they make are kept, so a design laid out differently, or
+// carrying ids, `nextId` or another key order, is still the same one. A
+// block nothing reaches and that reaches nothing — a pin declared on its
+// own by an older compiler, an idle CAN block — is not circuit either:
+// it runs nothing, and one board's leftover declarations used to keep a
+// matching circuit reading as unsaved forever.
+export function canonicalDesign(design) {
+  const { blocks, edges } = traceDesign(design);
+  const signature = (b) => {
+    const data = {};
+    for (const k of Object.keys(b.data || {}).sort()) {
+      if (k === 'dir') continue;
+      data[k] = b.data[k];
+    }
+    return `${b.type}${JSON.stringify(data)}`;
+  };
+  const wired = new Set();
+  for (const e of edges) {
+    wired.add(e.from);
+    wired.add(e.to);
+  }
+  // Each edge names its ends by signature plus a per-signature index, so
+  // two identical Data blocks feeding two different pins stay two.
+  const index = new Map();
+  const nameOf = (b) => {
+    if (!index.has(b)) {
+      const sig = signature(b);
+      const same = blocks.filter((x) => wired.has(x) && signature(x) === sig);
+      index.set(b, `${sig}#${same.indexOf(b)}`);
+    }
+    return index.get(b);
+  };
+  const lines = edges.map((e) => `${nameOf(e.from)}[${e.output ?? ''}] -> ${nameOf(e.to)}[${e.input ?? ''}]`).sort();
+  return JSON.stringify(lines);
 }
 
-export function markDevkitSent(esp, snapshot) {
-  const lastSentProp = esp.props.find((p) => p.name === 'lastSentSnapshot');
-  if (lastSentProp) lastSentProp.value = snapshot;
-  else esp.props.push({ id: `${esp.id}:lastSentSnapshot`, name: 'lastSentSnapshot', kind: 'value', value: snapshot });
+export function designsMatch(a, b) {
+  return canonicalDesign(a) === canonicalDesign(b);
+}
+
+// Anything at all the board could be sent: blocks or wires inside it, or
+// a wire to one of its pins from the level it sits in.
+export function hasAnyCircuit(esp, level) {
+  return Boolean(esp.children?.blocks?.size || esp.children?.connections?.size
+    || Array.from(level?.connections?.values?.() || []).some((c) => c.sourceBlockId === esp.id || c.targetBlockId === esp.id));
+}
+
+// "Unsaved" means the design this would send is not the one the device
+// was last confirmed to hold (see markDevkitSent) — compared as compiled
+// designs, never as snapshots of the blocks themselves: a snapshot changed
+// with every migrated prop and every live reading, and the dialog and the
+// on-canvas card used to take two different ones, so a freshly saved
+// circuit could read as unsaved forever. A circuit that does not compile
+// is not on the device either.
+export function isDevkitDirty(esp, level) {
+  const sent = String(propValue(esp, 'lastSentDesign', '') || '');
+  let compiled;
+  try {
+    compiled = canonicalDesign(buildDevkitDesign(esp, level));
+  } catch {
+    return true;
+  }
+  if (!sent) return compiled !== canonicalDesign({ blocks: [] });
+  return compiled !== sent;
+}
+
+// Records `design` as what the device holds — after a successful save,
+// or after reading the device and finding it already matches.
+export function markDevkitSent(esp, design) {
+  const canonical = canonicalDesign(design);
+  const prop = esp.props.find((p) => p.name === 'lastSentDesign');
+  if (prop) prop.value = canonical;
+  else esp.props.push({ id: `${esp.id}:lastSentDesign`, name: 'lastSentDesign', kind: 'value', value: canonical });
   esp.description = serializeBlockDescription(esp);
 }
 
@@ -286,6 +353,21 @@ export function collectEsp32DevkitBlocks(level, out = []) {
   for (const block of level.blocks.values()) {
     if (kindOf(block) === 'esp32-devkit') out.push({ block, level });
     if (block.children) collectEsp32DevkitBlocks(block.children, out);
+  }
+  return out;
+}
+
+// Every block that is a board with a serial or WiFi link of its own — the
+// ESP32 DevKit boards and the CNC module — for the things they share
+// (connection state, template refresh, the reconnect card). A circuit
+// only ever belongs to a DevKit, so circuit paths keep the narrower
+// collectEsp32DevkitBlocks above.
+export const BOARD_KINDS = ['esp32-devkit', 'cnc-module'];
+export function collectBoardBlocks(level, out = []) {
+  if (!level) return out;
+  for (const block of level.blocks.values()) {
+    if (BOARD_KINDS.includes(kindOf(block))) out.push({ block, level });
+    if (block.children) collectBoardBlocks(block.children, out);
   }
   return out;
 }

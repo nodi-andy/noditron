@@ -174,6 +174,39 @@ export function getPortValue(blockId, portId) {
   return portValues.get(`${blockId}:${portId}`);
 }
 
+// A block's outputs by port name from the whole-tree values, for a block
+// that is not on the level being edited and so has no entry in
+// getLastResult() — a child shown open inside its container, say.
+export function getBlockOutputs(block) {
+  const outputs = {};
+  for (const pin of block.ports || []) {
+    const value = portValues.get(`${block.id}:${pin.id}`);
+    if (value === undefined) continue;
+    const name = logicalName(block, pin);
+    if (name) outputs[name] = value;
+  }
+  return outputs;
+}
+
+// Values a host knows for a container's children when it is NOT running
+// them itself — a board whose firmware owns the circuit, reporting what
+// its pins and its USB link actually carry (see main.js's
+// syncLiveDigitalIO). Read in evaluateSubtree's not-evaluated branch, so
+// wires and indicators inside such a container show the board's values
+// rather than nothing. Cleared and refilled by the host every tick.
+const childOutputOverrides = new Map(); // containerId -> Map(`${blockId}:${portId}` -> { blockId, portId, value })
+export function setChildOutput(containerId, blockId, portId, value) {
+  let map = childOutputOverrides.get(containerId);
+  if (!map) {
+    map = new Map();
+    childOutputOverrides.set(containerId, map);
+  }
+  map.set(`${blockId}:${portId}`, { blockId, portId, value });
+}
+export function clearChildOutputs(containerId) {
+  childOutputOverrides.delete(containerId);
+}
+
 // The mirror image of boundaryOutputCache above, for the direction that
 // used to have no path through this file at all: a container's own
 // boundary *input* — fed from *outside* it — reaching an internal child
@@ -529,7 +562,23 @@ function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
   if (!evaluateChildren) {
     const boundaryOut = new Map(boundaryOutputOverrides.get(container.id) || []);
     boundaryOutputCache.set(container.id, boundaryOut);
-    if (container === currentLevelBlock) results.current = { blocks, inputsByBlock: new Map(), outputsByBlock: new Map(), errors: new Map() };
+    // What the host reports for this level stands in for an evaluation:
+    // the container's own pins as seen from inside (boundaryInputCache)
+    // and whatever child outputs it knows (childOutputOverrides), so a
+    // wire from a live input pin or into a live output pin still colours
+    // and a child's own indicator still reads the value.
+    const outputsByBlock = new Map();
+    for (const [pinId, value] of boundaryInputCache.get(container.id) || []) portValues.set(`${container.id}:${pinId}`, value);
+    for (const [key, { blockId, portId, value }] of childOutputOverrides.get(container.id) || []) {
+      portValues.set(key, value);
+      const block = container.children.blocks.get(blockId);
+      const pin = block && (block.ports || []).find((p) => p.id === portId);
+      const name = pin && logicalName(block, pin);
+      if (!name) continue;
+      if (!outputsByBlock.has(blockId)) outputsByBlock.set(blockId, {});
+      outputsByBlock.get(blockId)[name] = value;
+    }
+    if (container === currentLevelBlock) results.current = { blocks, inputsByBlock: new Map(), outputsByBlock, errors: new Map() };
     return;
   }
 
