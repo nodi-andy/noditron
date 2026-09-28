@@ -31,8 +31,9 @@ export function migrateWaveshareBoard(block, template, level) {
   if (block.name === 'ESP32-S3 DevKit') { block.name = 'esp32-S3'; changed = true; }
   const alreadyWaveshare = propValue(block, 'boardVariant') === 'ESP32-S3-POE-ETH-8DI-8DO';
   const aliases = new Map(Array.from({ length: 8 }, (_, i) => [`G${i + 4}`, `DI${i + 1}`]));
-  aliases.set('G2', 'CAN Out'); aliases.set('G3', 'CAN In');
-  aliases.set('CAN TX', 'CAN Out'); aliases.set('CAN RX', 'CAN In');
+  // One CAN pin now: the old CAN Out (and its older names) becomes it; an
+  // old CAN In is dropped unless wired, then kept as a legacy pin.
+  aliases.set('G2', 'CAN'); aliases.set('CAN TX', 'CAN'); aliases.set('CAN Out', 'CAN');
   aliases.set('G17', 'RS485 TX'); aliases.set('G18', 'RS485 RX');
   const connections = [...(level?.connections?.values?.() || []), ...(block.children?.connections?.values?.() || [])];
   const retained = new Set();
@@ -93,7 +94,39 @@ export function findContainingLevel(level, blockId) {
 // driven by something => output, driving something => input. Wiring a
 // Timer's `out` into D2 is therefore a complete, uploadable circuit on its
 // own — that's the whole point of the pins being on the block.
-function buildPinMappedDesign(esp, blocks, connections) {
+// What the far end of each of the board's `socket` pins is, seen from the
+// level the board sits on (see socketLink.js for the port itself). The
+// board's socket is a channel of its shell (conucon's socketOut): the
+// design saved to it carries where the socket leads, as `dest` — the far
+// board's node id (its `nodeId` prop, recorded from `nodes` by the
+// dialog) with its name as a fallback, or 'host' when the wire reaches an
+// ordinary block or nothing at all, meaning the browser. Keyed by port id.
+export function socketLinksFor(esp, level) {
+  const links = new Map();
+  const socketPorts = (esp.ports || []).filter((port) => pinMapFor(esp).find((pin) => pin.label === logicalName(esp, port.id))?.role === 'socket');
+  for (const port of socketPorts) {
+    let link = { far: 'host', dest: 'host', name: '' };
+    for (const conn of level?.connections?.values?.() || []) {
+      const otherId = conn.sourceBlockId === esp.id && conn.sourcePortId === port.id ? conn.targetBlockId
+        : conn.targetBlockId === esp.id && conn.targetPortId === port.id ? conn.sourceBlockId : null;
+      if (!otherId || otherId === esp.id) continue;
+      const other = level.blocks?.get?.(otherId);
+      if (other && BOARD_KINDS.includes(kindOf(other))) {
+        // Its node id (recorded by the dialog from identify), else the name
+        // the node calls itself, else what the diagram calls it.
+        link = { far: 'board', dest: propValue(other, 'nodeId', '') || propValue(other, 'nodeName', '') || other.name || '', name: propValue(other, 'nodeName', '') || other.name || '' };
+      }
+    }
+    links.set(port.id, link);
+  }
+  return links;
+}
+
+// `socketLinks` (see socketLinksFor) says where each socket pin leads;
+// `face` is 'internal' for the board's own children, 'external' for the
+// level around it, where a socket wire is the link itself and compiles to
+// nothing.
+function buildPinMappedDesign(esp, blocks, connections, { socketLinks = new Map(), face = 'internal', notes = null } = {}) {
   const allPinsByPortName = new Map(pinMapFor(esp).map((pin) => [pin.label, pin]));
   const pinsByPortName = new Map(
     pinMapFor(esp)
@@ -101,7 +134,14 @@ function buildPinMappedDesign(esp, blocks, connections) {
       .map((pin) => [pin.label, pin]),
   );
   const syntheticPins = new Map();
+  const socketPinPorts = new Map(); // synthetic socket pin block id -> the board's socket port id
   const CAN_OUT_GPIO = 2000;
+  // The socket pin, as a pin the layout already knows how to place (see
+  // serialConsole.buildMinimalDesign's din/dout rows), rewritten below
+  // into the firmware's `socket` block.
+  const SOCKET_OUT_GPIO = 2002;
+  const SOCKET_IN_GPIO = 2003;
+  const socketLinkOf = (portId) => socketLinks.get(portId) || { far: 'host', dest: 'host', name: '' };
   const CAN_IN_GPIO = 2001;
   let canBitrate = 250000;
 
@@ -154,14 +194,26 @@ function buildPinMappedDesign(esp, blocks, connections) {
       if (!isTarget) throw new Error('CAN speed only accepts a configured value.');
       return null; // compile-time configuration, not a runtime signal path
     }
-    if (boardPin?.role === 'can-out') {
-      if (!isTarget) throw new Error('CAN Out only accepts data to transmit.');
-      const pin = syntheticPinBlock({ label: 'CAN Out', gpio: CAN_OUT_GPIO }, 'output');
+    // The socket pin, wired from inside, is the board's own `socket`
+    // block: what the circuit puts in is announced on the board's shell
+    // as `socket out: …` and delivered to the node the socket is wired to
+    // outside (`dest`, see socketLinksFor), and what arrives at the
+    // socket from outside (`socket in: …`) is what a wire from the pin
+    // carries into the circuit. From the level around the board the
+    // socket wire IS the link and compiles to nothing.
+    if (boardPin?.role === 'socket') {
+      if (face !== 'internal') return null;
+      const pin = syntheticPinBlock({ label: 'socket', gpio: isTarget ? SOCKET_OUT_GPIO : SOCKET_IN_GPIO }, isTarget ? 'output' : 'input');
+      socketPinPorts.set(pin.id, portId);
       return { blockId: pin.id, portId: pin.ports[0].id };
     }
-    if (boardPin?.role === 'can-in') {
-      if (isTarget) throw new Error('CAN In only provides received data.');
-      const pin = syntheticPinBlock({ label: 'CAN In', gpio: CAN_IN_GPIO }, 'input');
+    // The CAN pin, like a GPIO: driven by something, it sends on the bus;
+    // driving something, it carries what the bus delivers. Older boards'
+    // separate CAN Out / CAN In pins compile the same way.
+    if (boardPin?.role === 'can' || boardPin?.role === 'can-out' || boardPin?.role === 'can-in') {
+      if (boardPin.role === 'can-out' && !isTarget) throw new Error('CAN Out only accepts data to transmit.');
+      if (boardPin.role === 'can-in' && isTarget) throw new Error('CAN In only provides received data.');
+      const pin = syntheticPinBlock({ label: 'CAN', gpio: isTarget ? CAN_OUT_GPIO : CAN_IN_GPIO }, isTarget ? 'output' : 'input');
       return { blockId: pin.id, portId: pin.ports[0].id };
     }
     if (usbPortNames.has(portName)) {
@@ -197,7 +249,9 @@ function buildPinMappedDesign(esp, blocks, connections) {
     });
   }
 
-  const design = serialConsole.buildMinimalDesign([...blocks, ...syntheticPins.values(), ...(usesUsb ? [usbTarget] : [])], mapped);
+  const design = serialConsole.buildMinimalDesign([...blocks, ...syntheticPins.values(), ...(usesUsb ? [usbTarget] : [])], mapped, notes);
+  // The board's socket port for a socket pin block, whichever way it faces.
+  const socketPortFor = () => [...socketPinPorts.values()][0] || null;
   for (const block of design.blocks) {
     if (block.type === 'dout' && block.data?.gpio === CAN_OUT_GPIO) {
       block.type = 'can';
@@ -205,6 +259,10 @@ function buildPinMappedDesign(esp, blocks, connections) {
     } else if (block.type === 'din' && block.data?.gpio === CAN_IN_GPIO) {
       block.type = 'can';
       block.data = { tx: 2, rx: 3, bitrate: canBitrate, format: 'string' };
+    } else if ((block.type === 'dout' && block.data?.gpio === SOCKET_OUT_GPIO) || (block.type === 'din' && block.data?.gpio === SOCKET_IN_GPIO)) {
+      const link = socketLinkOf(socketPortFor());
+      block.type = 'socket';
+      block.data = { dest: link.dest || 'host', name: link.name || '' };
     }
   }
   return design;
@@ -212,15 +270,18 @@ function buildPinMappedDesign(esp, blocks, connections) {
 
 export function buildExternalDevkitDesign(esp, level) {
   if (!esp || !level) return { blocks: [], nextId: 1 };
-  const siblingBlocks = Array.from(level.blocks?.values?.() || []).filter((block) => block.id !== esp.id && kindOf(block) !== 'esp32-devkit');
-  return buildPinMappedDesign(esp, siblingBlocks, Array.from(level.connections?.values?.() || []));
+  const siblingBlocks = Array.from(level.blocks?.values?.() || []).filter((block) => block.id !== esp.id && !BOARD_KINDS.includes(kindOf(block)));
+  return buildPinMappedDesign(esp, siblingBlocks, Array.from(level.connections?.values?.() || []), { face: 'external' });
 }
 
-export function buildInternalDevkitDesign(esp) {
+// `level`, when given, is the level the board sits on: what its socket
+// pins are wired to out there decides how a socket wired inside compiles
+// (see socketLinksFor and mapEndpoint's socket branch).
+export function buildInternalDevkitDesign(esp, level = null, { notes = null } = {}) {
   if (!esp) return { blocks: [], nextId: 1 };
   const children = esp.children ? Array.from(esp.children.blocks.values()) : [];
   const childConnections = esp.children ? Array.from(esp.children.connections.values()) : [];
-  return buildPinMappedDesign(esp, children, childConnections);
+  return buildPinMappedDesign(esp, children, childConnections, { socketLinks: socketLinksFor(esp, level), face: 'internal', notes });
 }
 
 // Inside first: a board's own circuit is what you build by entering it, and
@@ -229,8 +290,10 @@ export function buildInternalDevkitDesign(esp) {
 // when nothing has been built inside — wiring the board to blocks sitting
 // beside it on the parent canvas. Whichever face is used, it's used whole;
 // the two are never merged, since each numbers its own blocks from 1.
-export function buildDevkitDesign(esp, level) {
-  const internal = buildInternalDevkitDesign(esp);
+// `notes` (an array) collects what the drawing has that the design does
+// not (see serialConsole.buildMinimalDesign).
+export function buildDevkitDesign(esp, level, { notes = null } = {}) {
+  const internal = buildInternalDevkitDesign(esp, level, { notes });
   if (internal.blocks.length) return internal;
   return buildExternalDevkitDesign(esp, level);
 }

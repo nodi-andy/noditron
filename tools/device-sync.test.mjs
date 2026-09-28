@@ -104,7 +104,7 @@ test('DI to DO on the board pins comes back as the same design', () => {
   assert.equal(result.connections.length, 1);
 });
 
-test('a Match chain into CAN Out comes back with its routes, Data values and rows', () => {
+test('a Match chain into CAN comes back with its routes, Data values and rows', () => {
   const board = build(({ add, wire, f }) => {
     const match = add(f.match(['1', '0'], 2));
     const on = add(f.data('X100'));
@@ -112,8 +112,8 @@ test('a Match chain into CAN Out comes back with its routes, Data values and row
     wire('DI1', [match, 'in']);
     wire([match, 'out1'], [on, 'in']);
     wire([match, 'out2'], [off, 'in']);
-    wire([on, 'out'], 'CAN Out');
-    wire([off, 'out'], 'CAN Out');
+    wire([on, 'out'], 'CAN');
+    wire([off, 'out'], 'CAN');
   });
   const { result, empty } = roundTrip(board);
   assert.deepEqual(result.created.map((b) => kindOf(b)).sort(), ['croute', 'data', 'data']);

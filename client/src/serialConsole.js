@@ -15,6 +15,22 @@ import { getSession, ensureOpenPlain } from './serialFlash.js';
 
 const consoles = new Map(); // blockId -> { queue: Uint8Array, waiters: [] }
 
+// A block reached through another board's link (see canBridge.js): the
+// resolver says which, as `{ bridgeId, target }` — the bridge's block id
+// and the name the far node answers to. Every module shell has
+// `node <name> <line>`, which runs <line> on that node and prints its
+// answer, so through the bridge a line is `node <target> <line>` and the
+// reply lines are the far board's own. Nothing else here changes: shell()
+// and identify() below ask the resolver first.
+let bridgeResolver = () => null;
+export function setBridgeResolver(fn) {
+  bridgeResolver = fn || (() => null);
+}
+export function bridgeFor(blockId) {
+  if (getSession(blockId)) return null;
+  return bridgeResolver(blockId) || null;
+}
+
 // Makes sure the port is actually open in plain mode (see serialFlash.js's
 // own ensureOpenPlain for what that involves — a fresh open, a no-op if
 // it's already open and plain, or a full close/reopen if a bootloader
@@ -154,8 +170,31 @@ function logCompleteLines(state, chunk) {
 // `can <text>` has already been answered with `ok`, a circuit's [USB]
 // line, a board log. Lines inside a command's reply are that command's
 // and reach its caller through the command itself.
-const lineListeners = new Map(); // blockId -> Set<({ line, unsolicited }) => void>
+// Each listener gets every line that crosses the link, both ways:
+//   { line, unsolicited }          a line the board sent (unsolicited: no
+//                                  command was waiting on it)
+//   { line, outgoing: true }       a line this browser sent (see writeLine)
+// plus `quiet: true` on the traffic of a quiet command — one the app sends
+// on its own behalf (pin polling, the dialog's status refreshes, identify,
+// a design save) rather than the user, so a terminal view can leave it out
+// and still show everything the user or a wire put on the link.
+// What a board says on its own account, whatever else is going on: the
+// socket's traffic, a circuit's [USB] value, CAN/socket/node/WiFi/OTA
+// notices. See dispatchLines.
+const ANNOUNCEMENT_RE = /^(\w+@socket>|socket (in|out): |\[(USB|CAN|SOCKET|NODES|WIFI|OTA)\] )/;
+const lineListeners = new Map(); // blockId -> Set<(event) => void>
 const activeCommands = new Map(); // blockId -> count of commands in flight
+const quietCommands = new Map(); // blockId -> count of quiet commands in flight
+
+function notifyLineListeners(blockId, event) {
+  for (const listener of lineListeners.get(blockId) || []) {
+    try {
+      listener(event);
+    } catch {
+      // A listener's own error is not the link's problem.
+    }
+  }
+}
 
 export function subscribeConsoleLines(blockId, listener) {
   let set = lineListeners.get(blockId);
@@ -180,17 +219,21 @@ function dispatchLines(state, chunk) {
   const parts = text.split('\n');
   const tail = parts.pop();
   state.lineBuf = tail.length > MAX_LOG_BUFFER ? tail.slice(-MAX_LOG_BUFFER) : tail;
-  const unsolicited = !(activeCommands.get(state.blockId) > 0);
+  const inCommand = activeCommands.get(state.blockId) > 0;
+  const inQuiet = inCommand && quietCommands.get(state.blockId) > 0;
   for (const part of parts) {
     const line = part.replace(/\r$/, '');
     if (!line) continue;
-    for (const listener of listeners) {
-      try {
-        listener({ line, unsolicited });
-      } catch {
-        // A listener's own error is not the link's problem.
-      }
-    }
+    // A line the board prints on its own can land in the middle of a
+    // command's reply — the socket's `socket in:`/`socket out:` most of
+    // all, since the dialog polls the board every few seconds. It is
+    // still the board's own announcement: unsolicited, and never quiet,
+    // or the socket traffic would vanish from the box whenever a poll
+    // happened to be in flight.
+    const announcement = ANNOUNCEMENT_RE.test(line);
+    const unsolicited = !inCommand || announcement;
+    const quiet = inQuiet && !announcement;
+    notifyLineListeners(state.blockId, { line, unsolicited, quiet });
   }
 }
 
@@ -296,6 +339,28 @@ export function closeConsole(blockId) {
   state.reader?.cancel().catch(() => {});
 }
 
+// The console of a link opened under one id, continued under another —
+// the Add Block window identifies a board on a temporary id, then places
+// the block and hands the link over (serialFlash.adoptSession). The
+// reader keeps running on the same transport; only the id its lines are
+// filed under changes. Closing and reopening instead would race the old
+// reader's cancel against the new reader's lock on the same stream, and a
+// console that lost that race never reads a byte.
+export function adoptConsole(fromId, toId) {
+  const state = consoles.get(fromId);
+  if (state) {
+    consoles.delete(fromId);
+    state.blockId = toId;
+    consoles.set(toId, state);
+  }
+  const usb = usbValues.get(fromId);
+  if (usb) {
+    usbValues.delete(fromId);
+    usbValues.set(toId, usb);
+  }
+  return state || null;
+}
+
 // A write to a port whose device has gone never settles — and an ESP32-S3
 // on its native USB *does* go: opening the port asserts DTR, which resets
 // the chip, which takes its USB device down and brings it back as a fresh
@@ -329,8 +394,12 @@ async function writeRaw(blockId, bytes) {
   }
 }
 
-async function writeLine(blockId, text) {
+// `via` (optional) names what put the line on the link when it was not
+// typed: 'socket' for a wire's value into the board's socket (see
+// socketLink.js), so a terminal view can say so.
+async function writeLine(blockId, text, { via = null } = {}) {
   await writeRaw(blockId, new TextEncoder().encode(`${text}\n`));
+  notifyLineListeners(blockId, { line: String(text), outgoing: true, unsolicited: false, quiet: quietCommands.get(blockId) > 0, via });
 }
 
 // "Is anything running over there?", asked the way the firmware is most
@@ -349,7 +418,10 @@ async function writeLine(blockId, text) {
 // anything already buffered. Either one answers with the same [INFO] line,
 // and a board that prints it twice costs nothing — identify() returns on
 // the first.
-const PROBE_BYTES = new TextEncoder().encode('?\nping\n');
+// A newline first ends whatever half line the board's buffer holds, so
+// `ping` arrives whole. (`?` used to go first; it is grbl's status report
+// on the CNC and the S3 no longer answers it either.)
+const PROBE_BYTES = new TextEncoder().encode('\nping\n');
 
 async function probe(blockId) {
   await writeRaw(blockId, PROBE_BYTES);
@@ -475,7 +547,21 @@ async function identifyCommand(blockId, { timeoutMs = 3000, pingEveryMs = 500, b
       const tail = m[7];
       const circuit = tail.match(/circuit=(\w+) nCB=(\d+)/);
       const machine = tail.match(/state=(\S+)/);
+      // The second [INFO] line (build 20260925a and later) names the node:
+      // its id, which another board's socket is told to deliver to, and
+      // its own name. A board without it just times out the short wait.
+      let node = null;
+      let nodeName = null;
+      try {
+        const next = await readLine(state, 400);
+        const n = next.match(/^\[INFO] node=([0-9a-f]{8}) type=\w+ name=(\S+)/);
+        if (n) { node = n[1]; nodeName = n[2]; }
+      } catch {
+        /* no second line */
+      }
       return {
+        node,
+        nodeName,
         verified: true,
         kind: m[1] === 'CncMod' ? 'cnc' : 'logic',
         version: m[2],
@@ -624,16 +710,11 @@ function collapsePassThroughs(childBlocks, connections) {
   const fedThrough = (blockId, name) => connections.some((c) => c.targetBlockId === blockId && portNameOf(blockId, c.targetPortId) === name);
   // Block id -> the input whose value it passes on unchanged.
   const passThrough = new Map([...pinlessBools].map((id) => [id, 'in']));
-  // Data.in is a trigger: firmware's own data block emits its stored value
-  // when triggered. Data.write instead makes `out` carry whatever was written
-  // (see DATA_FN in palette.js), whatever is on `in` — the firmware data
-  // block (one input, no write) cannot store it, but forwarding `write`
-  // unchanged is what `out` shows, so DI → write → DO is DI → DO on the
-  // board. Several wires into `write` make the block a merge point: each of
-  // them feeds whatever `out` drives.
-  for (const b of childBlocks) {
-    if (propOf(b, 'noditronKind') === 'data' && fedThrough(b.id, 'write')) passThrough.set(b.id, 'write');
-  }
+  // A Data fed through `write` used to be folded into a junction here (the
+  // firmware's data block had no write input). Since build 20260928a a
+  // data block two or more rows tall takes a belt on a lower row as a
+  // write — stored and sent on — so those wires are laid out instead (see
+  // the written sinks and writer rows below).
   if (!passThrough.size) return connections;
   const feedsOf = (blockId) => connections.filter((c) => c.targetBlockId === blockId && portNameOf(blockId, c.targetPortId) === passThrough.get(blockId));
   // Every real source a wire leaving `conn`'s source traces back to.
@@ -658,7 +739,11 @@ function collapsePassThroughs(childBlocks, connections) {
   return out;
 }
 
-export function buildMinimalDesign(childBlocks, connections = []) {
+// `notes`, when an array is given, collects one line per drawn block the
+// board's design leaves out — a wiring shape the layouts below have no
+// row for. The design itself stays as it is: what the board runs is what
+// this compiles, and the lines are for the person who drew the rest.
+export function buildMinimalDesign(childBlocks, connections = [], notes = null) {
   const blocks = [];
   let nextBlockId = 1;
 
@@ -677,6 +762,10 @@ export function buildMinimalDesign(childBlocks, connections = []) {
   // back to whatever feeds its `in`, and the wire into it is dropped. Left
   // in place, the AND's input had no source the board could run and was
   // never connected at all, so the AND never fired.
+  // The wires as drawn, for the notes at the end: after the collapse a Data
+  // fed through `write` has no wires left, and that is exactly the block
+  // worth a word.
+  const drawn = connections;
   connections = collapsePassThroughs(childBlocks, connections);
 
   // A connection only carries block ids/port ids, not the logical port name
@@ -751,6 +840,9 @@ export function buildMinimalDesign(childBlocks, connections = []) {
   // collapsing this chain would incorrectly bypass that behavior.
   for (const dataChild of dataChildren) {
     if (idByChildId.has(dataChild.id)) continue;
+    // A Data something writes is laid out with its writers (the writer
+    // rows below), trigger included — not as this one-row shape.
+    if (connections.some((c) => c.targetBlockId === dataChild.id && portName(dataChild, c.targetPortId) === 'write')) continue;
     const inputConn = connections.find((c) => c.targetBlockId === dataChild.id && portName(dataChild, c.targetPortId) === 'in');
     const outputConn = connections.find((c) => c.sourceBlockId === dataChild.id && portName(dataChild, c.sourcePortId) === 'out');
     if (!inputConn || !outputConn) continue;
@@ -808,26 +900,52 @@ export function buildMinimalDesign(childBlocks, connections = []) {
       let data = null;
       let targetConn = outConn;
       const next = dataChildren.find((c) => c.id === outConn.targetBlockId);
-      if (next) {
-        if (portName(next, outConn.targetPortId) !== 'in') continue;
+      if (next && portName(next, outConn.targetPortId) === 'in') {
         data = next;
         targetConn = connections.find((c) => c.sourceBlockId === next.id && portName(next, c.sourcePortId) === 'out');
         if (!targetConn) continue;
       }
-      const target = pinChildren.find((c) => c.id === targetConn.targetBlockId);
-      if (!target || propOf(target, 'direction') !== 'output') continue;
+      // The row ends in an Output pin — or in a Data written through its
+      // `write` port (a collector), placed as the chain's sink: a data
+      // block whose lower rows the chain lands on (see writtenSink below).
+      let target = pinChildren.find((c) => c.id === targetConn.targetBlockId);
+      if (target && propOf(target, 'direction') !== 'output') continue;
+      if (!target) {
+        const written = dataChildren.find((c) => c.id === targetConn.targetBlockId);
+        if (!written || portName(written, targetConn.targetPortId) !== 'write') continue;
+        target = written;
+      }
       if (!chainsByTarget.has(target)) chainsByTarget.set(target, []);
       const chains = chainsByTarget.get(target);
       let chain = chains.find((ch) => ch.croute === croute);
       if (!chain) chains.push((chain = { source, croute, rows: [] }));
       // One row per route: a second Data on the same route would need the
-      // same grid cell.
+      // same grid cell. A second wire from the same route (the bench had
+      // Match.1 into Data "unlock"'s in and into its write) is said, not
+      // silently dropped.
       if (!chain.rows.some((r) => r.index === index)) chain.rows.push({ index, data });
+      else notes?.push(`A second wire from ${croute.name || 'Match'}.${portName(croute, outConn.sourcePortId)} into ${(data || target).name || 'a block'} is not on the board: one row per route, and the first wire has it.`);
     }
   }
+  // A written Data sink: its top row is the trigger row and stays clear,
+  // the chain rows land on the rows below it (the write rows), and its
+  // own out goes on to whatever it drives — an Output pin, to the right.
+  const writtenOut = (written) => {
+    const conn = connections.find((c) => c.sourceBlockId === written.id && portName(written, c.sourcePortId) === 'out');
+    const sink = conn && pinChildren.find((c) => c.id === conn.targetBlockId);
+    return sink && propOf(sink, 'direction') === 'output' && !idByChildId.has(sink.id) ? sink : null;
+  };
   for (const [target, chains] of chainsByTarget) {
-    if (idByChildId.has(target.id)) continue;
-    const top = row * 3;
+    if (idByChildId.has(target.id)) {
+      // A Data that already has its row — triggered in a chain above —
+      // and is written from a route as well: the write has no row.
+      if (dataChildren.includes(target)) notes?.push(`${[...new Set(chains.map((c) => c.croute.name || 'Match'))].join(', ')} also writes ${target.name || 'Data'}; that wire is not on the board, the block already has its row (triggered there).`);
+      continue;
+    }
+    const writtenSink = dataChildren.includes(target);
+    // One row lower for a written sink, so its trigger row (the row above
+    // the chain) is a row of its own and never the row before this shape.
+    const top = row * 3 + (writtenSink ? 1 : 0);
     let y = top;
     for (const { source, croute, rows } of chains) {
       let routes = [];
@@ -861,11 +979,89 @@ export function buildMinimalDesign(childBlocks, connections = []) {
       }
       y += height + 1;
     }
-    const sinkId = placeBool(target, 9, top);
-    const sink = blocks.find((b) => b.id === sinkId);
-    sink.w = 2;
-    sink.h = y - 1 - top;
+    if (writtenSink) {
+      const dataId = nextBlockId++;
+      idByChildId.set(target.id, dataId);
+      blocks.push({ id: dataId, type: 'data', gx: 9, gy: top - 1, w: 2, h: y - top, data: { value: String(propOf(target, 'value') ?? '') } });
+      const onward = writtenOut(target);
+      if (onward) {
+        blocks.push({ id: nextBlockId++, type: 'belt', gx: 11, gy: top - 1, data: { dir: 'E' } });
+        placeBool(onward, 12, top - 1);
+      }
+    } else {
+      const sinkId = placeBool(target, 9, top);
+      const sink = blocks.find((b) => b.id === sinkId);
+      sink.w = 2;
+      sink.h = y - 1 - top;
+    }
     row = Math.ceil(y / 3);
+  }
+
+  // Writer rows: a Data written by a source the board can run (an Input
+  // pin, a Timer, or a Data such a source triggers), its out driving an
+  // Output pin. The written Data is two or more rows tall — the top row
+  // for its trigger (a source wired into `in`, when there is one), one
+  // row per writer below it:
+  //   trigger @ (0,b)      → belts (2..5,b)                 → data @ (6,b), top row
+  //   writer k @ (0,r_k)   → belt (2,r_k) [→ data @ (3,r_k) → belt (5,r_k)] → row r_k
+  //   data out (8,b) → belt → sink @ (9,b)
+  // Sources are two rows tall and fire every belt along their edges, so
+  // the writers sit two rows apart (r_k = b + 2 + 2k with a trigger, b +
+  // 1 + 2k without) and the written Data spans down to the last writer's
+  // row — every row below its top is a write row, so that is fine.
+  for (const written of dataChildren) {
+    if (idByChildId.has(written.id)) continue;
+    const writes = connections.filter((c) => c.targetBlockId === written.id && portName(written, c.targetPortId) === 'write');
+    if (!writes.length) continue;
+    const sourceOf = (blockId) => childBlocks.find((c) => c.id === blockId) || null;
+    const canRun = (c) => Boolean(c) && !idByChildId.has(c.id) && ((pinChildren.includes(c) && propOf(c, 'direction') !== 'output') || timerChildren.includes(c));
+    // Each writer as { source, via }: the source that fires the row, and
+    // the Data it fires through, if any.
+    const writers = [];
+    for (const w of writes) {
+      const src = sourceOf(w.sourceBlockId);
+      if (canRun(src)) { if (!writers.some((x) => x.source === src)) writers.push({ source: src, via: null }); continue; }
+      if (src && dataChildren.includes(src) && !idByChildId.has(src.id)) {
+        const trig = connections.find((c) => c.targetBlockId === src.id && portName(src, c.targetPortId) === 'in');
+        const ts = trig && sourceOf(trig.sourceBlockId);
+        if (canRun(ts) && !writers.some((x) => x.source === ts)) writers.push({ source: ts, via: src });
+      }
+    }
+    if (!writers.length) continue;
+    const trigConn = connections.find((c) => c.targetBlockId === written.id && portName(written, c.targetPortId) === 'in');
+    const trigger = trigConn && sourceOf(trigConn.sourceBlockId);
+    const base = row * 3;
+    const belt = (gx, gy, dir = 'E') => blocks.push({ id: nextBlockId++, type: 'belt', gx, gy, data: { dir } });
+    const hasTrigger = canRun(trigger) && !writers.some((x) => x.source === trigger);
+    if (hasTrigger) {
+      placeSource(trigger, 0, base);
+      for (let gx = 2; gx <= 5; gx += 1) belt(gx, base);
+    }
+    const firstWriterRow = base + (hasTrigger ? 2 : 1);
+    writers.forEach(({ source, via }, k) => {
+      const gy = firstWriterRow + 2 * k;
+      placeSource(source, 0, gy);
+      belt(2, gy);
+      if (via) {
+        const viaId = nextBlockId++;
+        idByChildId.set(via.id, viaId);
+        blocks.push({ id: viaId, type: 'data', gx: 3, gy, w: 2, h: 1, data: { value: String(propOf(via, 'value') ?? '') } });
+        belt(5, gy);
+      } else {
+        for (let gx = 3; gx <= 5; gx += 1) belt(gx, gy);
+      }
+    });
+    const lastWriterRow = firstWriterRow + 2 * (writers.length - 1);
+    const dataId = nextBlockId++;
+    idByChildId.set(written.id, dataId);
+    blocks.push({ id: dataId, type: 'data', gx: 6, gy: base, w: 2, h: lastWriterRow - base + 1, data: { value: String(propOf(written, 'value') ?? '') } });
+    const onward = writtenOut(written);
+    if (onward) {
+      belt(8, base);
+      placeBool(onward, 9, base);
+    }
+    // The last writer's box reaches one row below its belt row.
+    row += Math.max(1, Math.ceil((lastWriterRow + 2 - base) / 3));
   }
 
   // AND: two inputs need two separate source blocks landing on two
@@ -926,6 +1122,13 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     if (targetDir !== 'output') continue; // only driving a real Output pin has firmware meaning
     if (idByChildId.has(target.id)) continue; // see fan-out/fan-in note above
 
+    if (dataSource && connections.some((c) => c.targetBlockId === dataSource.id && portName(dataSource, c.targetPortId) === 'write')) {
+      // A Data something writes belongs to the writer rows above; when
+      // those had no source the board can run, the notes say so, rather
+      // than this shape sending its stored value at boot as if nothing
+      // ever wrote it.
+      continue;
+    }
     if (dataSource) {
       // A constant connected directly to a hardware sink is sent once when
       // the circuit loads. The boot block wakes the firmware data block;
@@ -1021,6 +1224,38 @@ export function buildMinimalDesign(childBlocks, connections = []) {
     col += 1;
   }
 
+  if (notes) {
+    // What was drawn but is not in the design above, with the one shape
+    // that has cost real time named. A Data with anything wired into its
+    // `write` port is a plain junction to the board (collapsePassThroughs:
+    // what is written passes to `out`), so a stored value it holds is
+    // never sent — Match → Data "unlock" with the route also on `write`
+    // sent the route's own value to CAN instead of "unlock". A collector
+    // holding nothing loses nothing and gets no note.
+    const kindOfChild = (c) => (c.props || []).find((p) => p.name === 'noditronKind')?.value;
+    const valueOf = (c) => (c.props || []).find((p) => p.name === 'value')?.value;
+    const label = (c) => (kindOfChild(c) === 'data' ? `Data ${JSON.stringify(String(valueOf(c) ?? ''))}` : `${c.name || kindOfChild(c)}`);
+    const writtenTo = new Set(drawn.filter((c) => {
+      const target = dataChildren.find((d) => d.id === c.targetBlockId);
+      return target && portName(target, c.targetPortId) === 'write';
+    }).map((c) => c.targetBlockId));
+    for (const child of childBlocks) {
+      const kind = kindOfChild(child);
+      if (!['data', 'timer', 'and', 'croute'].includes(kind) || idByChildId.has(child.id)) continue;
+      const wired = drawn.some((c) => c.sourceBlockId === child.id || c.targetBlockId === child.id);
+      if (!wired) continue; // an unwired block drives nothing; nothing to say
+      if (kind === 'data' && writtenTo.has(child.id)) {
+        // Who writes it, by name and port, so the wire in question is named.
+        const writers = drawn
+          .filter((c) => c.targetBlockId === child.id && portName(child, c.targetPortId) === 'write')
+          .map((c) => { const src = childBlocks.find((b) => b.id === c.sourceBlockId); return src ? `${src.name || kindOfChild(src)}.${portName(src, c.sourcePortId) || 'out'}` : 'a wire'; });
+        notes.push(`${label(child)} is written by ${writers.join(' and ')} in a shape the board has no layout for and was left out (a Data is written at the end of a Match chain, or by an Input pin, a Timer, or a Data one of those triggers).`);
+      } else {
+        notes.push(`${label(child)} (${kind}) is wired in a shape the board has no layout for and was left out.`);
+      }
+    }
+  }
+
   return { blocks, nextId: nextBlockId };
 }
 
@@ -1102,14 +1337,18 @@ async function sendDesignCommand(blockId, design, { timeoutMs = 5000 } = {}) {
 // Every command shares one byte stream. In particular, polling must never
 // consume the READY/Saved reply belonging to a circuit upload.
 const commandQueues = new Map();
-function queueCommand(blockId, run) {
+// `quiet`: the command is the app's own housekeeping, not something the
+// user or a wire said — see lineListeners.
+function queueCommand(blockId, run, { quiet = false } = {}) {
   const previous = commandQueues.get(blockId) || Promise.resolve();
   const counted = async () => {
     activeCommands.set(blockId, (activeCommands.get(blockId) || 0) + 1);
+    if (quiet) quietCommands.set(blockId, (quietCommands.get(blockId) || 0) + 1);
     try {
       return await run();
     } finally {
       activeCommands.set(blockId, Math.max(0, (activeCommands.get(blockId) || 1) - 1));
+      if (quiet) quietCommands.set(blockId, Math.max(0, (quietCommands.get(blockId) || 1) - 1));
     }
   };
   const result = previous.catch(() => {}).then(counted);
@@ -1125,11 +1364,12 @@ function queueCommand(blockId, run) {
 // meantime (a pin change, a CAN frame) come back too, as they would on a
 // terminal. A firmware without the terminator answers by timing out with
 // whatever it printed.
-async function shellCommand(blockId, line, { timeoutMs = 4000 } = {}) {
+async function shellCommand(blockId, line, { timeoutMs = 4000, quiet = false, via = null } = {}) {
+  void quiet; // read by shell() for the queue; the reply is the same either way
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
-  await writeLine(blockId, line);
+  await writeLine(blockId, line, { via });
   const lines = [];
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -1146,26 +1386,80 @@ async function shellCommand(blockId, line, { timeoutMs = 4000 } = {}) {
   return { ok: false, error: 'no reply', lines };
 }
 
-export function shell(blockId, ...args) {
-  return queueCommand(blockId, () => shellCommand(blockId, ...args));
+// A shell line is the user's (or a wire's) unless the caller says
+// `quiet` — the dialog's own status polls do. Everything else this file
+// sends is housekeeping and always quiet.
+// The far board's shell through its bridge (see bridgeFor): the line goes
+// as `node <target> <line>`, quietly on the bridge, and what comes back is
+// the far board's reply — shown to whoever listens to the far block, as
+// its own console would show it, terminator included.
+async function bridgedShellCommand(bridge, blockId, line, { timeoutMs = 4500, quiet = false, via = null } = {}) {
+  notifyLineListeners(blockId, { line: String(line), outgoing: true, unsolicited: false, quiet, via });
+  const reply = await shell(bridge.bridgeId, `node ${bridge.target} ${line}`, { timeoutMs, quiet: true });
+  for (const text of reply.lines || []) notifyLineListeners(blockId, { line: text, unsolicited: false, quiet });
+  const tail = reply.ok ? 'ok' : reply.error ? `error: ${reply.error}` : null;
+  if (tail) notifyLineListeners(blockId, { line: tail, unsolicited: false, quiet });
+  return reply;
+}
+
+// The identity in a ping reply's lines (see identifyCommand for the
+// same read on a link of the block's own).
+function infoFromLines(lines) {
+  for (let i = 0; i < lines.length; i += 1) {
+    const m = String(lines[i]).match(INFO_RE);
+    if (!m) continue;
+    const tail = m[7];
+    const circuit = tail.match(/circuit=(\w+) nCB=(\d+)/);
+    const machine = tail.match(/state=(\S+)/);
+    const n = String(lines[i + 1] || '').match(/^\[INFO] node=([0-9a-f]{8}) type=\w+ name=(\S+)/);
+    return {
+      node: n ? n[1] : null,
+      nodeName: n ? n[2] : null,
+      verified: true,
+      kind: m[1] === 'CncMod' ? 'cnc' : 'logic',
+      version: m[2],
+      build: m[3],
+      ap: m[4],
+      ip: m[5],
+      heap: Number(m[6]),
+      circuitActive: circuit ? circuit[1] === 'active' : false,
+      blockCount: circuit ? Number(circuit[2]) : 0,
+      machineState: machine ? machine[1] : null,
+    };
+  }
+  return null;
+}
+
+async function bridgedIdentify(bridge, blockId) {
+  const reply = await bridgedShellCommand(bridge, blockId, 'ping', { timeoutMs: 4500, quiet: true });
+  const info = infoFromLines(reply.lines || []);
+  return info ? { ...info, via: bridge.bridgeId } : { verified: false, booting: false, via: bridge.bridgeId };
+}
+
+export function shell(blockId, line, opts = {}) {
+  const bridge = bridgeFor(blockId);
+  if (bridge) return queueCommand(blockId, () => bridgedShellCommand(bridge, blockId, line, opts), { quiet: Boolean(opts.quiet) });
+  return queueCommand(blockId, () => shellCommand(blockId, line, opts), { quiet: Boolean(opts.quiet) });
 }
 
 export function identify(blockId, ...args) {
-  return queueCommand(blockId, () => identifyCommand(blockId, ...args));
+  const bridge = bridgeFor(blockId);
+  if (bridge) return queueCommand(blockId, () => bridgedIdentify(bridge, blockId), { quiet: true });
+  return queueCommand(blockId, () => identifyCommand(blockId, ...args), { quiet: true });
 }
 
 export function readDesign(blockId, ...args) {
-  return queueCommand(blockId, () => readDesignCommand(blockId, ...args));
+  return queueCommand(blockId, () => readDesignCommand(blockId, ...args), { quiet: true });
 }
 
 export function setPin(blockId, ...args) {
-  return queueCommand(blockId, () => setPinCommand(blockId, ...args));
+  return queueCommand(blockId, () => setPinCommand(blockId, ...args), { quiet: true });
 }
 
 export function readPins(blockId, ...args) {
-  return queueCommand(blockId, () => readPinsCommand(blockId, ...args));
+  return queueCommand(blockId, () => readPinsCommand(blockId, ...args), { quiet: true });
 }
 
 export function sendDesign(blockId, ...args) {
-  return queueCommand(blockId, () => sendDesignCommand(blockId, ...args));
+  return queueCommand(blockId, () => sendDesignCommand(blockId, ...args), { quiet: true });
 }

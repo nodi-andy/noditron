@@ -1,0 +1,12 @@
+{
+  "name": "noditron",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tools/*.test.mjs",
+    "board-site": "node tools/build-board-site.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.2"
+  }
+}

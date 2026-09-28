@@ -6,8 +6,9 @@
 // A CNC module is conucon's esp32_cnc firmware: grbl as the core, with the
 // same module layer around it the Logic Module has (identity, shell, node
 // table, radios — see its Grbl_Esp32/src/Module.cpp). On the canvas it is
-// one block with a `gcode` input: whatever arrives there is sent to the
-// machine as `g <line>` through the board's shell (see main.js). The
+// one block with a `socket` port — its shell as a wire (see
+// client/src/socketLink.js): in by default, so whatever arrives is written
+// to the shell line by line; flipped to out it carries what grbl says. The
 // dialog is the same Connect / Connectivity / Shell the esp32-S3 has,
 // with the machine's own controls in place of a circuit section; the
 // Connectivity and Shell code is taken from the S3 manifest so the two
@@ -30,7 +31,15 @@ const secStart = s3Dialog.indexOf('  // ── Connectivity: who is around');
 // ...up to the S3's own circuit helpers that follow them.
 const secEnd = s3Dialog.indexOf('  function updateProgramSection() {');
 if (secStart < 0 || secEnd < 0) throw new Error('the S3 dialog no longer carries the Connectivity/Shell sections where this expects them');
-const SECTIONS = s3Dialog.slice(secStart, secEnd);
+const SECTIONS = s3Dialog.slice(secStart, secEnd)
+  // One radio at a time on this board (grbl's WiFi: station or access
+  // point, never both), so the two switches are one choice: radio buttons
+  // in place of the S3's independent checkboxes. The handlers are the
+  // S3's own — a radio only ever fires `change` when it becomes checked,
+  // which is exactly the `ap on` / `wifi on` branch of each — and the
+  // status refresh sets `checked` on whichever `wifi status` reports on.
+  .replace("box.type = 'checkbox';", "box.type = 'radio';\n    box.name = 'cnc-radio';");
+if (!SECTIONS.includes("box.name = 'cnc-radio'")) throw new Error('the S3 connectivity section no longer has the checkbox line this adapts');
 
 const STATUS_HTML = s3Html
   .replace("text = dirty ? 'Running \\u00b7 circuit not saved' : 'Logic Module running';", "text = 'grbl running';")
@@ -54,7 +63,9 @@ ctx.fillText('grbl', g.x + g.width / 2, g.y + g.height / 2 + 14);
 ctx.fillStyle = '#1f2937';
 ctx.font = '13px -apple-system, Segoe UI, Roboto, sans-serif';
 ctx.textAlign = 'left';
-ctx.fillText('gcode', g.x + 26, g.y + 30);
+ctx.fillText('socket', g.x + 26, g.y + 30);
+ctx.textAlign = 'right';
+ctx.fillText('CAN', g.x + g.width - 26, g.y + 30);
 ctx.restore();
 `.trim();
 
@@ -148,7 +159,7 @@ container.appendChild(heading);
     machineOpen.style.display = '';
     machineOpen.href = machineUrl;
     machineFrame.src = machineUrl;
-    machineHint.textContent = 'The module\\'s own page at ' + machineUrl + ' -- reachable when this computer is on that network (its access point, or the network it joined). Gcode also goes through the shell below as g <line>, and from the block\\'s gcode input.';
+    machineHint.textContent = 'The module\\'s own page at ' + machineUrl + ' -- reachable when this computer is on that network (its access point, or the network it joined). Gcode goes through the shell below as g <line>; the block\\'s socket port writes whatever reaches it to this same shell.';
   }
   machineReload.addEventListener('click', async () => {
     try {
@@ -191,6 +202,10 @@ ${SECTIONS}
       if (info.verified && info.kind === 'cnc') {
         log('ping: grbl v' + info.version + ' build ' + info.build + ', state ' + (info.machineState || '?') + '.');
         helpers.setProp('connectionState', 'connected:running');
+        // Who this node is, for another board's socket to address (see
+        // devkitCircuit's socketLinksFor).
+        if (info.node) helpers.setProp('nodeId', info.node);
+        if (info.nodeName) helpers.setProp('nodeName', info.nodeName);
         showRunning(info);
         return;
       }
@@ -200,7 +215,9 @@ ${SECTIONS}
         helpers.setProp('connectionState', 'connected:unknown');
         return;
       }
-      statusEl.textContent = 'Connected, but nothing answered as a CNC module. Its firmware may predate the module shell (build 20260925a).';
+      statusEl.textContent = helpers.serial.linkKind() === 'can'
+        ? 'Reached over CAN through ' + ((helpers.serial.getSession() || {}).target || 'another board') + ', but it did not answer. Its firmware needs the node protocol (CNC build 20260927b or later): connect it over USB once to install.'
+        : 'Connected, but nothing answered as a CNC module. Its firmware may predate the module shell (build 20260925a).';
       helpers.setProp('connectionState', 'connected:unknown');
     } catch (err) {
       statusEl.textContent = 'Connected, but could not identify the board: ' + err.message;
@@ -275,10 +292,15 @@ const block = {
   geometry: { x: 0, y: 0, width: 220, height: 120 },
   style: { color: '#7c3aed' },
   logicalPorts: [
-    { id: 'io_esp32cnc_gcode', name: 'gcode', direction: 'in', description: 'gcode lines for grbl, sent as g <line> through the module shell' },
+    { id: 'io_esp32cnc_socket', name: 'socket', direction: 'in', description: 'the module shell: in writes every line that arrives to it (g <line> for gcode), out carries every line grbl prints' },
+    // The CAN bus the module sits on: the Add Block window wires it to a
+    // Logic Module's CAN pin when either board hears the other (`nodes`,
+    // via can) — the physical bus, drawn. Direction none, like the S3's.
+    { id: 'io_esp32cnc_can', name: 'CAN', direction: null, description: 'the CAN bus (TX GPIO22 / RX GPIO23): wired to the other boards on the same bus' },
   ],
   ports: [
-    { id: 'prt_esp32cnc_gcode', logicalId: 'io_esp32cnc_gcode', side: 'left', offset: 30, manualOffset: true },
+    { id: 'prt_esp32cnc_socket', logicalId: 'io_esp32cnc_socket', side: 'left', offset: 30, manualOffset: true },
+    { id: 'prt_esp32cnc_can', logicalId: 'io_esp32cnc_can', side: 'right', offset: 30, manualOffset: true },
   ],
   props: [
     { id: 'prp_esp32cnc_kind', name: 'noditronKind', kind: 'value', value: 'cnc-module' },
@@ -288,6 +310,10 @@ const block = {
     { id: 'prp_esp32cnc_dialog', name: 'dialog', kind: 'value', value: DIALOG },
     { id: 'prp_esp32cnc_render', name: 'render', kind: 'value', value: RENDER },
     { id: 'prp_esp32cnc_children', name: 'allowedChildKinds', kind: 'value', value: '[]' },
+    // Who this node is, from identify / `nodes` (see addBlockDialog.js and
+    // devkitCircuit's socketLinksFor): declared so setProp has them.
+    { id: 'prp_esp32cnc_node', name: 'nodeId', kind: 'value', value: '' },
+    { id: 'prp_esp32cnc_nodename', name: 'nodeName', kind: 'value', value: '' },
   ],
   hasChildren: false,
   requirementIds: [],
@@ -297,8 +323,8 @@ const manifest = {
   noditronModule: 1,
   name: 'esp32-cnc',
   displayName: 'cnc',
-  version: '0.1.0',
-  description: "conucon's CNC module (grbl core): a gcode input sent to the machine through the board's shell, over USB or WiFi; Connectivity and Shell like the esp32-S3.",
+  version: '0.4.0',
+  description: "conucon's CNC module (grbl core): a socket port that is the board's shell as a wire, over USB or WiFi; Connectivity and Shell like the esp32-S3.",
   swatchColor: '#7c3aed',
   block: { format: 'nodigraph/clipboard-v1', blocks: [block], connections: [] },
 };

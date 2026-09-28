@@ -7,10 +7,10 @@ const manifest = JSON.parse(read('../modules/esp32-cnc/noditron.module.json'));
 const block = manifest.block.blocks[0];
 const prop = (name) => block.props.find((p) => p.name === name)?.value;
 
-test('the CNC module is a leaf with one gcode input and the shared connection dialog', () => {
+test('the CNC module is a leaf with a socket port, a CAN pin and the shared connection dialog', () => {
   assert.equal(manifest.name, 'esp32-cnc');
   assert.equal(prop('noditronKind'), 'cnc-module');
-  assert.deepEqual(block.logicalPorts.map((p) => [p.name, p.direction]), [['gcode', 'in']]);
+  assert.deepEqual(block.logicalPorts.map((p) => [p.name, p.direction]), [['socket', 'in'], ['CAN', null]]);
   assert.equal(block.hasChildren, false);
   const dialog = prop('dialog');
   for (const piece of ['Connect (COM)', 'Connect (WiFi)', 'MACHINE', 'CONNECTIVITY', 'SHELL', "createElement('iframe')", 'showMachinePage(info.ip)', "info.kind === 'cnc'"]) {
@@ -37,7 +37,7 @@ test('a CNC module answers ping with its own info line and identify reports kind
     get readable() { return readable; },
     writable: new WritableStream({ write(chunk) {
       if (new TextDecoder().decode(chunk).includes('ping')) {
-        setTimeout(() => controller.enqueue(encoder.encode('[INFO] CncMod v1.4a build 20260925a | AP=NDTCOM | IP=192.168.0.1 | heap=100000 | state=Alarm\n')), 5);
+        setTimeout(() => controller.enqueue(encoder.encode('[INFO] CncMod v1.4a build 20260925a | AP=CNC | IP=192.168.0.1 | heap=100000 | state=Alarm\n')), 5);
       }
     } }),
   };

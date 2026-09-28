@@ -195,6 +195,23 @@ test('a shell command collects its reply up to ok, or reports the error line', a
   api.closeConsole('board');
 });
 
+test('a socket announcement inside a quiet poll is still unsolicited and never quiet', async () => {
+  const { device } = shellDevice({ nodes: 'socket in: helloWorld\ncnc 0dd04644 CNC v1.4 self\nok\n' });
+  const api = consoleFor({ transport: { device } });
+  api.setLogIncoming(false);
+  const seen = [];
+  const stop = api.subscribeConsoleLines('board', (entry) => seen.push(entry));
+  await api.shell('board', 'nodes', { timeoutMs: 500, quiet: true });
+  const socket = seen.find((e) => e.line === 'socket in: helloWorld');
+  assert.ok(socket, 'the announcement was delivered');
+  assert.equal(socket.unsolicited, true);
+  assert.equal(socket.quiet, false);
+  const reply = seen.find((e) => e.line.startsWith('cnc 0dd04644'));
+  assert.equal(reply.quiet, true, 'the poll reply itself stays quiet');
+  stop();
+  api.closeConsole('board');
+});
+
 test('lines the board sends on its own are marked unsolicited; a command reply is not', async () => {
   const { device, push } = shellDevice({ 'can ?': '[CAN] tx ?\nok\n' });
   const api = consoleFor({ transport: { device } });
@@ -208,8 +225,15 @@ test('lines the board sends on its own are marked unsolicited; a command reply i
   api.openConsole('board');
   push('[CAN] rx <Idle|MPos:0.000,0.000,0.000>\n');
   await new Promise((r) => setTimeout(r, 30));
-  assert.deepEqual(seen.filter((e) => !e.unsolicited).map((e) => e.line), ['[CAN] tx ?', 'ok']);
-  assert.deepEqual(seen.filter((e) => e.unsolicited).map((e) => e.line), ['[CAN] rx <Idle|MPos:0.000,0.000,0.000>']);
+  // The line the browser wrote comes through too, marked outgoing, ahead
+  // of the board's reply to it.
+  assert.deepEqual(seen.filter((e) => e.outgoing).map((e) => e.line), ['can ?']);
+  // `[CAN] tx ?` is printed inside the command's reply, but it is the
+  // board's own notice about the bus and counts as an announcement.
+  assert.deepEqual(seen.filter((e) => !e.unsolicited && !e.outgoing).map((e) => e.line), ['ok']);
+  assert.deepEqual(seen.filter((e) => e.unsolicited).map((e) => e.line), ['[CAN] tx ?', '[CAN] rx <Idle|MPos:0.000,0.000,0.000>']);
+  // None of it is the app's own housekeeping.
+  assert.ok(seen.every((e) => !e.quiet));
   stop();
   api.closeConsole('board');
 });

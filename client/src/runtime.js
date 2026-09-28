@@ -552,6 +552,12 @@ const levelOutputValueCache = new Map(); // containerId -> outputValue Map
 function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
   if (!container.children) {
     beforeLevel?.(container, []);
+    // A leaf whose port carries a value the host lays over it (a CNC
+    // module's socket: its shell's latest line — see main.js) still has
+    // to be readable through getBoundaryOutput, the fallback every wire
+    // from a block with no fn of its own resolves through (see inputsFor).
+    const overrides = boundaryOutputOverrides.get(container.id);
+    if (overrides) boundaryOutputCache.set(container.id, new Map([...overrides].filter(([, value]) => value !== undefined)));
     return;
   }
   const blocks = [...container.children.blocks.values()];

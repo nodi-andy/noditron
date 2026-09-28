@@ -1,0 +1,75 @@
+/* The embedded build — the page a Logic Module serves from its own flash
+   (see tools/build-board-site.mjs). Loaded after nodigraph's and noditron's
+   stylesheets: a plain flow layout in place of floating HUD chips and the
+   floating control bar, the system font in place of web fonts, and the
+   parts that only make sense hosted elsewhere hidden. Nothing here changes
+   how the editor works, only where things sit. */
+
+body,
+button,
+input,
+select,
+textarea {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+}
+
+/* Top bar: one static row. */
+.topbar-hud {
+  position: static;
+  order: 0;
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  pointer-events: auto;
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.topbar-hud .hud-chip {
+  box-shadow: none;
+  border: none;
+  background: none;
+}
+
+/* Bottom bar: one static row, full width. */
+.control-bar {
+  position: static;
+  order: 2;
+  flex: 0 0 auto;
+  transform: none;
+  max-width: none;
+  justify-content: center;
+  border-radius: 0;
+  box-shadow: none;
+  border-top: 1px solid var(--border);
+}
+
+/* The canvas takes what is left between the two bars. */
+#scene-canvas {
+  position: relative;
+  inset: auto;
+  order: 1;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
+}
+
+/* Hosted-elsewhere features: search across the diagram, other people in a
+   live session, the document sync and file-handle rows. */
+#search-box,
+#online-users,
+#doc-sync,
+#file-source {
+  display: none !important;
+}
+
+/* The Add Block window's tiles, a little denser. */
+.noditron-add-tile {
+  min-height: 44px;
+  padding: 7px 9px;
+}

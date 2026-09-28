@@ -19,9 +19,8 @@
 // can use either, or both at once.
 import { generateId } from '/nodigraph/src/model/Block.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
-import { pasteSelection, isClipboardPayload, serializeSelection } from '/nodigraph/src/model/clipboard.js';
-import { getStoredToken, setStoredToken } from '/nodigraph/src/model/githubSync.js';
-import { getAllowedChildKinds, prepareAdd } from './containerRestrictions.js';
+import { pasteSelection, isClipboardPayload } from '/nodigraph/src/model/clipboard.js';
+import { getStoredToken } from '/nodigraph/src/model/githubSync.js';
 import { rehydrateKindLogic } from './palette.js';
 
 const GITHUB_API = 'https://api.github.com';
@@ -223,14 +222,6 @@ function recordInstalledModule(nodigraph, source) {
   writeInstalledModules(nodigraph, list);
 }
 
-function removeInstalledModule(nodigraph, source) {
-  const key = `${source.owner}/${source.repo}/${source.path}`;
-  writeInstalledModules(
-    nodigraph,
-    readInstalledModules(nodigraph).filter((m) => `${m.owner}/${m.repo}/${m.path}` !== key),
-  );
-}
-
 function registerLibraryModule(nodigraph, manifest, source) {
   recordInstalledModule(nodigraph, {
     ...source,
@@ -315,535 +306,72 @@ export async function installFromRepo(nodigraph, { owner, repo, ref, path = DEFA
   return { manifest, source };
 }
 
-// --- UI ---
-
-const HOST_ID = 'noditron-library-host';
-
-function ensureHost() {
-  let host = document.getElementById(HOST_ID);
-  if (!host) {
-    host = document.createElement('div');
-    host.id = HOST_ID;
-    host.hidden = true;
-    document.body.appendChild(host);
+// The module for a board that just identified itself (see
+// moduleDiscovery.moduleNameFor), by name, from wherever it is: a module
+// this project already installed, else one this server bundles (see
+// server/src/app.js's /api/modules), else a GitHub repo tagged
+// noditron-module that carries one of that name — installed on the way,
+// so it is a plain tile in the Add Block window from then on.
+export async function resolveModuleByName(nodigraph, name) {
+  const installed = getInstalledModules(nodigraph).find((m) => m.name === name);
+  if (installed) {
+    return { manifest: await fetchManifest(installed.owner, installed.repo, installed.ref, installed.path), source: installed };
   }
-  return host;
-}
-
-function field(labelText, inputAttrs = {}) {
-  const wrap = document.createElement('label');
-  wrap.style.cssText = 'display:block;margin-bottom:10px;';
-  const label = document.createElement('div');
-  label.textContent = labelText;
-  label.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin-bottom:4px;';
-  const input = document.createElement('input');
-  input.type = 'text';
-  Object.assign(input, inputAttrs);
-  input.style.cssText = 'width:100%;padding:6px 8px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:13px;box-sizing:border-box;';
-  wrap.append(label, input);
-  return { wrap, input };
-}
-
-function button(text, { primary = false } = {}) {
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.textContent = text;
-  btn.style.cssText = primary
-    ? 'padding:6px 12px;border:1px solid var(--success,#3ecf5d);border-radius:6px;background:var(--success,#3ecf5d);color:#06210f;font-size:12px;font-weight:600;cursor:pointer;'
-    : 'padding:6px 12px;border:1px solid var(--border);border-radius:6px;background:none;color:var(--text-primary);font-size:12px;cursor:pointer;';
-  return btn;
-}
-
-function heading(text) {
-  const h = document.createElement('h3');
-  h.textContent = text;
-  h.style.cssText = 'margin:0 0 12px;color:var(--success,#3ecf5d);font-size:14px;letter-spacing:.03em;';
-  return h;
-}
-
-function sectionLabel(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  div.style.cssText = 'font-size:11px;font-weight:700;letter-spacing:.05em;color:var(--text-muted);margin:16px 0 8px;';
-  return div;
-}
-
-function statusLine(text, isError = false) {
-  const p = document.createElement('p');
-  p.textContent = text;
-  p.style.cssText = `margin:8px 0 0;font-size:12px;color:${isError ? '#e5484d' : 'var(--text-muted)'};`;
-  return p;
-}
-
-function slugify(name) {
-  return String(name || 'module').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'module';
-}
-
-// Triggers a plain browser file save — no server, no clipboard permission
-// needed, works the same way nodigraph's own "download" export options do.
-function downloadJson(filename, data) {
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-// The manual-import/token subdialog — everything a casual "browse and
-// install" visit to the main dialog never needs to see. Its own host, not
-// the main dialog's: opened on top of it rather than replacing it, so
-// closing this one lands back on the list rather than nowhere.
-const IMPORT_HOST_ID = 'noditron-library-import-host';
-
-function ensureImportHost() {
-  let host = document.getElementById(IMPORT_HOST_ID);
-  if (!host) {
-    host = document.createElement('div');
-    host.id = IMPORT_HOST_ID;
-    host.hidden = true;
-    document.body.appendChild(host);
+  const bundledPath = `${MODULES_DIR}/${name}/${DEFAULT_MANIFEST_PATH}`;
+  const bundled = await fetchBundledManifest(bundledPath).catch(() => null);
+  if (bundled) {
+    const source = {
+      owner: LOCAL_OWNER,
+      repo: LOCAL_REPO,
+      ref: LOCAL_REF,
+      path: bundledPath,
+      name: bundled.name,
+      displayName: bundled.displayName || bundled.name,
+      version: bundled.version || null,
+      swatchColor: bundled.swatchColor || '#8b93a3',
+    };
+    registerLibraryModule(nodigraph, bundled, source);
+    return { manifest: bundled, source };
   }
-  return host;
+  const repos = await searchModules(name).catch(() => []);
+  for (const repo of repos) {
+    const found = await discoverModules(repo.owner, repo.repo, repo.defaultBranch).catch(() => []);
+    const hit = found.find((f) => f.manifest.name === name);
+    if (!hit) continue;
+    const ref = await resolveDefaultRef(repo.owner, repo.repo).catch(() => repo.defaultBranch);
+    const source = {
+      owner: hit.owner,
+      repo: hit.repo,
+      ref,
+      path: hit.path,
+      name: hit.manifest.name,
+      displayName: hit.manifest.displayName || hit.manifest.name,
+      version: hit.manifest.version || null,
+      swatchColor: hit.manifest.swatchColor || '#8b93a3',
+    };
+    registerLibraryModule(nodigraph, hit.manifest, source);
+    return { manifest: hit.manifest, source };
+  }
+  throw new Error(`no module named ${name}: not installed, not bundled with this noditron, and no noditron-module repo on GitHub carries one`);
 }
 
-export function installLibraryUI(nodigraph, onInstalled) {
-  const host = ensureHost();
-  const importHost = ensureImportHost();
-
-  function close() {
-    host.hidden = true;
-    host.innerHTML = '';
-  }
-
-  function closeImport() {
-    importHost.hidden = true;
-    importHost.innerHTML = '';
-  }
-
-  // Import/token — a repo by name (with an optional pinned ref/path) and
-  // the shared GitHub token, both things the plain browse-and-install list
-  // in open() below never needs: most modules are public, and typing an
-  // owner/repo is only for one you already know isn't (yet) listed.
-  function openImport() {
-    importHost.innerHTML = '';
-    importHost.hidden = false;
-
-    const backdrop = document.createElement('div');
-    backdrop.className = 'noditron-dialog-backdrop';
-    backdrop.addEventListener('click', closeImport);
-
-    const panel = document.createElement('div');
-    panel.className = 'noditron-dialog-panel';
-    panel.style.minWidth = '380px';
-    panel.addEventListener('click', (e) => e.stopPropagation());
-
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'noditron-dialog-close';
-    closeBtn.setAttribute('aria-label', 'Close');
-    closeBtn.textContent = '×';
-    closeBtn.addEventListener('click', closeImport);
-
-    const body = document.createElement('div');
-    body.className = 'noditron-dialog-body';
-    body.appendChild(heading('IMPORT FROM A REPO'));
-
-    // Shared with nodigraph's own "Open/Save to GitHub" — same storage key,
-    // so a token set in either place works in both.
-    const { wrap: tokenWrap, input: tokenInput } = field('GITHUB PERSONAL ACCESS TOKEN', { type: 'password', placeholder: 'ghp_…', value: getStoredToken() });
-    body.appendChild(tokenWrap);
-    tokenInput.addEventListener('change', () => setStoredToken(tokenInput.value.trim()));
-    if (getStoredToken()) {
-      const forgetBtn = button('Forget this token');
-      forgetBtn.style.cssText += 'padding:2px 0;margin:-6px 0 14px;border:none;color:var(--text-muted);text-decoration:underline;';
-      forgetBtn.addEventListener('click', () => {
-        setStoredToken('');
-        tokenInput.value = '';
-        forgetBtn.remove();
-      });
-      body.appendChild(forgetBtn);
-    }
-    const tokenHint = statusLine('Only needed for a private repo — sent only to api.github.com, kept only in this browser.');
-    tokenHint.style.margin = '-8px 0 14px';
-    body.appendChild(tokenHint);
-
-    const { wrap: repoWrap, input: repoInput } = field('OWNER/REPO', { placeholder: 'e.g. someone/esp32-devkit' });
-    const { wrap: refWrap, input: refInput } = field('REF (optional — tag or branch, latest tag if blank)');
-    const { wrap: pathWrap, input: pathInput } = field('MANIFEST PATH (optional)', { placeholder: DEFAULT_MANIFEST_PATH });
-    body.append(repoWrap, refWrap, pathWrap);
-
-    const fetchBtn = button('Fetch');
-    const previewArea = document.createElement('div');
-    body.append(fetchBtn, previewArea);
-
-    fetchBtn.addEventListener('click', async () => {
-      previewArea.innerHTML = '';
-      const raw = repoInput.value.trim();
-      const [owner, repo] = raw.split('/').map((s) => s.trim());
-      if (!owner || !repo) {
-        previewArea.appendChild(statusLine('Enter as owner/repo.', true));
-        return;
-      }
-      const path = pathInput.value.trim() || DEFAULT_MANIFEST_PATH;
-      previewArea.appendChild(statusLine('Fetching…'));
-      try {
-        const resolvedRef = refInput.value.trim() || (await resolveDefaultRef(owner, repo));
-        const manifest = await fetchManifest(owner, repo, resolvedRef, path);
-        previewArea.innerHTML = '';
-        const preview = document.createElement('div');
-        preview.style.cssText = 'border:1px solid var(--border);border-radius:6px;padding:10px;margin-top:4px;';
-        const title = document.createElement('div');
-        title.textContent = `${manifest.displayName || manifest.name} — v${manifest.version || '?'}`;
-        title.style.cssText = 'font-weight:600;font-size:13px;';
-        const desc = document.createElement('div');
-        desc.textContent = manifest.description || '';
-        desc.style.cssText = 'font-size:12px;color:var(--text-muted);margin:4px 0 8px;';
-        const installBtn = button('Add to library', { primary: true });
-        installBtn.addEventListener('click', async () => {
-          try {
-            const source = { owner, repo, ref: resolvedRef, path, name: manifest.name, displayName: manifest.displayName || manifest.name, version: manifest.version || null, swatchColor: manifest.swatchColor || '#8b93a3' };
-            registerLibraryModule(nodigraph, manifest, source);
-            onInstalled?.();
-            closeImport();
-            close();
-          } catch (err) {
-            preview.appendChild(statusLine(`Install failed: ${err.message}`, true));
-          }
-        });
-        preview.append(title, desc, installBtn);
-        previewArea.appendChild(preview);
-      } catch (err) {
-        previewArea.innerHTML = '';
-        const needsToken = (err.status === 401 || err.status === 404) && !tokenInput.value.trim();
-        previewArea.appendChild(statusLine(`Fetch failed: ${err.message}${needsToken ? ' — this repo may be private; add a token above.' : ''}`, true));
-      }
-    });
-
-    panel.append(closeBtn, body);
-    backdrop.appendChild(panel);
-    importHost.appendChild(backdrop);
-  }
-
-  function open() {
-    host.innerHTML = '';
-    host.hidden = false;
-
-    const backdrop = document.createElement('div');
-    backdrop.className = 'noditron-dialog-backdrop';
-    backdrop.addEventListener('click', close);
-
-    const panel = document.createElement('div');
-    panel.className = 'noditron-dialog-panel';
-    panel.style.minWidth = '380px';
-    panel.addEventListener('click', (e) => e.stopPropagation());
-
-    const closeBtn = document.createElement('button');
-    closeBtn.type = 'button';
-    closeBtn.className = 'noditron-dialog-close';
-    closeBtn.setAttribute('aria-label', 'Close');
-    closeBtn.textContent = '×';
-    closeBtn.addEventListener('click', close);
-
-    const body = document.createElement('div');
-    body.className = 'noditron-dialog-body';
-    body.appendChild(heading('LIBRARY'));
-
-    // Browse — every module tagged noditron-module, loaded up front so
-    // opening this dialog is "here's what's out there," not an empty box
-    // waiting for a query; the search field just narrows the same list.
-    const searchRow = document.createElement('div');
-    searchRow.style.cssText = 'display:flex;gap:8px;margin-bottom:4px;';
-    const { wrap: searchWrap, input: searchInput } = field('');
-    searchInput.placeholder = 'Filter by name…';
-    searchWrap.style.flex = '1';
-    searchWrap.style.marginBottom = '0';
-    const searchBtn = button('Search');
-    searchRow.append(searchWrap, searchBtn);
-    body.appendChild(searchRow);
-    const resultsArea = document.createElement('div');
-    body.appendChild(resultsArea);
-
-    // Every module in every noditron-module-tagged repo, flattened into one
-    // list — one repo can carry dozens (see discoverModules), so the unit
-    // shown and installed here is a module, not a repo. Fetched once per
-    // dialog open; the search field re-filters this same array client-side
-    // rather than re-hitting GitHub per keystroke.
-    let catalog = [];
-
-    function moduleRow(entry) {
-      const { manifest } = entry;
-      const row = document.createElement('div');
-      row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);';
-      const text = document.createElement('div');
-      text.style.cssText = 'min-width:0;';
-      const name = document.createElement('div');
-      name.textContent = manifest.displayName || manifest.name;
-      name.style.cssText = 'font-size:12px;font-weight:600;';
-      const sub = document.createElement('div');
-      sub.textContent = `${manifest.description || ''}${manifest.description ? ' — ' : ''}${entry.owner}/${entry.repo}`;
-      sub.style.cssText = 'font-size:11px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
-      text.append(name, sub);
-      const installBtn = button('Add to library', { primary: true });
-      installBtn.addEventListener('click', () => {
-        try {
-          const source = { owner: entry.owner, repo: entry.repo, ref: entry.ref, path: entry.path, name: manifest.name, displayName: manifest.displayName || manifest.name, version: manifest.version || null, swatchColor: manifest.swatchColor || '#8b93a3' };
-          registerLibraryModule(nodigraph, manifest, source);
-          onInstalled?.();
-          close();
-        } catch (err) {
-          row.appendChild(statusLine(`Failed: ${err.message}`, true));
-        }
-      });
-      row.append(text, installBtn);
-      return row;
-    }
-
-    function renderCatalog(query) {
-      resultsArea.innerHTML = '';
-      const q = query.trim().toLowerCase();
-      const matches = q
-        ? catalog.filter((entry) => {
-            const m = entry.manifest;
-            return [m.name, m.displayName, m.description, entry.repo].some((s) => String(s || '').toLowerCase().includes(q));
-          })
-        : catalog;
-      if (!matches.length) {
-        // GitHub returns a plain 404 for an unauthenticated request to a
-        // private repo — deliberately indistinguishable from "doesn't
-        // exist" (see nodigraph's own GitHubConnectDialog doc on this same
-        // behavior) — so an empty catalog with no token set is the single
-        // most likely cause here, not "genuinely nothing exists": this
-        // app's own default repo (nodi-andy/noditron) is private.
-        const hint = !q && !getStoredToken()
-          ? ' This app\'s own modules live in a private repo — add a GitHub token below ("Import from a repo / manage GitHub token…") to see them.'
-          : '';
-        resultsArea.appendChild(
-          statusLine(
-            (q ? 'No modules match that filter.' : 'No modules found.') +
-              (hint || (q ? '' : ' See "Export selected as a module" below, or import one you already know by repo.')),
-          ),
-        );
-        return;
-      }
-      for (const entry of matches) resultsArea.appendChild(moduleRow(entry));
-    }
-
-    // DEFAULT_REPOS always takes part, on top of whatever topic search
-    // turns up — search failing (rate-limited, offline) shouldn't also
-    // take down the one repo guaranteed to be there, so the two are
-    // resolved independently and merged (deduped by owner/repo) rather
-    // than one being a precondition for the other.
-    async function repoList() {
-      const seen = new Set();
-      const repos = [];
-      for (const { owner, repo } of DEFAULT_REPOS) {
-        seen.add(`${owner}/${repo}`);
-        repos.push({ owner, repo, defaultBranch: null });
-      }
-      try {
-        for (const r of await searchModules('')) {
-          const key = `${r.owner}/${r.repo}`;
-          if (!seen.has(key)) {
-            seen.add(key);
-            repos.push(r);
-          }
-        }
-      } catch {
-        // Best-effort discovery on top of the guaranteed default(s) above —
-        // a failed search still leaves those loadable.
-      }
-      return repos;
-    }
-
-    async function loadCatalog() {
-      resultsArea.innerHTML = '';
-      resultsArea.appendChild(statusLine('Loading…'));
-      try {
-        const repos = await repoList();
-        const perRepo = await Promise.all(
-          repos.map((r) => discoverModules(r.owner, r.repo, r.defaultBranch || undefined).catch(() => [])),
-        );
-        catalog = perRepo.flat();
-        renderCatalog(searchInput.value);
-      } catch (err) {
-        resultsArea.innerHTML = '';
-        resultsArea.appendChild(statusLine(`Couldn't load modules: ${err.message}`, true));
-      }
-    }
-
-    searchBtn.addEventListener('click', () => renderCatalog(searchInput.value));
-    searchInput.addEventListener('input', () => renderCatalog(searchInput.value));
-    searchInput.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') renderCatalog(searchInput.value);
-    });
-    loadCatalog();
-
-    const importLink = button('Import from a repo / manage GitHub token…');
-    importLink.style.cssText += 'width:100%;margin-top:10px;text-align:center;justify-content:center;';
-    importLink.addEventListener('click', () => openImport());
-    body.appendChild(importLink);
-
-    // Export — the authoring side of the loop: build a block by hand (its
-    // custom fn/render/html/dialog code included — see logicTab.js), select
-    // it, and turn it into a manifest ready to push to a public repo. No
-    // separate format to learn: the payload is exactly what nodigraph's own
-    // Ctrl+C would put on the clipboard for the same selection.
-    body.appendChild(sectionLabel('EXPORT SELECTED AS A MODULE'));
-    const selectedCount = nodigraph.selection.count;
-    if (!selectedCount) {
-      body.appendChild(statusLine('Select one or more blocks on canvas first.'));
-    } else {
-      const primary = nodigraph.project.getBlock(nodigraph.selection.selectedBlockId);
-      const { wrap: nameWrap, input: nameInput } = field('MODULE NAME (used in the file path, lowercase-hyphenated)', { value: slugify(primary?.name) });
-      const { wrap: displayWrap, input: displayInput } = field('DISPLAY NAME', { value: primary?.name || 'My Module' });
-      const { wrap: descWrap, input: descInput } = field('DESCRIPTION');
-      const { wrap: versionWrap, input: versionInput } = field('VERSION', { value: '0.1.0' });
-      body.append(nameWrap, displayWrap, descWrap, versionWrap);
-
-      const exportBtn = button(`Download noditron.module.json (${selectedCount} block${selectedCount === 1 ? '' : 's'})`, { primary: true });
-      exportBtn.addEventListener('click', () => {
-        const payload = serializeSelection(nodigraph.project, nodigraph.selection.list());
-        const manifestOut = {
-          noditronModule: 1,
-          name: slugify(nameInput.value),
-          displayName: displayInput.value.trim() || slugify(nameInput.value),
-          version: versionInput.value.trim() || '0.1.0',
-          description: descInput.value.trim(),
-          swatchColor: primary?.style?.color || '#8b93a3',
-          block: payload,
-        };
-        downloadJson('noditron.module.json', manifestOut);
-      });
-      body.appendChild(exportBtn);
-
-      const exportHint = statusLine('Push the downloaded file to a GitHub repo: as noditron.module.json at its root for a repo that\'s just this one module, or as modules/NAME/noditron.module.json alongside others if that repo keeps a whole catalog (both are discovered). A repo tagged with the topic "noditron-module" shows up in the browse list for anyone; a private one installs too, for anyone with a token that can read it.');
-      body.appendChild(exportHint);
-    }
-
-    // Installed — module definitions already added to this project. Adding
-    // an instance happens from the palette; this dialog manages the
-    // definitions themselves.
-    const installed = getInstalledModules(nodigraph);
-    if (installed.length) {
-      body.appendChild(sectionLabel('INSTALLED IN THIS PROJECT'));
-      for (const mod of installed) {
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--border);';
-        const name = document.createElement('div');
-        name.textContent = `${mod.displayName} v${mod.version || '?'} (${mod.owner}/${mod.repo})`;
-        name.style.cssText = 'font-size:12px;';
-        const actions = document.createElement('div');
-        actions.style.cssText = 'display:flex;gap:6px;flex:none;';
-        const updateBtn = button('Update');
-        updateBtn.addEventListener('click', async () => {
-          try {
-            const ref = await resolveDefaultRef(mod.owner, mod.repo);
-            const manifest = await fetchManifest(mod.owner, mod.repo, ref, mod.path);
-            registerLibraryModule(nodigraph, manifest, { ...mod, ref });
-            onInstalled?.();
-            open();
-          } catch (err) {
-            row.appendChild(statusLine(`Failed: ${err.message}`, true));
-          }
-        });
-        const removeBtn = button('Remove');
-        removeBtn.addEventListener('click', () => {
-          removeInstalledModule(nodigraph, mod);
-          onInstalled?.();
-          open();
-        });
-        actions.append(updateBtn, removeBtn);
-        row.append(name, actions);
-        body.appendChild(row);
-      }
-    }
-
-    panel.append(closeBtn, body);
-    backdrop.appendChild(panel);
-    host.appendChild(backdrop);
-  }
-
-  return { open, close };
-}
-
-export function mountLibrary(nodigraph, container) {
-  const divider = document.createElement('div');
-  divider.style.cssText = 'height:1px;background:var(--border);margin:6px 2px;';
-  container.appendChild(divider);
-
-  const ui = installLibraryUI(nodigraph, () => refreshInstalledButtons());
-
-  const openBtn = document.createElement('button');
-  openBtn.type = 'button';
-  const swatch = document.createElement('span');
-  swatch.className = 'noditron-swatch';
-  swatch.style.background = '#8b93a3';
-  const label = document.createElement('span');
-  label.textContent = 'Add from library…';
-  openBtn.append(swatch, label);
-  openBtn.addEventListener('click', () => ui.open());
-  container.appendChild(openBtn);
-
-  const installedGroup = document.createElement('div');
-  installedGroup.style.cssText = 'display:flex;flex-direction:column;gap:6px;';
-  container.appendChild(installedGroup);
-
-  function refreshInstalledButtons() {
-    installedGroup.innerHTML = '';
-    for (const mod of getInstalledModules(nodigraph)) {
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      const sw = document.createElement('span');
-      sw.className = 'noditron-swatch';
-      sw.style.background = mod.swatchColor || '#8b93a3';
-      const lbl = document.createElement('span');
-      lbl.textContent = mod.displayName;
-      btn.append(sw, lbl);
-      btn.addEventListener('click', async () => {
-        try {
-          const manifest = await fetchManifest(mod.owner, mod.repo, mod.ref, mod.path);
-          // Into the selected block, when one is selected — the same as the
-          // palette's own buttons (see containerRestrictions.prepareAdd).
-          prepareAdd(nodigraph);
-          addModuleBlock(nodigraph, manifest, mod);
-        } catch (err) {
-          // eslint-disable-next-line no-alert
-          alert(`Couldn't add ${mod.displayName}: ${err.message}`);
-        }
-      });
-      installedGroup.appendChild(btn);
-    }
-  }
-
-  refreshInstalledButtons();
-
-  // Called on every navigation (see main.js's own level-change poll).
-  // Library modules are arbitrary/user-authored -- unlike the built-in
-  // palette primitives (see palette.js's own refresh()), there's no cheap
-  // way to kind-check one against an allowedChildKinds list without
-  // fetching it first, so a restricted container just can't add library
-  // modules at all (this is exactly what keeps another ESP32 DevKit from
-  // being installed inside an ESP32 DevKit -- see that module's own
-  // allowedChildKinds prop). Unrestricted containers show this section
-  // exactly as before.
-  function refresh() {
-    const restricted = getAllowedChildKinds(nodigraph) !== null;
-    // Not .hidden -- openBtn (a button inside #noditron-palette) and
-    // installedGroup (its own inline display:flex) both have a display
-    // rule that would out-specificity the UA [hidden]{display:none}
-    // default and leave them visible anyway (see palette.js's own note).
-    // Clearing back to '' (rather than a hardcoded 'flex') lets openBtn
-    // and divider fall back to whatever their own CSS already says;
-    // installedGroup has no stylesheet rule of its own (only the inline
-    // display:flex set when it was created above) so it needs its shown
-    // value spelled out explicitly, or clearing to '' would default it to
-    // a plain block and break its own row layout.
-    divider.style.display = restricted ? 'none' : '';
-    openBtn.style.display = restricted ? 'none' : '';
-    installedGroup.style.display = restricted ? 'none' : 'flex';
-  }
-  refresh();
-  return { refresh };
+// Every module this server bundles, as tiles for the Add Block window —
+// the same source the resolver above reads, listed up front.
+export async function listBundledModules() {
+  const res = await fetch('/api/modules', { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Couldn't load bundled modules (${res.status})`);
+  const entries = await res.json();
+  return (Array.isArray(entries) ? entries : []).map((entry) => {
+    const manifest = validateManifest(entry.manifest);
+    return {
+      owner: LOCAL_OWNER,
+      repo: LOCAL_REPO,
+      ref: LOCAL_REF,
+      path: entry.path,
+      name: manifest.name,
+      displayName: manifest.displayName || manifest.name,
+      version: manifest.version || null,
+      swatchColor: manifest.swatchColor || '#8b93a3',
+    };
+  });
 }

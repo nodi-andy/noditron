@@ -23,6 +23,7 @@ import { getLastResult, kindOf } from './runtime.js';
 import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
 import * as devkitCircuit from './devkitCircuit.js';
+import { socketPortsOf } from './socketLink.js';
 import { reconcileWithDevice, loadFromDevice } from './deviceSync.js';
 import { rememberedWifi } from './serialMemory.js';
 
@@ -87,7 +88,7 @@ export function installDialogSystem(nodigraph) {
     const executableSource = kindOf(block) === 'esp32-devkit'
       ? String(source)
         .replace(
-          /if \(!design\.blocks\.length\)\s*\{\s*log\('Nothing to send -- connect a supported circuit signal directly to DI, DO, CAN In, or CAN Out\.'\);\s*\}\s*else\s*\{\s*/,
+          /if \(!design\.blocks\.length\)\s*\{\s*log\('Nothing to send -- connect a supported circuit signal directly to DI, DO, or CAN\.'\);\s*\}\s*else\s*\{\s*/,
           '',
         )
         .replace(/(updateProgramSection\(\);)\s*}\s*}\s*catch \(err\)/, '$1\n    } catch (err)')
@@ -160,14 +161,17 @@ export function installDialogSystem(nodigraph) {
         // `host` is the board's IP or name; the last one used is offered.
         connectWifi: (host, onLog) => serialFlash.connectWifi(block.id, host, { onLog }),
         rememberedWifi: () => rememberedWifi(block.id),
-        linkKind: () => serialFlash.getSession(block.id)?.kind || 'serial',
+        linkKind: () => serialFlash.getSession(block.id)?.kind || (serialConsole.bridgeFor(block.id) ? 'can' : 'serial'),
         detectChip: (onLog) => serialFlash.detectChip(block.id, { onLog }),
         flash: (files, eraseAll, onProgress, onLog) => serialFlash.flash(block.id, files, { eraseAll, onProgress, onLog }),
         // `forget` (true from a dialog's own Disconnect button) also drops
         // the remembered port, so the next load does not offer it again.
         disconnect: (forget) => serialFlash.disconnect(block.id, { forget: Boolean(forget) }),
         guessAddress: serialFlash.guessAddress,
-        getSession: () => serialFlash.getSession(block.id),
+        // A block online through another board (see canBridge.js) has a
+        // session too, of kind 'can': its dialog opens on the connected path
+        // and every console call goes through the bridge.
+        getSession: () => serialFlash.getSession(block.id) || (serialConsole.bridgeFor(block.id) ? { kind: 'can', ...serialConsole.bridgeFor(block.id) } : null),
         firmwarePresets: serialFlash.FIRMWARE_PRESETS,
         fetchPresetParts: serialFlash.fetchPresetParts,
       },
@@ -207,6 +211,23 @@ export function installDialogSystem(nodigraph) {
         // asked for (a CAN reply after `can <text>`, a [USB] line); returns
         // the unsubscribe function.
         subscribeLines: (listener) => serialConsole.subscribeConsoleLines(block.id, listener),
+        // The far end of each of this board's socket pins, by name — the
+        // block its exterior wire reaches ('cnc'), or 'browser' when the
+        // wire ends at nothing.
+        socketPeers: () => {
+          const level = devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, block.id);
+          return socketPortsOf(block).map(({ port, direction }) => {
+            let peer = 'browser';
+            for (const conn of level?.connections?.values?.() || []) {
+              const otherId = conn.sourceBlockId === block.id && conn.sourcePortId === port.id ? conn.targetBlockId
+                : conn.targetBlockId === block.id && conn.targetPortId === port.id ? conn.sourceBlockId : null;
+              if (!otherId || otherId === block.id) continue;
+              const other = level.blocks?.get?.(otherId);
+              if (other) peer = other.name || peer;
+            }
+            return { portId: port.id, direction, peer };
+          });
+        },
         readPins: (opts) => serialConsole.readPins(block.id, opts),
         close: () => serialConsole.closeConsole(block.id),
       },

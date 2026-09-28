@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
+import { traceDesign } from '../client/src/designImport.js';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 const module = JSON.parse(read('../modules/esp32-s3-devkit/noditron.module.json'));
@@ -19,16 +20,21 @@ function wired(from, to) {
 }
 
 test('Waveshare name, eight isolated inputs, eight driver outputs and CAN pins', () => {
-  assert.equal(module.version, '1.8.0');
+  assert.equal(module.version, '1.10.0');
   assert.equal(module.displayName, 'esp32-S3');
   assert.equal(board.name, 'esp32-S3');
   assert.deepEqual(pins.filter(p => p.role === 'digital-input').map(p => p.gpio), [4,5,6,7,8,9,10,11]);
   assert.deepEqual(pins.filter(p => p.role === 'digital-output').map(p => p.exio), [1,2,3,4,5,6,7,8]);
   assert.equal(board.logicalPorts.find(p => p.name === 'DI1').direction, 'in');
   assert.equal(board.logicalPorts.find(p => p.name === 'DO1').direction, 'out');
-  assert.equal(pins.find(p => p.label === 'CAN Out').gpio, 2);
-  assert.equal(pins.find(p => p.label === 'CAN In').gpio, 3);
+  // One CAN pin, direction by the wire (see devkitCircuit's mapEndpoint).
+  assert.equal(pins.find(p => p.label === 'CAN').role, 'can');
+  assert.equal(board.logicalPorts.find(p => p.name === 'CAN').direction, null);
+  assert.ok(!pins.some(p => p.label === 'CAN In' || p.label === 'CAN Out'));
   assert.equal(board.logicalPorts.find(p => p.name === 'CAN speed').direction, 'out');
+  // The shell as a port (see client/src/socketLink.js): no GPIO, out by default.
+  assert.equal(board.logicalPorts.find(p => p.name === 'socket').direction, 'out');
+  assert.equal(pins.find(p => p.role === 'socket').gpio, null);
 });
 
 test('the board face keeps the USB pin, drops the USB box, and shows its connection state', () => {
@@ -38,6 +44,7 @@ test('the board face keeps the USB pin, drops the USB box, and shows its connect
   assert.ok(board.logicalPorts.some(p => p.name === 'USB'));
   assert.doesNotMatch(render, /fillText\('USB'/);
   assert.doesNotMatch(render, /roundRect\(usbX/);
+  assert.doesNotMatch(render, /fillText\(pin\.label/, 'the board does not letter its pins: nodigraph labels every port');
   assert.match(html, /className = 'esp-status'/);
   for (const state of ['Not connected', 'Connecting', 'Logic Module running', 'needs firmware', 'circuit not saved']) {
     assert.match(html, new RegExp(state));
@@ -53,7 +60,7 @@ test('the device dialog accepts circuits wired directly to board terminals', () 
   assert.match(source, /programLabel\.textContent = 'CIRCUIT'/);
   assert.match(source, /compiledCount = compiled\.blocks\.length/);
   assert.doesNotMatch(source, /No Digital I\/O blocks|add a Digital I\/O block/);
-  assert.match(source, /connect a supported circuit signal directly to DI, DO, CAN In, or CAN Out/);
+  assert.match(source, /connect a supported circuit signal directly to DI, DO, or CAN/);
 });
 
 test('an already placed Waveshare block receives corrected DI and DO directions', () => {
@@ -111,10 +118,10 @@ test('a pinless Bool between DI1 and DO1 is compiled as a pass-through', () => {
 test('fixed hardware directions and bus pins cannot become arbitrary GPIOs', () => {
   assert.throws(() => circuit.buildInternalDevkitDesign(wired('DO1', 'DI1')), /digital input/);
   assert.throws(() => circuit.buildInternalDevkitDesign(wired('DI1', 'DI2')), /digital output/);
-  assert.throws(() => circuit.buildInternalDevkitDesign(wired('CAN Out', 'DI1')), /only accepts data/);
+  assert.throws(() => circuit.buildInternalDevkitDesign(wired('CAN speed', 'DI1')), /configured value/);
 });
 
-test('CAN Out sends connected Data at the configured speed without a visible CAN block', () => {
+test('a wire into CAN sends connected Data at the configured speed without a visible CAN block', () => {
   const esp = structuredClone(board);
   const data = (id, value) => ({
     id, logicalPorts: [{ id: `${id}-out`, name: 'out', direction: 'out' }],
@@ -127,7 +134,7 @@ test('CAN Out sends connected Data at the configured speed without a visible CAN
   esp.children = {
     blocks: new Map([[payload.id, payload], [speed.id, speed]]),
     connections: new Map([
-      ['payload', { sourceBlockId: payload.id, sourcePortId: 'payload-port', targetBlockId: esp.id, targetPortId: port('CAN Out') }],
+      ['payload', { sourceBlockId: payload.id, sourcePortId: 'payload-port', targetBlockId: esp.id, targetPortId: port('CAN') }],
       ['speed', { sourceBlockId: speed.id, sourcePortId: 'speed-port', targetBlockId: esp.id, targetPortId: port('CAN speed') }],
     ]),
   };
@@ -137,8 +144,8 @@ test('CAN Out sends connected Data at the configured speed without a visible CAN
   assert.equal(design.blocks.find(b => b.type === 'data').data.value, '123#AA');
 });
 
-test('CAN In is a direct source and defaults to 250 kbit/s', () => {
-  const design = circuit.buildInternalDevkitDesign(wired('CAN In', 'DO1'));
+test('a wire out of CAN is a direct source and defaults to 250 kbit/s', () => {
+  const design = circuit.buildInternalDevkitDesign(wired('CAN', 'DO1'));
   assert.deepEqual(design.blocks.find(b => b.type === 'can').data, { tx: 2, rx: 3, bitrate: 250000, format: 'string' });
   assert.deepEqual(design.blocks.find(b => b.type === 'dout').data, { exio: 1 });
 });
@@ -162,7 +169,7 @@ test('an older running build exposes the firmware update action', () => {
   assert.match(source, /info\.build < preferredPreset\.build/);
   assert.match(source, /showRunning\(info\)/);
   const flashSource = read('../client/src/serialFlash.js');
-  assert.match(flashSource, /build: '20260925i'/);
+  assert.match(flashSource, /build: '20260928b'/);
 });
 
 test('existing DevKit input wires retain their IDs and obsolete wired pins survive', () => {
@@ -206,14 +213,19 @@ test('DI1 into a Data block\'s write drives DO2 from its out', () => {
     ]),
   };
   const design = circuit.buildInternalDevkitDesign(esp);
-  assert.deepEqual(design.blocks.map(({ type, data }) => ({ type, data })), [
-    { type: 'din', data: { gpio: 4, emitOnChange: true } },
-    { type: 'dout', data: { exio: 2 } },
-    { type: 'belt', data: { dir: 'E' } },
-  ]);
+  // A writer row (firmware build 20260928a and later: a data block two or
+  // more rows tall takes a belt on a lower row as a write): DI1 on the
+  // row below the Data's top row writes it, the Data's out drives DO2.
+  const at = (type, gx, gy) => design.blocks.find(b => b.type === type && b.gx === gx && b.gy === gy);
+  assert.deepEqual(at('din', 0, 1).data, { gpio: 4, emitOnChange: true });
+  assert.deepEqual({ h: at('data', 6, 0).h, value: at('data', 6, 0).data.value }, { h: 2, value: '0' });
+  assert.deepEqual(at('dout', 9, 0).data, { exio: 2 });
+  for (const [gx, gy] of [[2, 1], [3, 1], [4, 1], [5, 1], [8, 0]]) assert.ok(at('belt', gx, gy), `belt at ${gx},${gy}`);
+  const edges = traceDesign(design).edges.map(e => `${e.from.type}>${e.to.type}:${e.input ?? 'in'}`).sort();
+  assert.deepEqual(edges, ['data>dout:in', 'din>data:write']);
 });
 
-// DI → Match → Data → CAN Out: conucon's own GUI layout for driving the grbl
+// DI → Match → Data → CAN: conucon's own GUI layout for driving the grbl
 // controller over CAN — each input's croute rows end in Data blocks that all
 // run into one tall CAN block.
 function matchToCan({ writeToo = false } = {}) {
@@ -236,15 +248,15 @@ function matchToCan({ writeToo = false } = {}) {
       wire('di', esp.id, port('DI1'), 'match', 'match-in-port'),
       wire('m1', 'match', 'match-1-port', 'on', 'on-in-port'),
       wire('m0', 'match', 'match-0-port', 'off', 'off-in-port'),
-      wire('c1', 'on', 'on-out-port', esp.id, port('CAN Out')),
-      wire('c0', 'off', 'off-out-port', esp.id, port('CAN Out')),
+      wire('c1', 'on', 'on-out-port', esp.id, port('CAN')),
+      wire('c0', 'off', 'off-out-port', esp.id, port('CAN')),
       ...(writeToo ? [wire('w1', 'match', 'match-1-port', 'on', 'on-write-port')] : []),
     ]),
   };
   return circuit.buildInternalDevkitDesign(esp);
 }
 
-test('DI → Match → Data → CAN Out compiles to din → croute → data rows → one tall can block', () => {
+test('DI → Match → Data → CAN compiles to din → croute → data rows → one tall can block', () => {
   const design = matchToCan();
   const at = (type, gx, gy) => design.blocks.find(b => b.type === type && b.gx === gx && b.gy === gy);
   assert.deepEqual(at('din', 0, 0).data, { gpio: 4, emitOnChange: true });
@@ -256,8 +268,8 @@ test('DI → Match → Data → CAN Out compiles to din → croute → data rows
   assert.equal(design.blocks.filter(b => b.type === 'boot').length, 0, 'nothing is sent unprompted at boot');
 });
 
-test('a Data also written from its Match forwards the signal, so its row cannot sit beside a Data row', () => {
+test('a Data both triggered and written from the same route keeps the trigger; the second wire adds no row', () => {
   const design = matchToCan({ writeToo: true });
   const rows = design.blocks.filter(b => b.type === 'data').map(b => b.data.value);
-  assert.deepEqual(rows, ['X0'], 'the written Data is a pass-through, dropped next to the triggered one');
+  assert.deepEqual(rows, ['X100', 'X0'], 'one row per route: the Data row stands, the write wire has no belt');
 });

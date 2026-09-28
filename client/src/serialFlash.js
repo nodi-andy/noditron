@@ -69,7 +69,7 @@ export const FIRMWARE_PRESETS = [
     label: 'Logic — esp32-S3 (Waveshare 8DI/8DO)',
     chip: 'ESP32-S3',
     board: 'ESP32-S3-POE-ETH-8DI-8DO',
-    build: '20260925i',
+    build: '20260928b',
     parts: [
       { path: 'firmware-assets/logic/esp32-s3-bootloader.bin', address: 0x0 },
       { path: 'firmware-assets/logic/esp32-s3-partitions.bin', address: 0x8000 },
@@ -205,6 +205,25 @@ export async function connectWifi(blockId, host, { onLog } = {}) {
   return session;
 }
 
+// A link opened before its block existed (the Add Block window identifies
+// a board first, then places the module it turns out to be) is handed to
+// that block: same port or socket, same open transport, now under the
+// block's own id — and remembered for it, so the reconnect card offers it
+// back next time (see serialMemory.js). Whoever opened a console on the
+// old id closes it first (serialConsole.closeConsole); the next console
+// opens on the new id against the same transport.
+export function adoptSession(fromId, toId) {
+  const session = sessions.get(fromId);
+  if (!session) return null;
+  sessions.delete(fromId);
+  forgetPort(fromId);
+  forgetWifi(fromId);
+  sessions.set(toId, session);
+  if (session.kind === 'wifi') rememberWifi(toId, session.host);
+  else rememberPort(toId, session.port);
+  return session;
+}
+
 export function isWifiSession(session) {
   return session?.kind === 'wifi';
 }
@@ -250,7 +269,7 @@ export function findSessionByPort(port) {
 // front of it, and that changes what DTR and RTS mean (see below).
 const ESPRESSIF_USB_VID = 0x303a;
 
-function usesNativeUsb(port) {
+export function usesNativeUsb(port) {
   return port?.getInfo?.()?.usbVendorId === ESPRESSIF_USB_VID;
 }
 

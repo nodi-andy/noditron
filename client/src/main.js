@@ -5,8 +5,9 @@
 // instant this module starts; a short poll covers that gap without this
 // file needing to know anything about nodigraph's internal timing.
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
-import { mountPalette, rehydrateKindLogic, migrateLegacyDataBlock } from './palette.js';
-import { mountLibrary } from './library.js';
+import { rehydrateKindLogic, migrateLegacyDataBlock } from './palette.js';
+import { installAddBlockDialog } from './addBlockDialog.js';
+import { installCanBridge } from './canBridge.js';
 import { startRuntime, kindOf, getLastResult, getBoundaryOutput, getPortValue, setBoundaryInput, setBoundaryOutput, clearBoundaryOutput, setChildOutput, clearChildOutputs } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
 import { installHtmlOverlay } from './htmlOverlay.js';
@@ -17,6 +18,17 @@ import * as livePins from './livePins.js';
 import * as devkitCircuit from './devkitCircuit.js';
 import { createDeviceSaver } from './deviceSave.js';
 import { installSerialReconnect } from './serialReconnect.js';
+import { createSocketLinks } from './socketLink.js';
+import { installBoardPage, installProjectStore } from './boardPage.js';
+import { placeNeighbours } from './canNeighbours.js';
+import * as BlockDescription from '/nodigraph/src/model/BlockDescription.js';
+
+// Block code lives in strings (palette.js, the module manifests) and runs
+// through new Function, so it cannot import; what it needs of these two
+// modules it takes from here. A `import('/src/...')` in such a string
+// would ask the server for the file by URL, which the board, serving the
+// page as one bundled app.js, does not have (see tools/build-board-site.mjs).
+window.noditronModules = { serialConsole, BlockDescription };
 
 // noditron's own "primitive" kinds — plain value/logic leaves with no
 // business growing a sub-architecture of their own (unlike Timer, whose
@@ -46,8 +58,23 @@ function waitForNodigraph() {
 async function boot() {
   const nodigraph = await waitForNodigraph();
 
-  const palette = mountPalette(nodigraph, document.getElementById('noditron-palette'));
-  const library = mountLibrary(nodigraph, document.getElementById('noditron-palette'));
+  // On a board's own page the project is kept by the board, through its
+  // file upload rather than /api/project (see boardPage.js): in place
+  // before the first persist below.
+  const projectStore = window.nodigraphEmbedded ? installProjectStore() : null;
+
+  // nodigraph's + button opens the Add Block window (see addBlockDialog.js):
+  // the primitives in groups, and boards added by connecting to them.
+  installAddBlockDialog(nodigraph);
+  // Boards behind a connected board's CAN bus are online through it (see
+  // canBridge.js): polled from the runtime tick below. A module heard on
+  // the bus that has no block yet is placed beside the board that hears
+  // it and wired CAN to CAN (canNeighbours.js) — once per page: a block
+  // deleted on purpose is not put back by the next poll.
+  const offeredOnBus = new Set();
+  const canBridge = installCanBridge(nodigraph, {
+    onNodes: (board, nodes) => placeNeighbours(nodigraph, board, nodes, { offered: offeredOnBus, status: (message) => console.info(`[noditron] ${message}`) }),
+  });
 
   // Three independent draw contributors, composed into the single
   // window.nodigraphDrawBlock hook nodigraph calls once per block per
@@ -186,6 +213,18 @@ async function boot() {
       const templateBlock = await templateFor(moduleNameOf(block));
       if (!templateBlock) continue;
       if (devkitCircuit.migrateWaveshareBoard(block, templateBlock, level)) changed = true;
+      // The CNC module's `gcode` input became its `socket` (see
+      // socketLink.js): the same port, renamed in place, so a wire already
+      // on it stays — and the template's socket is then not added twice.
+      if (kindOf(block) === 'cnc-module') {
+        const gcode = (block.logicalPorts || []).find((lp) => lp.name === 'gcode');
+        if (gcode && !(block.logicalPorts || []).some((lp) => lp.name === 'socket')) {
+          const tpl = (templateBlock.logicalPorts || []).find((lp) => lp.name === 'socket');
+          gcode.name = 'socket';
+          if (tpl?.description) gcode.description = tpl.description;
+          changed = true;
+        }
+      }
       for (const name of ESP32_TEMPLATE_PROP_NAMES) {
         const src = (templateBlock.props || []).find((p) => p.name === name);
         if (!src) continue;
@@ -278,6 +317,18 @@ async function boot() {
     }
   }
   resetStaleConnectionStates();
+
+  // The page a board serves of itself opens as that board (see
+  // boardPage.js): its block found or placed, connected to the page's own
+  // host, holding the board's circuit, and entered. Before the reconnect
+  // cards below, which then have nothing to offer for it.
+  if (window.nodigraphEmbedded) {
+    try {
+      await installBoardPage(nodigraph, { store: projectStore, log: (message) => console.info(`[noditron] ${message}`) });
+    } catch (err) {
+      console.warn('[noditron] this board\'s page could not open as the board:', err.message);
+    }
+  }
 
   // With every board honestly "Not connected", offer the ones that were
   // connected last time their port back — a card at the bottom of the
@@ -562,47 +613,47 @@ async function boot() {
   // Still the "global timer" for block *values* — runtime.js's own
   // getLastResult() is what canvasIndicators.js/htmlOverlay.js read each
   // paint. Also where htmlOverlay's own container cleanup happens (see its
-  // own doc on why that's fine to leave off the per-frame path), and where
-  // the palette/library re-filter themselves against whichever container's
-  // now current (see palette.js/library.js's own refresh() and
-  // containerRestrictions.js) — nodigraph has no "you just entered a
-  // different block" event of its own to hook, so this just compares
-  // project.path against what it was last tick, which is already ticking
-  // here at a rate no navigation could outrun.
-  // The palette and library offer what fits where a new block would land
-  // (see containerRestrictions.addTarget), which moves with the selection
-  // as well as with navigation — so both are part of the key.
-  const addTargetKey = () => JSON.stringify([nodigraph.project.path, nodigraph.addTarget?.()?.id ?? null]);
-  let lastPathJson = addTargetKey();
-  // A CNC module's `gcode` input is the machine's feed: whatever value
-  // sits on it is sent as `g <line>` through the board's shell each time
-  // it changes (a Data block's text, a Match output) — grbl answers ok or
-  // error: on the shell, and the dialog's shell box shows both.
-  const lastGcodeSent = new Map(); // blockId -> last text sent
-  function forwardGcodeToCncModules() {
-    for (const { block, level } of devkitCircuit.collectBoardBlocks(nodigraph.project.rootBlock.children)) {
-      if (kindOf(block) !== 'cnc-module') continue;
-      if (!serialFlash.getSession(block.id) || !devkitCircuit.isDevkitRunning(block)) {
-        lastGcodeSent.delete(block.id);
-        continue;
-      }
-      const port = (block.ports || []).find((p) => logicalName(block, p.id) === 'gcode');
-      const conn = port && [...(level?.connections?.values?.() || [])].find((c) => c.targetBlockId === block.id && c.targetPortId === port.id);
-      if (!conn) continue;
-      const direct = getPortValue(conn.sourceBlockId, conn.sourcePortId);
-      const value = direct !== undefined ? direct : getBoundaryOutput(conn.sourceBlockId, conn.sourcePortId);
-      if (value === undefined || value === null || value === false) continue;
-      const text = String(value).trim();
-      if (!text || lastGcodeSent.get(block.id) === text) continue;
-      lastGcodeSent.set(block.id, text);
-      serialConsole.shell(block.id, `g ${text}`).catch((err) => console.warn(`[noditron] ${block.name}: gcode not sent:`, err.message));
-    }
-  }
+  // own doc on why that's fine to leave off the per-frame path). What the
+  // Add Block window offers is filtered when it opens (see
+  // addBlockDialog.js and containerRestrictions.js), so nothing here has
+  // to watch for navigation any more.
+  // Every board's `socket` port — its shell as a wire, either way round;
+  // see socketLink.js. Lines a board prints leave through a socket `out`
+  // and are its value; whatever a wire brings to a socket `in` is written
+  // to that board's shell.
+  const socketLinks = createSocketLinks({
+    subscribeLines: serialConsole.subscribeConsoleLines,
+    isLive: (block) => Boolean(serialFlash.getSession(block.id) || serialConsole.bridgeFor(block.id)) && devkitCircuit.isDevkitRunning(block),
+    shell: (blockId, line) => serialConsole.shell(blockId, line, { via: 'socket' }),
+    publish: (blockId, portId, value) => (value === undefined ? clearBoundaryOutput(blockId, portId) : setBoundaryOutput(blockId, portId, value)),
+    wireValue: (blockId, portId) => {
+      const direct = getPortValue(blockId, portId);
+      return direct !== undefined ? direct : getBoundaryOutput(blockId, portId);
+    },
+    log: (message) => console.warn(`[noditron] ${message}`),
+  });
 
+  // On an embedded host (window.nodigraphEmbedded, the page a board
+  // serves) a tick asks for a redraw only when some block's outputs
+  // changed — ten redraws a second of an unchanged diagram is most of what
+  // made that page feel heavy. Elsewhere every tick redraws, as before.
+  let lastOutputs = '';
+  function outputsChanged(result) {
+    let text = '';
+    try {
+      text = JSON.stringify([...(result?.outputsByBlock || new Map())].map(([id, outputs]) => [id, outputs]));
+    } catch {
+      return true;
+    }
+    if (text === lastOutputs) return false;
+    lastOutputs = text;
+    return true;
+  }
   startRuntime(
     nodigraph,
-    () => {
-      forwardGcodeToCncModules();
+    (result) => {
+      socketLinks.tick(devkitCircuit.collectBoardBlocks(nodigraph.project.rootBlock.children));
+      canBridge.tick();
       // The whole tree, not listBlocks(): that is only the level being
       // edited, so standing inside a board pruned the board's own overlay
       // every tick and the next frame built it again — its pill flickered
@@ -616,14 +667,7 @@ async function boot() {
       })(nodigraph.project.rootBlock.children);
       htmlOverlay.prune(byId);
       nodigraph.refreshSaved?.();
-      nodigraph.renderLoop.requestRender();
-
-      const pathJson = addTargetKey();
-      if (pathJson !== lastPathJson) {
-        lastPathJson = pathJson;
-        palette.refresh();
-        library.refresh();
-      }
+      if (!window.nodigraphEmbedded || outputsChanged(result)) nodigraph.renderLoop.requestRender();
     },
     100,
     syncLiveDigitalIO,

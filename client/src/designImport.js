@@ -60,6 +60,9 @@ export function traceDesign(design) {
         if (y === b.gy) return { block: b, input: 'a' };
         if (y === b.gy + 1) return { block: b, input: 'b' };
       }
+      // A data block two or more rows tall: a belt on a lower row writes
+      // (firmware build 20260928a and later), the top row triggers.
+      if (b.type === 'data' && b.h >= 2 && inside(b, x, y)) return { block: b, input: y > b.gy ? 'write' : null };
       if (inside(b, x, y)) return { block: b, input: b.type === 'and' ? 'a' : null };
     }
     return null;
@@ -195,7 +198,7 @@ export function importDesign({ design, esp, pinMap = [], factories, replace = fa
       const port = pin && boardPort(pin.label);
       r = port ? { board: port } : childFor(b, () => factories.digitalIo(d.exio ? 1000 + Number(d.exio) - 1 : Number(d.gpio), 'output'));
     } else if (b.type === 'can') {
-      const port = boardPort(role === 'source' ? 'CAN In' : 'CAN Out');
+      const port = boardPort('CAN') || boardPort(role === 'source' ? 'CAN In' : 'CAN Out');
       r = port ? { board: port } : null;
       const bitrate = Number(d.bitrate);
       const speedPort = boardPort('CAN speed');
@@ -250,6 +253,13 @@ export function importDesign({ design, esp, pinMap = [], factories, replace = fa
     const child = r.child;
     if (b.type === 'and') return { blockId: child.id, portId: portIdOf(child, edge.input === 'b' ? 'b' : 'a') };
     if (b.type === 'timer') return null; // nothing feeds a timer
+    if (b.type === 'data' && edge.input === 'write') {
+      // The write port is hidden on a fresh Data (see palette.js); a wire
+      // into it shows it, as the Inspector would.
+      const logical = (child.logicalPorts || []).find((lp) => lp.name === 'write');
+      if (logical) delete logical.hidden;
+      return { blockId: child.id, portId: portIdOf(child, 'write') };
+    }
     return { blockId: child.id, portId: portIdOf(child, 'in') || portIdOf(child, 'value') };
   }
 

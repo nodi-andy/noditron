@@ -17,6 +17,7 @@ import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { startHelloListener, discover } from './lanDiscovery.js';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIR = path.join(here, '..', '..', 'client');
@@ -243,6 +244,23 @@ const server = http.createServer((req, res) => {
     handleListModules(res);
     return;
   }
+  // Boards on this machine's network (see lanDiscovery.js): the ones heard
+  // by their UDP hello, plus — with ?scan=1, a few seconds — every host of
+  // the local /24 subnets that answers /api/version as a board.
+  if (urlPath === '/api/discover' && req.method === 'GET') {
+    const scan = /(^|[?&])scan=1(&|$)/.test(req.url.split('?')[1] || '');
+    discover({ scan }).then(
+      (result) => {
+        res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+        res.end(JSON.stringify(result));
+      },
+      (err) => {
+        res.writeHead(500, { 'Content-Type': 'text/plain' });
+        res.end(err.message);
+      },
+    );
+    return;
+  }
   if (urlPath.startsWith('/api/modules/') && req.method === 'GET') {
     handleGetModule(decodeURIComponent(urlPath.slice('/api/modules/'.length)), res);
     return;
@@ -273,6 +291,7 @@ const wss = new WebSocketServer({ server });
 wss.on('connection', () => {});
 
 server.listen(PORT, () => {
+  startHelloListener(console);
   console.log(`noditron server running at http://localhost:${PORT}`);
   console.log(`nodigraph client vendored (read-only) from ${NODIGRAPH_CLIENT_DIR}`);
   console.log(

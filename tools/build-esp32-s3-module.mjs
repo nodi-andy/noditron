@@ -18,8 +18,10 @@ const CLASSIC_PATH = path.join(here, '..', 'modules', 'esp32-devkit', 'noditron.
 // EXIO virtual GPIOs 1000..1007 match conucon's live IO protocol.
 const LEFT = Array.from({ length: 8 }, (_, i) => ['DI' + (i + 1), i + 4, 'digital-input']);
 const RIGHT = Array.from({ length: 8 }, (_, i) => ['DO' + (i + 1), 1000 + i, 'digital-output']);
-LEFT.push(['CAN In', 3, 'can-in']);
-RIGHT.push(['CAN Out', 2, 'can-out'], ['CAN speed', null, 'can-speed']);
+// One CAN pin, like the socket: which way it is wired decides — a wire into
+// it sends on the bus, a wire out of it receives (see devkitCircuit's
+// mapEndpoint, role 'can'). The transceiver sits on TX2/RX3 either way.
+RIGHT.push(['CAN', null, 'can'], ['CAN speed', null, 'can-speed']);
 RIGHT.push(['RS485 TX', 17, 'rs485'], ['RS485 RX', 18, 'rs485']);
 const RESERVED = new Map([[17, 'RS485 TX'], [18, 'RS485 RX']]);
 const NOTES = new Map();
@@ -34,8 +36,8 @@ function pinEntry([label, gpio, role], side, row) {
     role,
     // The S3 has no input-only pins at all, unlike the classic ESP32's
     // 34/35/36/39 — every GPIO it brings out can drive as well as read.
-    inputOnly: role === 'digital-input' || role === 'can-in',
-    outputOnly: role === 'digital-output' || role === 'can-out' || role === 'can-speed',
+    inputOnly: role === 'digital-input',
+    outputOnly: role === 'digital-output' || role === 'can-speed',
     ...(role === 'digital-output' ? { exio: gpio - 999, note: 'TCA9554 EXIO' + (gpio - 999) + ' / isolated Darlington output' } : {}),
     side,
     row,
@@ -53,6 +55,11 @@ function build() {
     // behind it, carrying the board's serial link to whatever is wired to
     // it (see devkitCircuit.js's usb-serial handling).
     { label: 'USB', gpio: null, role: 'usb-serial', inputOnly: null, side: 'top', row: null, orientation: 'usb-top' },
+    // The board's shell as a port (see client/src/socketLink.js): out by
+    // default — the lines the board prints — flipped to in from the
+    // Inspector to feed lines into its shell instead. Below CAN In, no
+    // GPIO behind it; the circuit on the board never sees it.
+    { label: 'socket', gpio: null, role: 'socket', inputOnly: null, outputOnly: null, direction: 'out', side: 'left', row: LEFT.length, orientation: 'usb-top' },
   ];
 
   // One port per pin, each pinned to its own slot down the edge. Ports on
@@ -77,9 +84,13 @@ function build() {
       // Use the PCB terminal direction on the block face. Nodigraph
       // automatically inverts a container port when viewed from inside,
       // so DI becomes an inner source and DO an inner sink as required.
-      direction: pin.inputOnly ? 'in' : pin.outputOnly ? 'out' : null,
+      direction: pin.direction !== undefined ? pin.direction : pin.inputOnly ? 'in' : pin.outputOnly ? 'out' : null,
       description: pin.reserved
         ? `GPIO${pin.gpio} — unavailable: ${pin.reserved}`
+        : pin.role === 'socket'
+          ? 'the board\'s shell: out carries every line it prints (the latest is the value), in writes what arrives to it'
+        : pin.role === 'can'
+          ? 'the CAN bus (TX2/RX3): a wire into it sends the value on the bus, a wire out of it carries what the bus delivers'
         : pin.gpio === null
           ? pin.role
           : pin.note
@@ -101,12 +112,19 @@ function build() {
 const USB_BOX = /\n\/\/ The USB connector sits under[\s\S]*?ctx\.fillText\('USB', usbX, g\.y \+ 29\);\n/;
 
 // Reuse the board drawing with this PCB's name, reset button and RGB pin.
+// The classic render letters every left/right pin itself — a second,
+// larger label under the one nodigraph draws for every port. Dropped: one
+// label per pin, nodigraph's.
+const PIN_LABELS = /\nctx\.font = '15px[^\n]*\nctx\.textBaseline = 'middle';\nfor \(const pin of pins\) \{[\s\S]*?\n\}\n/;
+
 function renderSource(boardName) {
   const classic = JSON.parse(fs.readFileSync(CLASSIC_PATH, 'utf8'));
   const source = Object.values(classic.block.blocks)[0].props.find((p) => p.name === 'render').value;
   if (!USB_BOX.test(source)) throw new Error('classic render no longer has the USB connector box this strips');
+  if (!PIN_LABELS.test(source)) throw new Error('classic render no longer has the pin label loop this strips');
   return source
     .replace(USB_BOX, '\n')
+    .replace(PIN_LABELS, '\n')
     .replace("block.name || 'ESP32 DevKit'", `block.name || '${boardName}'`)
     .replace(
       "drawBoardButton(g.x + g.width / 2 + 72, 'GPIO35', '#f8fafc');",
@@ -208,14 +226,14 @@ setProp('dialog', currentDialog
   .replace("    sendBtn.disabled = !childCount;", "    sendBtn.disabled = !compiledCount;")
   .replace(
     "log('Nothing to send -- wire a Timer/Bool to a GPIO pin on this ESP32 DevKit first.');",
-    "log('Nothing to send -- connect a supported circuit signal directly to DI, DO, CAN In, or CAN Out.');",
+    "log('Nothing to send -- connect a supported circuit signal directly to DI, DO, or CAN.');",
   )
   .replace(
     "log('Nothing to send -- add a Digital I/O block inside this ESP32 DevKit with a real pin set first.');",
-    "log('Nothing to send -- connect a supported circuit signal directly to DI, DO, CAN In, or CAN Out.');",
+    "log('Nothing to send -- connect a supported circuit signal directly to DI, DO, or CAN.');",
   ));
 module_.displayName = block.name = 'esp32-S3';
-module_.version = '1.8.0';
+module_.version = '1.10.0';
 setProp('boardVariant', 'ESP32-S3-POE-ETH-8DI-8DO');
 setProp('firmwarePreset', 'logic-esp32-s3-waveshare');
 setProp('canPins', JSON.stringify({ tx: 2, rx: 3 }));
@@ -229,11 +247,11 @@ setProp('onboardControls', JSON.stringify({
   led: { label: 'RGB', gpio: 38, role: 'output', type: 'addressable' },
 }));
 
-module_.description = 'Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8, DO1-D8, direct CAN In/Out with configurable speed, and USB firmware installation.';
+module_.description = 'Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8, DO1-D8, one CAN pin with configurable speed, a socket port carrying its shell, and USB firmware installation.';
 block.description = '';
 
 fs.writeFileSync(MODULE_PATH, `${JSON.stringify(module_, null, 2)}\n`);
 
 const reserved = pins.filter((p) => p.reserved).map((p) => p.label);
-console.log(`esp32-s3-devkit: ${pins.length} pins (${LEFT.length} left, ${RIGHT.length} right, 1 top), ${ports.length} ports`);
+console.log(`esp32-s3-devkit: ${pins.length} pins (${LEFT.length + 1} left, ${RIGHT.length} right, 1 top), ${ports.length} ports`);
 console.log(`  block ${geometry.width}x${geometry.height}, reserved: ${reserved.join(', ') || 'none'}`);

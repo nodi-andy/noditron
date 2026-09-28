@@ -8,7 +8,6 @@ import { createBlock, generateId } from '/nodigraph/src/model/Block.js';
 import { addPort, logicalPortOf, serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { createConnection } from '/nodigraph/src/model/Connection.js';
 import { KIND_PROP } from './runtime.js';
-import { getAllowedChildKinds, prepareAdd } from './containerRestrictions.js';
 
 // `hidden` ships a port that's real and wireable but not painted on the
 // canvas until someone reveals it from the Inspector's own port list (see
@@ -150,7 +149,7 @@ if (!badge) {
     if (!parent || (parent.props || []).find((p) => p.name === 'noditronKind')?.value !== 'esp32-devkit') return;
     if ((parent.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running') return;
     try {
-      const serialConsole = await import('/src/serialConsole.js');
+      const serialConsole = window.noditronModules.serialConsole;
       await serialConsole.setPin(parent.id, Number(pin), next);
     } catch (err) {
       console.warn('[Bool] Live hardware set failed:', err.message);
@@ -292,7 +291,7 @@ slider.addEventListener('input', async () => {
   if (!parent || (parent.props || []).find((p) => p.name === 'noditronKind')?.value !== 'esp32-devkit') return;
   if ((parent.props || []).find((p) => p.name === 'connectionState')?.value !== 'connected:running') return;
   try {
-    const serialConsole = await import('/src/serialConsole.js');
+    const serialConsole = window.noditronModules.serialConsole;
     await serialConsole.setPin(parent.id, Number(props.pin), next);
   } catch (err) {
     console.warn('[Bool] Live hardware set failed:', err.message);
@@ -326,7 +325,7 @@ async function syncPorts(pinValue, dirValue) {
     .join(',');
   const desiredKey = desired.map(([d, n]) => d + ':' + n).sort().join(',');
   if (current === desiredKey) return false;
-  const bd = await import('/nodigraph/src/model/BlockDescription.js');
+  const bd = window.noditronModules.BlockDescription;
   for (const lp of [...(block.logicalPorts || [])]) {
     const removedPinIds = bd.removeLogicalPort(block, lp.id);
     for (const pinId of removedPinIds) helpers.project.removeConnectionsForPort(pinId);
@@ -1799,79 +1798,58 @@ export function rehydrateKindLogic(block) {
   }
 }
 
-export function mountPalette(nodigraph, container) {
-  container.innerHTML = '';
-  const label = document.createElement('div');
-  label.className = 'noditron-palette-label';
-  label.textContent = 'Add block';
-  container.appendChild(label);
-
-  // { el, kind } for every button -- kept around so refresh() (see below)
-  // can show/hide by kind against whatever the current container allows,
-  // without rebuilding the whole palette (and losing click listeners,
-  // scroll position, etc.) every time the user navigates a level.
-  const buttons = [];
-  function paletteButton(swatchColor, text, kind, onClick) {
-    const button = document.createElement('button');
-    button.type = 'button';
-    const swatch = document.createElement('span');
-    swatch.className = 'noditron-swatch';
-    swatch.style.background = swatchColor;
-    const label_ = document.createElement('span');
-    label_.textContent = text;
-    button.append(swatch, label_);
-    // Into the selected block, when one is selected (see prepareAdd) —
-    // before onClick, which places the new block in view of the camera the
-    // move leaves behind.
-    button.addEventListener('click', () => {
-      prepareAdd(nodigraph);
-      onClick();
-    });
-    container.appendChild(button);
-    buttons.push({ el: button, kind });
-    return button;
-  }
-
-  paletteButton('#3ecf5d', 'Bool', 'digital-io', () => createDigitalIOBlock(nodigraph));
-  paletteButton('#4f8cff', 'Data', 'data', () => createStandaloneDataBlock(nodigraph));
-  paletteButton('#4f8cff', 'Add', 'add', () => createAddBlock(nodigraph));
-  paletteButton('#c98a2f', 'AND gate', 'and', () => createAndBlock(nodigraph));
-  paletteButton('#c98a2f', 'OR gate', 'or', () => createOrBlock(nodigraph));
-  paletteButton('#c98a2f', 'Gate', 'gate', () => createGateBlock(nodigraph));
-  paletteButton('#c98a2f', 'NOT gate', 'not', () => createNotBlock(nodigraph));
-  paletteButton('#7c5cff', 'State', 'state', () => createStateBlock(nodigraph));
-  paletteButton('#3ecf5d', 'LED', 'led', () => createLedBlock(nodigraph));
-  paletteButton('#3ecf5d', 'Timer', 'timer', () => createTimerBlock(nodigraph));
-  paletteButton('#2f6fed', 'Weather', 'weather', () => createWeatherBlock(nodigraph));
-  paletteButton('#c98a2f', 'JSON Field', 'json-field', () => createJsonFieldBlock(nodigraph));
-
-  // conucon's Logic Module blocks (see that section in this file).
-  paletteButton('#7c5cff', 'Boot', 'boot', () => createBootBlock(nodigraph));
-  paletteButton('#c98a2f', 'Slice', 'slice', () => createSliceBlock(nodigraph));
-  paletteButton('#c98a2f', 'Route', 'route', () => createRouteBlock(nodigraph));
-  paletteButton('#c98a2f', 'Match', 'croute', () => createContentRouteBlock(nodigraph));
-  paletteButton('#3ecf5d', 'PWM Out', 'pwmout', () => createPwmOutBlock(nodigraph));
-  paletteButton('#3ecf5d', 'PWM In', 'pwmin', () => createPwmInBlock(nodigraph));
-  paletteButton('#2f6fed', 'Serial TX', 'serial', () => createSerialOutBlock(nodigraph));
-  paletteButton('#2f6fed', 'Serial RX', 'serialin', () => createSerialInBlock(nodigraph));
-  paletteButton('#2f6fed', 'CAN', 'can', () => createCanBlock(nodigraph));
-  paletteButton('#2f6fed', 'I2C Out', 'i2cout', () => createI2cOutBlock(nodigraph));
-  paletteButton('#2f6fed', 'I2C In', 'i2cin', () => createI2cInBlock(nodigraph));
-
-  // Called on every navigation (see main.js's own level-change poll) --
-  // hides any button whose kind isn't in the current container's own
-  // allowedChildKinds, if it declares one (see containerRestrictions.js).
-  // Unrestricted containers (no prop set -- the ordinary case) show every
-  // primitive, exactly as before this existed.
-  function refresh() {
-    const allowed = getAllowedChildKinds(nodigraph);
-    for (const { el, kind } of buttons) {
-      // Not el.hidden -- #noditron-palette button's own display:flex rule
-      // (id+element, higher specificity than the UA [hidden]{display:none}
-      // default) would silently win and leave it visible anyway.
-      el.style.display = allowed !== null && !allowed.includes(kind) ? 'none' : '';
-    }
-  }
-  refresh();
-  return { refresh };
+// Every primitive noditron ships, in the groups the Add Block window lays
+// them out in (see addBlockDialog.js): a swatch colour, a label, the kind
+// the block gets tagged with (see addKindProp), and how to make one. The
+// window filters these against the current container's allowedChildKinds
+// (see containerRestrictions.js) and calls prepareAdd before create, so a
+// new block lands where nodigraph's own + button would have put it.
+export function paletteGroups(nodigraph) {
+  const entry = (swatchColor, text, kind, create) => ({ swatchColor, text, kind, create: () => create(nodigraph) });
+  return [
+    {
+      label: 'Logic',
+      entries: [
+        entry('#3ecf5d', 'Bool', 'digital-io', createDigitalIOBlock),
+        entry('#c98a2f', 'AND gate', 'and', createAndBlock),
+        entry('#c98a2f', 'OR gate', 'or', createOrBlock),
+        entry('#c98a2f', 'Gate', 'gate', createGateBlock),
+        entry('#c98a2f', 'NOT gate', 'not', createNotBlock),
+        entry('#7c5cff', 'State', 'state', createStateBlock),
+      ],
+    },
+    {
+      label: 'Data',
+      entries: [
+        entry('#4f8cff', 'Data', 'data', createStandaloneDataBlock),
+        entry('#4f8cff', 'Add', 'add', createAddBlock),
+        entry('#c98a2f', 'JSON Field', 'json-field', createJsonFieldBlock),
+        entry('#2f6fed', 'Weather', 'weather', createWeatherBlock),
+      ],
+    },
+    {
+      label: 'Time & output',
+      entries: [
+        entry('#3ecf5d', 'Timer', 'timer', createTimerBlock),
+        entry('#3ecf5d', 'LED', 'led', createLedBlock),
+      ],
+    },
+    {
+      // conucon's Logic Module blocks (see that section in this file).
+      label: 'Board I/O',
+      entries: [
+        entry('#7c5cff', 'Boot', 'boot', createBootBlock),
+        entry('#c98a2f', 'Slice', 'slice', createSliceBlock),
+        entry('#c98a2f', 'Route', 'route', createRouteBlock),
+        entry('#c98a2f', 'Match', 'croute', createContentRouteBlock),
+        entry('#3ecf5d', 'PWM Out', 'pwmout', createPwmOutBlock),
+        entry('#3ecf5d', 'PWM In', 'pwmin', createPwmInBlock),
+        entry('#2f6fed', 'Serial TX', 'serial', createSerialOutBlock),
+        entry('#2f6fed', 'Serial RX', 'serialin', createSerialInBlock),
+        entry('#2f6fed', 'CAN', 'can', createCanBlock),
+        entry('#2f6fed', 'I2C Out', 'i2cout', createI2cOutBlock),
+        entry('#2f6fed', 'I2C In', 'i2cin', createI2cInBlock),
+      ],
+    },
+  ];
 }

@@ -86,12 +86,10 @@
     </div>
   </div>
 
-  <!-- noditron's own addition outside the canvas itself: the block
-       palette (see src/palette.js). Every block's own status indicator is
-       drawn directly into nodigraph's canvas paint instead (see
-       src/canvasIndicators.js) — there's no separate DOM overlay layer to
-       host anymore. -->
-  <div id="noditron-palette"></div>
+  <!-- No block palette of its own: nodigraph's + button opens noditron's
+       Add Block window (see src/addBlockDialog.js), which builds its own
+       DOM. Every block's own status indicator is drawn directly into
+       nodigraph's canvas paint (see src/canvasIndicators.js). -->
 
   <!-- Sets window.nodigraphExtraTabs — has to run *before* nodigraph's own
        main.js below, which reads it once while setting up the Inspector

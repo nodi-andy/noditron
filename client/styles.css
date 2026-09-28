@@ -3,97 +3,136 @@
    --border, --bg-well, ...) are reused here rather than redeclared, so
    this stays in sync with nodigraph's light canvas and editor chrome. */
 
-/* Keep the palette in a predictable, high-contrast position on the right.
-  It stays clear of the top HUD and leaves the canvas center unobstructed. */
-#noditron-palette {
-  position: fixed;
-  top: calc(var(--topbar-height, 44px) + 22px);
-  right: 12px;
-  bottom: auto;
-  left: auto;
-  transform: none;
-  z-index: 60;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  padding: 8px;
-  background: var(--bg-surface, #fff);
-  border: 2px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.24);
-  max-width: min(280px, calc(100vw - 24px));
-  max-height: calc(100dvh - var(--topbar-height, 44px) - 104px);
-  overflow-y: auto;
+/* The Add Block window (see src/addBlockDialog.js): nodigraph's + button
+   opens it. It shares the dialog backdrop/panel/close rules below and adds
+   a wider panel with grouped grids of tiles. */
+.noditron-dialog-panel.noditron-add-panel {
+  max-width: min(760px, calc(100vw - 32px));
+  width: 100%;
 }
 
-@media (min-width: 769px) {
-  body.inspector-open #noditron-palette {
-    right: calc(12px + var(--inspector-width, 300px));
-  }
+.noditron-add-title {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
-#noditron-palette .noditron-palette-label {
+.noditron-add-group {
+  margin: 0 0 16px;
+}
+
+.noditron-add-group-label {
   font-size: 11px;
   font-weight: 600;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
-  padding: 2px 6px 4px;
+  margin-bottom: 8px;
 }
 
-#noditron-palette button {
-  display: flex;
-  align-items: center;
+.noditron-add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: 8px;
-  padding: 7px 10px;
-  background: none;
-  border: 1px solid transparent;
-  border-radius: 6px;
+}
+
+.noditron-add-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  min-height: 52px;
+  padding: 9px 10px;
+  background: var(--bg-well, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
   color: var(--text-primary);
   font-size: 13px;
   text-align: left;
   cursor: pointer;
-  white-space: nowrap;
 }
 
-#noditron-palette button:hover {
+.noditron-add-tile:hover:not(:disabled) {
   background: var(--bg-hover);
-  border-color: var(--border);
+  border-color: var(--accent, var(--border));
 }
 
-#noditron-palette .noditron-swatch {
+.noditron-add-tile:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.noditron-add-tile .noditron-swatch {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
 }
 
-@media (max-width: 768px) {
-  #noditron-palette {
-    top: auto;
-    right: 12px;
-    bottom: calc(78px + env(safe-area-inset-bottom, 0px));
-    max-width: calc(100vw - 24px);
-    max-height: none;
-    overflow-x: auto;
-    overflow-y: hidden;
-    flex-direction: row;
-    align-items: center;
-    padding: 6px;
-    border-radius: 22px;
-  }
+.noditron-add-tile-label {
+  font-weight: 600;
+}
 
-  #noditron-palette .noditron-palette-label,
-  #noditron-palette > div:not(:has(.noditron-swatch)) {
-    display: none;
-  }
+.noditron-add-tile-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}
 
-  #noditron-palette button {
-    flex: 0 0 auto;
-    padding: 7px 10px;
-    white-space: nowrap;
-  }
+.noditron-add-form {
+  display: flex;
+  gap: 6px;
+  margin: 10px 0 0;
+}
+
+.noditron-add-form input {
+  flex: 1;
+  min-width: 0;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+
+.noditron-add-form button {
+  padding: 6px 12px;
+  border: 1px solid var(--success, #3ecf5d);
+  border-radius: 6px;
+  background: var(--success, #3ecf5d);
+  color: #06210f;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.noditron-add-form button.noditron-add-scan {
+  border-color: var(--border);
+  background: none;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.noditron-add-found {
+  margin-top: 8px;
+}
+
+.noditron-add-status {
+  min-height: 1em;
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+}
+
+.noditron-add-status.is-error {
+  color: var(--danger, #e5484d);
+}
+
+.noditron-add-status + .noditron-add-grid {
+  margin-top: 8px;
 }
 
 /* The Inspector's "Logic" tab (see src/logicTab.js) — rendered inside

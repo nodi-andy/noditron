@@ -116,11 +116,15 @@ export async function reconcileWithDevice(nodigraph, block) {
   const onDevice = await serialConsole.readDesign(block.id);
   const deviceBlocks = Array.isArray(onDevice?.blocks) ? onDevice.blocks : [];
   let compiled = null;
+  const notes = [];
   try {
-    compiled = devkitCircuit.buildDevkitDesign(block, level);
+    compiled = devkitCircuit.buildDevkitDesign(block, level, { notes });
   } catch {
     compiled = null;
   }
+  // Said with every outcome below: "the device holds this circuit" is
+  // true of the design, and misleading when the drawing has more in it.
+  const leftOut = notes.length ? ` Not on the board: ${notes.join(' ')}` : '';
   const settle = (deviceDesign) => {
     setProp(block, 'deviceDesign', deviceDesign);
     block.description = serializeBlockDescription(block);
@@ -130,7 +134,7 @@ export async function reconcileWithDevice(nodigraph, block) {
   if (compiled && devkitCircuit.designsMatch(compiled, onDevice)) {
     devkitCircuit.markDevkitSent(block, onDevice);
     settle('');
-    return { status: 'in-sync', message: 'The device holds this circuit -- nothing to save.' };
+    return { status: 'in-sync', message: `The device holds this circuit -- nothing to save.${leftOut}` };
   }
   if (!deviceBlocks.length) {
     settle('');
@@ -155,7 +159,7 @@ export async function reconcileWithDevice(nodigraph, block) {
     }
   }
   settle(JSON.stringify(onDevice));
-  return { status: 'differs', message: "The device holds a different circuit -- save this one to replace it, or load the device's." };
+  return { status: 'differs', message: `The device holds a different circuit -- save this one to replace it, or load the device's.${leftOut}` };
 }
 
 // Replaces whatever is inside the block with the device's circuit — the
