@@ -123,8 +123,12 @@ export async function reconcileWithDevice(nodigraph, block) {
     compiled = null;
   }
   // Said with every outcome below: "the device holds this circuit" is
-  // true of the design, and misleading when the drawing has more in it.
-  const leftOut = notes.length ? ` Not on the board: ${notes.join(' ')}` : '';
+  // true of the design, and misleading when the drawing has more in it —
+  // as a one-line count here; the full wording, deduped (the compiler
+  // repeats itself per chain), goes to the browser console.
+  const uniqueNotes = [...new Set(notes)];
+  if (uniqueNotes.length) console.info(`Not on the board:\n${uniqueNotes.join('\n')}`);
+  const leftOut = uniqueNotes.length ? ` ${uniqueNotes.length} wire(s) left out — details in the browser console.` : '';
   const settle = (deviceDesign) => {
     setProp(block, 'deviceDesign', deviceDesign);
     block.description = serializeBlockDescription(block);
