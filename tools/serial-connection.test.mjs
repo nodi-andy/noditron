@@ -237,3 +237,28 @@ test('lines the board sends on its own are marked unsolicited; a command reply i
   stop();
   api.closeConsole('board');
 });
+
+test('an ok that names its command ends the reply like a bare ok', async () => {
+  const { device } = shellDevice({ 'ls can': 'log = Off\nmirror = Off\nok ls can\n' });
+  const api = consoleFor({ transport: { device } });
+  api.setLogIncoming(false);
+  const sent = await api.shell('board', 'ls can', { timeoutMs: 500 });
+  assert.equal(sent.ok, true);
+  assert.deepEqual(sent.lines, ['log = Off', 'mirror = Off']);
+  assert.equal(sent.end, 'ok ls can');
+  api.closeConsole('board');
+});
+
+test('a line from another node, <from>@<port>><text>, is unsolicited even inside a reply', async () => {
+  const { device } = shellDevice({ 'ls can': 'cnc@can>unlock\nlog = Off\nok\n' });
+  const api = consoleFor({ transport: { device } });
+  api.setLogIncoming(false);
+  const seen = [];
+  const stop = api.subscribeConsoleLines('board', (entry) => seen.push(entry));
+  const sent = await api.shell('board', 'ls can', { timeoutMs: 500 });
+  assert.equal(sent.ok, true);
+  assert.deepEqual(seen.filter((e) => e.unsolicited).map((e) => e.line), ['cnc@can>unlock']);
+  assert.deepEqual(seen.filter((e) => !e.unsolicited && !e.outgoing).map((e) => e.line), ['log = Off', 'ok']);
+  stop();
+  api.closeConsole('board');
+});

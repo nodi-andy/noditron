@@ -13,6 +13,7 @@ test('board messages become the console lines the serial link would carry', () =
   assert.equal(consoleTextFor({ type: 'io', pins: [{ gpio: 4, output: false, state: true }] }), '{"type":"io-change","pins":[{"gpio":4,"output":false,"state":true}]}');
   assert.equal(consoleTextFor({ type: 'console', line: '[USB] hellooo' }), '[USB] hellooo');
   assert.equal(consoleTextFor({ type: 'can_in', value: 'ok' }), '[CAN] rx ok');
+  assert.equal(consoleTextFor({ type: 'can_in', value: 'ok', from: 'cnc' }), 'cnc@can>ok');
   assert.equal(consoleTextFor({ type: 'route_sel', id: 3 }), null);
   assert.equal(consoleTextFor('garbage'), null);
 });

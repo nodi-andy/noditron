@@ -178,10 +178,11 @@ function logCompleteLines(state, chunk) {
 // on its own behalf (pin polling, the dialog's status refreshes, identify,
 // a design save) rather than the user, so a terminal view can leave it out
 // and still show everything the user or a wire put on the link.
-// What a board says on its own account, whatever else is going on: the
-// socket's traffic, a circuit's [USB] value, CAN/socket/node/WiFi/OTA
+// What a board says on its own account, whatever else is going on: a line
+// that reached it from another node (`<from>@<port>><text>` — `cnc@can>ok`,
+// `a1d148c4@socket>hello`), a circuit's [USB] value, CAN/socket/node/WiFi/OTA
 // notices. See dispatchLines.
-const ANNOUNCEMENT_RE = /^(\w+@socket>|socket (in|out): |\[(USB|CAN|SOCKET|NODES|WIFI|OTA)\] )/;
+const ANNOUNCEMENT_RE = /^([\w?*-]+@\w+>|socket (in|out): |\[(USB|CAN|SOCKET|NODES|WIFI|OTA)\] )/;
 const lineListeners = new Map(); // blockId -> Set<(event) => void>
 const activeCommands = new Map(); // blockId -> count of commands in flight
 const quietCommands = new Map(); // blockId -> count of quiet commands in flight
@@ -1379,8 +1380,9 @@ async function shellCommand(blockId, line, { timeoutMs = 4000, quiet = false, vi
     } catch {
       break;
     }
-    if (reply === 'ok') return { ok: true, lines };
-    if (reply.startsWith('error:')) return { ok: false, error: reply.slice(6).trim(), lines };
+    // `ok`, or `ok <the command>` from a board that names what it ended.
+    if (reply === 'ok' || reply.startsWith('ok ')) return { ok: true, lines, end: reply };
+    if (reply.startsWith('error:')) return { ok: false, error: reply.slice(6).trim(), lines, end: reply };
     lines.push(reply);
   }
   return { ok: false, error: 'no reply', lines };
@@ -1397,7 +1399,7 @@ async function bridgedShellCommand(bridge, blockId, line, { timeoutMs = 4500, qu
   notifyLineListeners(blockId, { line: String(line), outgoing: true, unsolicited: false, quiet, via });
   const reply = await shell(bridge.bridgeId, `node ${bridge.target} ${line}`, { timeoutMs, quiet: true });
   for (const text of reply.lines || []) notifyLineListeners(blockId, { line: text, unsolicited: false, quiet });
-  const tail = reply.ok ? 'ok' : reply.error ? `error: ${reply.error}` : null;
+  const tail = reply.end || (reply.ok ? 'ok' : reply.error ? `error: ${reply.error}` : null);
   if (tail) notifyLineListeners(blockId, { line: tail, unsolicited: false, quiet });
   return reply;
 }

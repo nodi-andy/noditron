@@ -1017,3 +1017,55 @@ ping
   bus (node 0dd04644, MAC 20-50-0D-D0-46-45) still runs 20260928a. Verified:
   $Pins lists the machine pins; Y limit -1 + restart → boot log has no Y
   limit; back to 35 → "Y Axis limit switch on pin GPIO(35)".
+
+## One shell grammar on both boards: settings tree, `id@port>` traffic (2026-09-28)
+
+CNC build **20260928c** and S3 (esp32_logic) build **20260928c**. The shell
+changes on both boards:
+
+- **The CNC no longer mirrors its console onto CAN.**
+  - A line that arrives over CAN runs as grbl client `CLIENT_CAN` (5), so its
+    `ok`, `error:` and `<Idle|…>` go back on the bus and nowhere else.
+  - The console reaches the bus only with `can mirror on`.
+- **Neither board echoes what it sends.**
+  - `[CAN] tx` / `[CAN] rx` are only shown with `can log on`, a setting on
+    both boards.
+  - What reaches a node from another shows on its console as
+    `<from>@<port>><text>`: `logic@can>unlock`, `cnc@can>ok`, `?@uart2>…`.
+    `<from>` is the one node heard lately, else `?`.
+  - A node request for this node shows as `<asker>@can><line>`.
+  - The S3's `can_in` WebSocket message now carries `from`, and
+    `wifiTransport.consoleTextFor` turns it into the same line.
+- **Sending with `<node>@can><line>` (or `<node>><line>`).**
+  - It runs the line on that node over CAN. The answer is printed as
+    `<node>@can>…`, followed by its closing `ok` / `error:` without the
+    prefix, so `shell()` still sees the end of the reply.
+  - `<node>@socket><text>` puts text into the sockets on the bus.
+  - `node <node> <line>` is unchanged; noditron's bridge still uses it.
+- **Settings tree (see conucon esp32_cnc README, "Settings tree").**
+  - `ls`, `ls x`, `x limit pin`, `x limit pin 34`, `x.limit.pin = 34`,
+    `get …`, `set …`.
+  - On the CNC the tree is grbl's settings list, each name turned into a
+    path (`Pins/X/Limit` → `x.limit.pin`), plus per-axis mask bits
+    (`x.dir.invert`) and live values (`x.limit.state`, `x.pos`). `$…` is
+    unchanged.
+  - On the S3 it is a table: `name`, `ap.*`, `wifi.*`, `can.*`,
+    `circuit.*`, `firmware.*`, `heap`.
+- **Removed lines.** grbl's `[RX:…]` echo now goes to the WebUI terminal only,
+  and `[BUF:n]` after every `ok` is gone (nothing read either).
+- **S3 line buffer.** The S3's USB line buffer grew from 48 to 256 characters.
+- **noditron.** `ANNOUNCEMENT_RE` now matches any `<id>@<port>>` line as
+  unsolicited, and a test covers it.
+- **`ok` names the command it ends (both boards, 20260928c).**
+  - The format is `ok G0 X10` / `ok ls can` / `ok unlock`. Commands longer
+    than 48 characters are cut: `ok G1 X10 Y20 ...`.
+  - It is still the reply terminator, so `shellCommand` accepts `ok` or
+    `ok <anything>` and returns it as `end`, and the bridge passes the far
+    board's own terminator on.
+  - gui.html settles the waiter whose command the `ok` names (falling back to
+    the oldest). Over HTTP it registers the waiter before reading the body,
+    and drops a body `ok` nobody waits for.
+  - Removed `ok`s:
+    - the ones synthesized for realtime bytes and ABORT over UART2/CAN
+    - the second `ok` from `$V=`
+    - JMP's `ok:` / `error:` text plus status (now a `[MSG:JMP …]` line)

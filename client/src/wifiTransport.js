@@ -9,7 +9,9 @@
 // shell reply is fed back as console text. The board's own broadcasts are
 // translated to the lines the console already knows: an `io` snapshot
 // becomes the `io-change` line the serial link sends, a `console` line is
-// what a circuit's serial block printed to USB, a CAN frame is `[CAN] rx`.
+// what a circuit's serial block printed to USB, a CAN frame is the line
+// the USB console printed for it: `<from>@can><text>` (`[CAN] rx` from a
+// board too old to say who sent it).
 // What cannot go this way is the raw byte phase of `save-design`; the
 // console sends a design over HTTP instead (see serialConsole.js).
 const CONSOLE_PORT = 81;
@@ -30,7 +32,9 @@ export function consoleTextFor(message) {
   if (message.type === 'shell') return String(message.output ?? '');
   if (message.type === 'io' && Array.isArray(message.pins)) return JSON.stringify({ type: 'io-change', pins: message.pins });
   if (message.type === 'console' && typeof message.line === 'string') return message.line;
-  if (message.type === 'can_in' && message.value !== undefined) return `[CAN] rx ${message.value}`;
+  if (message.type === 'can_in' && message.value !== undefined) {
+    return message.from ? `${message.from}@can>${message.value}` : `[CAN] rx ${message.value}`;
+  }
   return null;
 }
 
