@@ -28,7 +28,7 @@ import { getInstalledModules, listBundledModules, fetchManifest, addModuleBlock,
 import { getAllowedChildKinds, prepareAdd, addTarget } from './containerRestrictions.js';
 import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
-import { moduleNameFor } from './moduleDiscovery.js';
+import { moduleNameFor, MODULE_NAMES } from './moduleDiscovery.js';
 import { findContainingLevel } from './devkitCircuit.js';
 import { setBlockProp, findBoardByNodeId, scanAndPlaceNeighbours, describeNeighbours } from './canNeighbours.js';
 
@@ -106,7 +106,7 @@ export function installAddBlockDialog(nodigraph) {
     const info = await serialConsole.identify(tempId, { timeoutMs: 6000 });
     if (!info.verified) return { info, board: null };
 
-    const name = moduleNameFor(info.kind, { nativeUsb });
+    const name = moduleNameFor(info.kind, { nativeUsb, board: info.board });
     status(`${moduleLabel(info)}: placing ${name}...`);
     const existing = findBoardByNodeId(nodigraph, info.node);
     let board = existing?.block || null;
@@ -340,7 +340,7 @@ export function installAddBlockDialog(nodigraph) {
             ? 'The board is starting but nothing answered as a module yet. Place it anyway to install or check its firmware from its own dialog:'
             : 'Nothing answered on this link. The board may have no firmware yet; place it anyway and install one from its own dialog:', true);
           choice.hidden = false;
-          for (const name of ['esp32-s3-devkit', 'esp32-devkit', 'esp32-cnc']) {
+          for (const name of MODULE_NAMES) {
             choice.appendChild(tile({ swatchColor: '#8b93a3', text: `Place ${name}` }, async () => {
               try {
                 await placeUnverified(name);

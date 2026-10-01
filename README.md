@@ -11,7 +11,7 @@ A module is plain data, not code: its repo carries one `noditron.module.json` ma
 ```json
 {
   "noditronModule": 1,
-  "name": "esp32-devkit",
+  "name": "esp32-devkit-logic",
   "displayName": "ESP32 DevKit",
   "version": "0.1.0",
   "description": "...",
@@ -26,7 +26,27 @@ No registry server of ours is involved: a module lives in a GitHub repo (public 
 
 **On the board itself:** `node tools/build-board-site.mjs --upload <board>` puts this page on an esp32-S3 Logic Module's flash as three gzipped files — `index.html`, `app.js` (nodigraph's and noditron's clients bundled by esbuild, `npm install` once at the repo root) and `app.css` — plus the icon and the modules as JSON, in an **embedded** form by default (system font, plain flow layout from `client/embedded.css`, no installable-app or live-sync plumbing, no flasher, only the blocks the firmware runs; `--full` for the whole site), and the firmware serves it at `/` in place of its old belts editor (kept at `/logic-editor`); that page opens as the board itself — its block placed (or found by node id), connected to the page's own host, holding the circuit the board runs, and entered (`client/src/boardPage.js`); Save sends the circuit to the board and stores the project on it through its file upload (the board's `/api/project` PUT cannot hold a body that size), with the project in its flash and the bundled modules as JSON (see the `noditron site` section of conucon's esp32_logic main.cpp). The classic DevKit's filesystem is too small for it.
 
-`modules/esp32-devkit/` and `modules/esp32-s3-devkit/` in this repo are two working examples built this way — an ESP32 (or ESP32-S3) board with every header pin on the block edge and a real connect/flash dialog, each wired to only its own chip's firmware — see "Flashing firmware over serial" below. Both share one dialog script (see the block's `chipFamily` prop, which the script filters `helpers.serial.firmwarePresets` against) rather than two copies that could drift apart. This repo's own `modules/` catalog is what the server bundles (`/api/modules`), and is always offered — whether or not the repo carries the `noditron-module` GitHub topic (a repo-settings change with no API this project's tools can reach — add it by hand under Settings → General → Topics if you also want *other* people's search to find it, since `DEFAULT_REPOS` only ever applies to this app's own build, not a searcher's).
+`modules/esp32-devkit-logic/` and `modules/esp32s3-8io-logic/` in this repo are two working examples built this way — an ESP32 (or ESP32-S3) board with every header pin on the block edge and a real connect/flash dialog, each wired to only its own chip's firmware — see "Flashing firmware over serial" below. Both share one dialog script (see the block's `chipFamily` prop, which the script filters `helpers.serial.firmwarePresets` against) rather than two copies that could drift apart. This repo's own `modules/` catalog is what the server bundles (`/api/modules`), and is always offered — whether or not the repo carries the `noditron-module` GitHub topic (a repo-settings change with no API this project's tools can reach — add it by hand under Settings → General → Topics if you also want *other* people's search to find it, since `DEFAULT_REPOS` only ever applies to this app's own build, not a searcher's).
+
+## Boards and firmware: six modules
+
+Three boards, two firmwares, one module for each pair, named
+`<hardware>-<firmware>`:
+
+| Hardware | id | Logic Module | CNC module |
+|---|---|---|---|
+| ESP32 DevKit V1 (classic) | `esp32-devkit` | `esp32-devkit-logic` | `esp32-devkit-cnc` |
+| Waveshare ESP32-S3 RS485/CAN, two isolated IOs | `esp32s3-2io` | `esp32s3-2io-logic` | `esp32s3-2io-cnc` |
+| Waveshare ESP32-S3-POE-ETH-8DI-8DO | `esp32s3-8io` | `esp32s3-8io-logic` | `esp32s3-8io-cnc` |
+
+The firmware presets in `client/src/serialFlash.js` carry the same six ids,
+and so do conucon's PlatformIO envs (`logic-esp32s3-2io`, `cnc-esp32s3-2io`,
+...). A board built from 20260930a on says which it is — `board=<hardware>`
+on the second `[INFO]` line of its `?` reply, and `board` in `/api/version` —
+and the Add Block window places exactly that module (`moduleNameFor` in
+`client/src/moduleDiscovery.js`). Older firmware is placed by its USB chip
+as before. The three names from before the scheme (`esp32-devkit`,
+`esp32-s3-devkit`, `esp32-cnc`) still resolve (`MODULE_ALIASES`).
 
 ## Flashing firmware over serial
 
@@ -79,7 +99,7 @@ The server listens on `PORT`, which Cloud Run sets automatically.
 
 The `esp32-S3` library block represents the Waveshare
 [ESP32-S3-POE-ETH-8DI-8DO](https://www.waveshare.com/wiki/ESP32-S3-POE-ETH-8DI-8DO).
-Its library ID remains `esp32-s3-devkit` so existing projects refresh normally.
+Its library ID is `esp32s3-8io-logic` (`esp32-s3-devkit` before the naming scheme; the old name still resolves) so existing projects refresh normally.
 DI1?DI8 read GPIO4?GPIO11; DO1?DO8 compile to `dout.data.exio` 1?8,
 using conucon's TCA9554 driver (SDA42, SCL41, address 0x20, active-high).
 Live output IDs are 1000?1007. CAN uses TWAI on TX2/RX3.

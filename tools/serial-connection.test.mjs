@@ -134,7 +134,7 @@ test('native ESP32-S3 USB uses ROM flashing instead of the unstable RAM stub', (
   assert.match(flashSource, /compress: session\.esploader\.IS_STUB === true/);
 });
 
-for (const name of ['esp32-devkit', 'esp32-s3-devkit']) {
+for (const name of ['esp32-devkit-logic', 'esp32s3-8io-logic', 'esp32s3-2io-logic']) {
   test(`${name} selects S3 firmware from detection even for a classic diagram block`, () => {
     const module = JSON.parse(fs.readFileSync(new URL(`../modules/${name}/noditron.module.json`, import.meta.url)));
     const source = Object.values(module.block.blocks)[0].props.find(p => p.name === 'dialog').value;

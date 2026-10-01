@@ -63,46 +63,95 @@ export function getSession(blockId) {
 // family (offsets, and on some cores their actual bytes, differ).
 const FIRMWARE_REPO = { owner: 'nodi-andy', repo: 'noditron', ref: 'main' };
 const BOOT_APP0 = { path: 'firmware-assets/boot_app0.bin', address: 0xe000 };
+// Six presets: the two firmwares on each of the three boards (see
+// moduleDiscovery.HARDWARE), id <firmware>-<hardware>, matching the
+// module of the same name and the conucon env that builds it. Every
+// preset is the full bundle — bootloader, partition table, boot_app0,
+// app — and the partition table is the firmware's own (the CNC's differs
+// from the Logic Module's on the same chip).
+const BUILD = '20260930r';
+// The CNC's own build; both firmwares were rebuilt together for the CAN
+// firmware update (relay ends by itself, 64-frame receive queue).
+const CNC_BUILD = '20260930r';
+const S3_LOGIC = [
+  { path: 'firmware-assets/logic/esp32-s3-bootloader.bin', address: 0x0 },
+  { path: 'firmware-assets/logic/esp32-s3-partitions.bin', address: 0x8000 },
+  BOOT_APP0,
+];
+const CLASSIC_LOGIC = [
+  { path: 'firmware-assets/logic/esp32-bootloader.bin', address: 0x1000 },
+  { path: 'firmware-assets/logic/esp32-partitions.bin', address: 0x8000 },
+  BOOT_APP0,
+];
+// 0x0, not the classic's 0x1000. The Arduino core states this per chip
+// family and the two genuinely differ — its boards.txt has
+// `esp32s3.build.bootloader_addr=0x0` against `esp32.build.bootloader_addr=0x1000`
+// — so an S3 bootloader written where a classic one goes leaves a board
+// that never boots.
+const S3_CNC = [
+  { path: 'firmware-assets/cnc/esp32-s3-bootloader.bin', address: 0x0 },
+  { path: 'firmware-assets/cnc/esp32-s3-partitions.bin', address: 0x8000 },
+  BOOT_APP0,
+];
+const CLASSIC_CNC = [
+  { path: 'firmware-assets/cnc/esp32-bootloader.bin', address: 0x1000 },
+  { path: 'firmware-assets/cnc/esp32-partitions.bin', address: 0x8000 },
+  BOOT_APP0,
+];
 export const FIRMWARE_PRESETS = [
   {
-    id: 'logic-esp32-s3-waveshare',
-    label: 'Logic — esp32-S3 (Waveshare 8DI/8DO)',
+    id: 'logic-esp32s3-8io',
+    label: 'Logic — esp32-S3 CAN (8 DI / 8 DO)',
     chip: 'ESP32-S3',
-    board: 'ESP32-S3-POE-ETH-8DI-8DO',
-    build: '20260928b',
-    parts: [
-      { path: 'firmware-assets/logic/esp32-s3-bootloader.bin', address: 0x0 },
-      { path: 'firmware-assets/logic/esp32-s3-partitions.bin', address: 0x8000 },
-      BOOT_APP0,
-      { path: 'firmware-assets/logic/esp32-s3-waveshare.bin', address: 0x10000 },
-    ],
+    board: 'esp32s3-8io',
+    boardName: 'Waveshare ESP32-S3-POE-ETH-8DI-8DO',
+    build: BUILD,
+    parts: [...S3_LOGIC, { path: 'firmware-assets/logic/esp32s3-8io.bin', address: 0x10000 }],
   },
   {
-    id: 'logic-esp32',
-    label: 'Logic — ESP32 (classic)',
+    id: 'logic-esp32s3-2io',
+    label: 'Logic — esp32-S3 CAN (2 IO)',
+    chip: 'ESP32-S3',
+    board: 'esp32s3-2io',
+    boardName: 'Waveshare ESP32-S3 RS485/CAN',
+    build: BUILD,
+    parts: [...S3_LOGIC, { path: 'firmware-assets/logic/esp32s3-2io.bin', address: 0x10000 }],
+  },
+  {
+    id: 'logic-esp32-devkit',
+    label: 'Logic — ESP32 DevKit (classic)',
     chip: 'ESP32',
-    parts: [
-      { path: 'firmware-assets/logic/esp32-bootloader.bin', address: 0x1000 },
-      { path: 'firmware-assets/logic/esp32-partitions.bin', address: 0x8000 },
-      BOOT_APP0,
-      { path: 'firmware-assets/logic/esp32.bin', address: 0x10000 },
-    ],
+    board: 'esp32-devkit',
+    boardName: 'ESP32 DevKit V1',
+    build: BUILD,
+    parts: [...CLASSIC_LOGIC, { path: 'firmware-assets/logic/esp32-devkit.bin', address: 0x10000 }],
   },
   {
-    id: 'logic-esp32-s3',
-    label: 'Logic — ESP32-S3',
+    id: 'cnc-esp32s3-2io',
+    label: 'CNC — esp32-S3 CAN (2 IO)',
     chip: 'ESP32-S3',
-    parts: [
-      // 0x0, not the classic's 0x1000. The Arduino core states this per
-      // chip family and the two genuinely differ — its boards.txt has
-      // `esp32s3.build.bootloader_addr=0x0` against
-      // `esp32.build.bootloader_addr=0x1000` — so an S3 bootloader written
-      // where a classic one goes leaves a board that never boots.
-      { path: 'firmware-assets/logic/esp32-s3-bootloader.bin', address: 0x0 },
-      { path: 'firmware-assets/logic/esp32-s3-partitions.bin', address: 0x8000 },
-      BOOT_APP0,
-      { path: 'firmware-assets/logic/esp32-s3.bin', address: 0x10000 },
-    ],
+    board: 'esp32s3-2io',
+    boardName: 'Waveshare ESP32-S3 RS485/CAN',
+    build: CNC_BUILD,
+    parts: [...S3_CNC, { path: 'firmware-assets/cnc/esp32s3-2io.bin', address: 0x10000 }],
+  },
+  {
+    id: 'cnc-esp32s3-8io',
+    label: 'CNC — esp32-S3 CAN (8 DI / 8 DO)',
+    chip: 'ESP32-S3',
+    board: 'esp32s3-8io',
+    boardName: 'Waveshare ESP32-S3-POE-ETH-8DI-8DO',
+    build: CNC_BUILD,
+    parts: [...S3_CNC, { path: 'firmware-assets/cnc/esp32s3-8io.bin', address: 0x10000 }],
+  },
+  {
+    id: 'cnc-esp32-devkit',
+    label: 'CNC — ESP32 DevKit (classic)',
+    chip: 'ESP32',
+    board: 'esp32-devkit',
+    boardName: 'ESP32 DevKit V1',
+    build: CNC_BUILD,
+    parts: [...CLASSIC_CNC, { path: 'firmware-assets/cnc/esp32-devkit.bin', address: 0x10000 }],
   },
 ];
 

@@ -11,7 +11,7 @@ import { buildSite, siteFiles, siteIndex, MAX_NAME } from './build-board-site.mj
 // (the whole editor bundled), the icon, and the module list as JSON the
 // firmware's static handler serves — every file gzipped under /site/.
 
-const PAGE = ['index.html', 'app.js', 'app.css', 'nodigraph/icon.svg', 'api/modules.json', 'api/modules/esp32-cnc.json', 'api/modules/esp32-s3-devkit.json'];
+const PAGE = ['index.html', 'app.js', 'app.css', 'nodigraph/icon.svg', 'api/modules.json', 'api/modules/esp32-devkit-cnc.json', 'api/modules/esp32s3-2io-cnc.json', 'api/modules/esp32s3-2io-logic.json', 'api/modules/esp32s3-8io-cnc.json', 'api/modules/esp32s3-8io-logic.json'];
 
 test('the site is the bundled page plus the modules as JSON', async () => {
   const files = await siteFiles();

@@ -18,8 +18,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const MODULE_PATH = path.join(here, '..', 'modules', 'esp32-cnc', 'noditron.module.json');
-const S3_PATH = path.join(here, '..', 'modules', 'esp32-s3-devkit', 'noditron.module.json');
+// One module per board the CNC firmware is built for (see conucon's
+// modules/esp32_cnc/platformio.ini and Machines/): the same block, with
+// the board's own chip family and CAN pins.
+const BOARDS = [
+  { id: 'esp32-devkit', displayName: 'ESP32 DevKit \u00b7 CNC', chipFamily: 'ESP32', can: 'TX GPIO22 / RX GPIO23', boardVariant: 'ESP32 DevKit V1' },
+  { id: 'esp32s3-2io', displayName: 'esp32-S3 2IO \u00b7 CNC', chipFamily: 'ESP32-S3', can: 'TX GPIO15 / RX GPIO16', boardVariant: 'ESP32-S3-RS485-CAN (2 IO)' },
+  { id: 'esp32s3-8io', displayName: 'esp32-S3 8IO \u00b7 CNC', chipFamily: 'ESP32-S3', can: 'TX GPIO2 / RX GPIO3', boardVariant: 'ESP32-S3-POE-ETH-8DI-8DO' },
+];
+const modulePathFor = (board) => path.join(here, '..', 'modules', `${board.id}-cnc`, 'noditron.module.json');
+const S3_PATH = path.join(here, '..', 'modules', 'esp32s3-8io-logic', 'noditron.module.json');
 
 const s3 = JSON.parse(fs.readFileSync(S3_PATH, 'utf8'));
 const s3Block = s3.block.blocks[0];
@@ -283,55 +291,60 @@ ${SECTIONS}
 }
 `.trim();
 
-const block = {
-  id: 'blk_esp32cnc_1',
-  name: 'cnc',
-  type: 'block',
-  kind: 'block',
-  description: '',
-  geometry: { x: 0, y: 0, width: 220, height: 120 },
-  style: { color: '#7c3aed' },
-  logicalPorts: [
-    { id: 'io_esp32cnc_socket', name: 'socket', direction: 'in', description: 'the module shell: in writes every line that arrives to it (g <line> for gcode), out carries every line grbl prints' },
-    // The CAN bus the module sits on: the Add Block window wires it to a
-    // Logic Module's CAN pin when either board hears the other (`nodes`,
-    // via can) — the physical bus, drawn. Direction none, like the S3's.
-    { id: 'io_esp32cnc_can', name: 'CAN', direction: null, description: 'the CAN bus (TX GPIO22 / RX GPIO23): wired to the other boards on the same bus' },
-  ],
-  ports: [
-    { id: 'prt_esp32cnc_socket', logicalId: 'io_esp32cnc_socket', side: 'left', offset: 30, manualOffset: true },
-    { id: 'prt_esp32cnc_can', logicalId: 'io_esp32cnc_can', side: 'right', offset: 30, manualOffset: true },
-  ],
-  props: [
-    { id: 'prp_esp32cnc_kind', name: 'noditronKind', kind: 'value', value: 'cnc-module' },
-    { id: 'prp_esp32cnc_chip', name: 'chipFamily', kind: 'value', value: 'ESP32' },
-    { id: 'prp_esp32cnc_state', name: 'connectionState', kind: 'value', value: 'disconnected' },
-    { id: 'prp_esp32cnc_html', name: 'html', kind: 'value', value: STATUS_HTML },
-    { id: 'prp_esp32cnc_dialog', name: 'dialog', kind: 'value', value: DIALOG },
-    { id: 'prp_esp32cnc_render', name: 'render', kind: 'value', value: RENDER },
-    { id: 'prp_esp32cnc_children', name: 'allowedChildKinds', kind: 'value', value: '[]' },
-    // Who this node is, from identify / `nodes` (see addBlockDialog.js and
-    // devkitCircuit's socketLinksFor): declared so setProp has them.
-    { id: 'prp_esp32cnc_node', name: 'nodeId', kind: 'value', value: '' },
-    { id: 'prp_esp32cnc_nodename', name: 'nodeName', kind: 'value', value: '' },
-  ],
-  hasChildren: false,
-  requirementIds: [],
-};
+for (const board of BOARDS) {
+  const block = {
+    id: 'blk_esp32cnc_1',
+    name: 'cnc',
+    type: 'block',
+    kind: 'block',
+    description: '',
+    geometry: { x: 0, y: 0, width: 220, height: 120 },
+    style: { color: '#7c3aed' },
+    logicalPorts: [
+      { id: 'io_esp32cnc_socket', name: 'socket', direction: 'in', description: 'the module shell: in writes every line that arrives to it (g <line> for gcode), out carries every line grbl prints' },
+      // The CAN bus the module sits on: the Add Block window wires it to a
+      // Logic Module's CAN pin when either board hears the other (`nodes`,
+      // via can) — the physical bus, drawn. Direction none, like the S3's.
+      { id: 'io_esp32cnc_can', name: 'CAN', direction: null, description: `the CAN bus (${board.can}): wired to the other boards on the same bus` },
+    ],
+    ports: [
+      { id: 'prt_esp32cnc_socket', logicalId: 'io_esp32cnc_socket', side: 'left', offset: 30, manualOffset: true },
+      { id: 'prt_esp32cnc_can', logicalId: 'io_esp32cnc_can', side: 'right', offset: 30, manualOffset: true },
+    ],
+    props: [
+      { id: 'prp_esp32cnc_kind', name: 'noditronKind', kind: 'value', value: 'cnc-module' },
+      { id: 'prp_esp32cnc_chip', name: 'chipFamily', kind: 'value', value: board.chipFamily },
+      { id: 'prp_esp32cnc_board', name: 'boardId', kind: 'value', value: board.id },
+      { id: 'prp_esp32cnc_variant', name: 'boardVariant', kind: 'value', value: board.boardVariant },
+      { id: 'prp_esp32cnc_preset', name: 'firmwarePreset', kind: 'value', value: `cnc-${board.id}` },
+      { id: 'prp_esp32cnc_state', name: 'connectionState', kind: 'value', value: 'disconnected' },
+      { id: 'prp_esp32cnc_html', name: 'html', kind: 'value', value: STATUS_HTML },
+      { id: 'prp_esp32cnc_dialog', name: 'dialog', kind: 'value', value: DIALOG },
+      { id: 'prp_esp32cnc_render', name: 'render', kind: 'value', value: RENDER },
+      { id: 'prp_esp32cnc_children', name: 'allowedChildKinds', kind: 'value', value: '[]' },
+      // Who this node is, from identify / `nodes` (see addBlockDialog.js and
+      // devkitCircuit's socketLinksFor): declared so setProp has them.
+      { id: 'prp_esp32cnc_node', name: 'nodeId', kind: 'value', value: '' },
+      { id: 'prp_esp32cnc_nodename', name: 'nodeName', kind: 'value', value: '' },
+    ],
+    hasChildren: false,
+    requirementIds: [],
+  };
 
-const manifest = {
-  noditronModule: 1,
-  name: 'esp32-cnc',
-  displayName: 'cnc',
-  version: '0.4.0',
-  description: "conucon's CNC module (grbl core): a socket port that is the board's shell as a wire, over USB or WiFi; Connectivity and Shell like the esp32-S3.",
-  swatchColor: '#7c3aed',
-  block: { format: 'nodigraph/clipboard-v1', blocks: [block], connections: [] },
-};
+  const manifest = {
+    noditronModule: 1,
+    name: `${board.id}-cnc`,
+    displayName: board.displayName,
+    version: '0.5.0',
+    description: "conucon's CNC module (grbl core): a socket port that is the board's shell as a wire, over USB or WiFi; Connectivity and Shell like the esp32-S3.",
+    swatchColor: '#7c3aed',
+    block: { format: 'nodigraph/clipboard-v1', blocks: [block], connections: [] },
+  };
 
-fs.mkdirSync(path.dirname(MODULE_PATH), { recursive: true });
-fs.writeFileSync(MODULE_PATH, `${JSON.stringify(manifest, null, 2)}\n`);
+  fs.mkdirSync(path.dirname(modulePathFor(board)), { recursive: true });
+  fs.writeFileSync(modulePathFor(board), `${JSON.stringify(manifest, null, 2)}\n`);
+}
 new Function('container', 'block', 'props', 'outputs', 'helpers', DIALOG);
 new Function('container', 'block', 'inputs', 'outputs', 'helpers', STATUS_HTML);
 new Function('ctx', 'block', 'inputs', 'outputs', 'helpers', RENDER);
-console.log(`esp32-cnc: written, dialog ${DIALOG.length} chars (sections ${SECTIONS.length} from the S3 manifest)`);
+console.log(`${BOARDS.map((b) => `${b.id}-cnc`).join(', ')}: written, dialog ${DIALOG.length} chars (sections ${SECTIONS.length} from the S3 manifest)`);

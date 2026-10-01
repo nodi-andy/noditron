@@ -16,8 +16,8 @@ const circuit = new Function(
   strip(read('../client/src/devkitCircuit.js')) + '\nreturn { buildDevkitDesign, socketLinksFor };',
 )(serial, kindOf, () => '', () => null);
 
-const template = JSON.parse(read('../modules/esp32-s3-devkit/noditron.module.json')).block.blocks[0];
-const cncTemplate = JSON.parse(read('../modules/esp32-cnc/noditron.module.json')).block.blocks[0];
+const template = JSON.parse(read('../modules/esp32s3-8io-logic/noditron.module.json')).block.blocks[0];
+const cncTemplate = JSON.parse(read('../modules/esp32s3-2io-cnc/noditron.module.json')).block.blocks[0];
 const boardPort = (board, label) => board.ports.find((p) => board.logicalPorts.find((lp) => lp.id === p.logicalId)?.name === label).id;
 
 function dataBlock(id, text) {

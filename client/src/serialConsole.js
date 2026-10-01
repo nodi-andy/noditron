@@ -445,6 +445,22 @@ async function writeBytes(blockId, bytes) {
 // which it found as `kind`.
 const INFO_RE = /\[INFO] (LogicMod|CncMod) v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \| heap=(\d+) \| (.*)$/;
 
+// The second [INFO] line names the node: `node=<id> type=<logic|cnc>` and
+// then key=value words — `board=<hardware>` (builds 20260930a and later,
+// see moduleDiscovery.HARDWARE), `name=<node name>` (the CNC), and others
+// this does not read. Null for any other line.
+const NODE_LINE_RE = /^\[INFO] node=([0-9a-f]{8}) type=(\w+)((?:\s+\w+=\S*)*)/;
+export function parseNodeLine(line) {
+  const m = String(line || '').replace(/\r$/, '').match(NODE_LINE_RE);
+  if (!m) return null;
+  const fields = {};
+  for (const word of m[3].trim().split(/\s+/)) {
+    const eq = word.indexOf('=');
+    if (eq > 0) fields[word.slice(0, eq)] = word.slice(eq + 1);
+  }
+  return { node: m[1], type: m[2], board: fields.board || null, name: fields.name || null };
+}
+
 // Two more lines worth recognising while probing (see identify below).
 // The firmware prints this banner once, out of setup(), a second or more
 // before it can answer anything — it is proof the app image is there and
@@ -553,16 +569,18 @@ async function identifyCommand(blockId, { timeoutMs = 3000, pingEveryMs = 500, b
       // its own name. A board without it just times out the short wait.
       let node = null;
       let nodeName = null;
+      let board = null;
       try {
         const next = await readLine(state, 400);
-        const n = next.match(/^\[INFO] node=([0-9a-f]{8}) type=\w+ name=(\S+)/);
-        if (n) { node = n[1]; nodeName = n[2]; }
+        const n = parseNodeLine(next);
+        if (n) { node = n.node; nodeName = n.name; board = n.board; }
       } catch {
         /* no second line */
       }
       return {
         node,
         nodeName,
+        board,
         verified: true,
         kind: m[1] === 'CncMod' ? 'cnc' : 'logic',
         version: m[2],
@@ -1413,10 +1431,11 @@ function infoFromLines(lines) {
     const tail = m[7];
     const circuit = tail.match(/circuit=(\w+) nCB=(\d+)/);
     const machine = tail.match(/state=(\S+)/);
-    const n = String(lines[i + 1] || '').match(/^\[INFO] node=([0-9a-f]{8}) type=\w+ name=(\S+)/);
+    const n = parseNodeLine(lines[i + 1]);
     return {
-      node: n ? n[1] : null,
-      nodeName: n ? n[2] : null,
+      node: n ? n.node : null,
+      nodeName: n ? n.name : null,
+      board: n ? n.board : null,
       verified: true,
       kind: m[1] === 'CncMod' ? 'cnc' : 'logic',
       version: m[2],

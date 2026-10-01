@@ -1,8 +1,8 @@
 {
   "noditronModule": 1,
-  "name": "esp32-s3-devkit",
-  "displayName": "esp32-S3",
-  "version": "1.10.0",
+  "name": "esp32s3-8io-logic",
+  "displayName": "esp32-S3 8IO · Logic",
+  "version": "1.11.0",
   "description": "Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8, DO1-D8, one CAN pin with configurable speed, a socket port carrying its shell, and USB firmware installation.",
   "swatchColor": "#2f6fed",
   "block": {
@@ -390,13 +390,19 @@
             "id": "prp_esp32s3_firmwarepreset",
             "name": "firmwarePreset",
             "kind": "value",
-            "value": "logic-esp32-s3-waveshare"
+            "value": "logic-esp32s3-8io"
           },
           {
             "id": "prp_esp32s3_canpins",
             "name": "canPins",
             "kind": "value",
             "value": "{\"tx\":2,\"rx\":3}"
+          },
+          {
+            "id": "prp_esp32s3_boardid",
+            "name": "boardId",
+            "kind": "value",
+            "value": "esp32s3-8io"
           }
         ],
         "hasChildren": true,

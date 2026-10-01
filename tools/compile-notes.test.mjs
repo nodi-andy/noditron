@@ -19,7 +19,7 @@ const circuit = new Function(
   'serialConsole', 'kindOf', 'serializeBlockDescription', 'traceDesign',
   strip(read('../client/src/devkitCircuit.js')) + '\nreturn { buildDevkitDesign, canonicalDesign, designsMatch };',
 )(serial, kindOf, () => '', traceDesign);
-const manifest = JSON.parse(read('../modules/esp32-s3-devkit/noditron.module.json'));
+const manifest = JSON.parse(read('../modules/esp32s3-8io-logic/noditron.module.json'));
 const template = manifest.block.blocks[0];
 const pinMap = JSON.parse(template.props.find((p) => p.name === 'pinMap').value);
 

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import test from 'node:test';
 
-import { parseNodesOutput, moduleNameFor, canNeighbours, NODE_TYPE_MODULES } from '../client/src/moduleDiscovery.js';
+import { parseNodesOutput, moduleNameFor, canNeighbours, NODE_TYPE_MODULES, MODULE_NAMES, canonicalModuleName } from '../client/src/moduleDiscovery.js';
 
 const read = (rel) => fs.readFileSync(new URL(rel, import.meta.url), 'utf8');
 
@@ -14,13 +14,15 @@ test('nodes output is read line by line: type, id, optional name, version, self 
     'logic a1d148c4 esp32-s3 v1.2 self',
     'cnc 0dd04644 CNC v1.4 seen 0s ago via can',
     'logic 1b2c3d4e v1.2 seen 3s ago via wifi',
+    'cnc 85568abc CNC v1.4 seen 1s ago via can board=esp32s3-2io',
     'ok',
     '[CAN] tx logic a1d148c4 esp32-s3 v1.2 self',
   ]);
   assert.deepEqual(nodes, [
-    { type: 'logic', id: 'a1d148c4', name: 'esp32-s3', version: '1.2', self: true, ageS: null, via: null },
-    { type: 'cnc', id: '0dd04644', name: 'CNC', version: '1.4', self: false, ageS: 0, via: 'can' },
-    { type: 'logic', id: '1b2c3d4e', name: '', version: '1.2', self: false, ageS: 3, via: 'wifi' },
+    { type: 'logic', id: 'a1d148c4', name: 'esp32-s3', version: '1.2', self: true, ageS: null, via: null, board: null },
+    { type: 'cnc', id: '0dd04644', name: 'CNC', version: '1.4', self: false, ageS: 0, via: 'can', board: null },
+    { type: 'logic', id: '1b2c3d4e', name: '', version: '1.2', self: false, ageS: 3, via: 'wifi', board: null },
+    { type: 'cnc', id: '85568abc', name: 'CNC', version: '1.4', self: false, ageS: 1, via: 'can', board: 'esp32s3-2io' },
   ]);
 });
 
@@ -34,13 +36,22 @@ test('only nodes heard on the CAN bus are placed beside the board and wired to i
   assert.deepEqual(canNeighbours(nodes).map((n) => [n.type, n.id]), [['logic', 'a1d148c4']]);
 });
 
-test('a board is placed as the module its kind names; a logic board on a bridge chip is the classic DevKit', () => {
-  assert.equal(moduleNameFor('cnc'), 'esp32-cnc');
-  assert.equal(moduleNameFor('logic', { nativeUsb: true }), 'esp32-s3-devkit');
-  assert.equal(moduleNameFor('logic', { nativeUsb: null }), 'esp32-s3-devkit'); // over WiFi: nothing to tell by
-  assert.equal(moduleNameFor('logic', { nativeUsb: false }), 'esp32-devkit');
+test('a board is placed as the module for its hardware and firmware; without a hardware id, by its USB chip', () => {
+  assert.equal(moduleNameFor('cnc', { board: 'esp32s3-2io' }), 'esp32s3-2io-cnc');
+  assert.equal(moduleNameFor('logic', { board: 'esp32s3-8io' }), 'esp32s3-8io-logic');
+  assert.equal(moduleNameFor('logic', { board: 'esp32-devkit', nativeUsb: true }), 'esp32-devkit-logic', 'the board\'s own word wins');
+  assert.equal(moduleNameFor('cnc', { board: 'no-such-board' }), 'esp32s3-2io-cnc', 'an unknown hardware id falls back');
+  assert.equal(moduleNameFor('cnc'), 'esp32s3-2io-cnc');
+  assert.equal(moduleNameFor('cnc', { nativeUsb: false }), 'esp32-devkit-cnc');
+  assert.equal(moduleNameFor('logic', { nativeUsb: true }), 'esp32s3-8io-logic');
+  assert.equal(moduleNameFor('logic', { nativeUsb: null }), 'esp32s3-8io-logic'); // over WiFi: nothing to tell by
+  assert.equal(moduleNameFor('logic', { nativeUsb: false }), 'esp32-devkit-logic');
   assert.equal(moduleNameFor('something-else'), null);
-  assert.deepEqual(NODE_TYPE_MODULES, { cnc: 'esp32-cnc', logic: 'esp32-s3-devkit' });
+  assert.deepEqual(NODE_TYPE_MODULES, { cnc: 'esp32s3-2io-cnc', logic: 'esp32s3-8io-logic' });
+  assert.deepEqual(MODULE_NAMES, ['esp32-devkit-logic', 'esp32-devkit-cnc', 'esp32s3-2io-logic', 'esp32s3-2io-cnc', 'esp32s3-8io-logic', 'esp32s3-8io-cnc']);
+  assert.equal(canonicalModuleName('esp32-s3-devkit'), 'esp32s3-8io-logic', 'the old names still resolve');
+  assert.equal(canonicalModuleName('esp32-cnc'), 'esp32-devkit-cnc');
+  assert.equal(canonicalModuleName('esp32s3-2io-cnc'), 'esp32s3-2io-cnc');
 });
 
 test('nodigraph\'s + button opens the window instead of adding an empty block, and the side palette is gone', () => {

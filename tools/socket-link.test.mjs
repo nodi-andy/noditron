@@ -10,8 +10,8 @@ import { createSocketLinks, socketLineOf, socketPortsOf } from '../client/src/so
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 
 test('both board modules carry a socket port, the S3 out and the CNC in', () => {
-  const s3 = JSON.parse(read('../modules/esp32-s3-devkit/noditron.module.json')).block.blocks[0];
-  const cnc = JSON.parse(read('../modules/esp32-cnc/noditron.module.json')).block.blocks[0];
+  const s3 = JSON.parse(read('../modules/esp32s3-8io-logic/noditron.module.json')).block.blocks[0];
+  const cnc = JSON.parse(read('../modules/esp32s3-2io-cnc/noditron.module.json')).block.blocks[0];
   assert.deepEqual(socketPortsOf(s3).map((s) => s.direction), ['out']);
   assert.deepEqual(socketPortsOf(cnc).map((s) => s.direction), ['in']);
   assert.ok(!cnc.logicalPorts.some((lp) => lp.name === 'gcode'), 'the gcode input is gone');

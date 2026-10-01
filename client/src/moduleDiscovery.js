@@ -15,7 +15,9 @@
 //
 // No imports on purpose, so tools/add-block.test.mjs runs this as it is.
 
-const NODE_LINE_RE = /^(logic|cnc|node)\s+([0-9a-f]{8})(?:\s+(\S+))?\s+v(\S+)\s+(self|seen\s+(\d+)s\s+ago\s+via\s+(\S+))\s*$/;
+// `board=<hardware>` at the end (firmware builds 20260930f/g and later) is
+// what the node's heartbeat said about its hardware — see HARDWARE.
+const NODE_LINE_RE = /^(logic|cnc|node)\s+([0-9a-f]{8})(?:\s+(\S+))?\s+v(\S+)\s+(self|seen\s+(\d+)s\s+ago\s+via\s+(\S+))(?:\s+board=(\S+))?\s*$/;
 
 export function parseNodesOutput(lines) {
   const nodes = [];
@@ -32,6 +34,7 @@ export function parseNodesOutput(lines) {
       self: m[5] === 'self',
       ageS: m[6] === undefined ? null : Number(m[6]),
       via: m[7] || null,
+      board: m[8] || null,
     });
   }
   return nodes;
@@ -45,12 +48,37 @@ export function parseNodesOutput(lines) {
 // serialFlash.usesNativeUsb), the classic DevKit through a bridge chip.
 // Over WiFi, or heard on the bus, there is nothing to tell them apart by,
 // and the S3 is the board that has those links.
-export const NODE_TYPE_MODULES = { cnc: 'esp32-cnc', logic: 'esp32-s3-devkit' };
+// Three boards, two firmwares, six modules named <hardware>-<firmware>:
+//   esp32-devkit   the classic ESP32 DevKit V1
+//   esp32s3-2io    Waveshare ESP32-S3 RS485/CAN, two isolated IOs
+//   esp32s3-8io    Waveshare ESP32-S3-POE-ETH-8DI-8DO
+// A board says which it is: `board=<hardware>` on the second [INFO] line
+// of its `?` reply (firmware builds 20260930a and later — see
+// serialConsole.parseNodeLine), so the module placed for it is the one for
+// exactly its hardware and firmware.
+export const HARDWARE = ['esp32-devkit', 'esp32s3-2io', 'esp32s3-8io'];
+export const FIRMWARES = ['logic', 'cnc'];
+export const MODULE_NAMES = HARDWARE.flatMap((hw) => FIRMWARES.map((fw) => `${hw}-${fw}`));
+// The names these modules had before the scheme, still recorded in older
+// projects and reported by older firmware: resolved to today's module.
+export const MODULE_ALIASES = { 'esp32-devkit': 'esp32-devkit-logic', 'esp32-s3-devkit': 'esp32s3-8io-logic', 'esp32-cnc': 'esp32-devkit-cnc' };
+export function canonicalModuleName(name) {
+  return MODULE_ALIASES[name] || name;
+}
+// A node heard on the bus says only its type (the heartbeat carries no
+// hardware id): the module placed for it is the board each firmware is
+// used on around here — the 8DI/8DO board for logic, the RS485/CAN board
+// for the CNC.
+export const NODE_TYPE_MODULES = { cnc: 'esp32s3-2io-cnc', logic: 'esp32s3-8io-logic' };
 
-export function moduleNameFor(kind, { nativeUsb = null } = {}) {
-  if (kind === 'cnc') return NODE_TYPE_MODULES.cnc;
-  if (kind === 'logic') return nativeUsb === false ? 'esp32-devkit' : NODE_TYPE_MODULES.logic;
-  return null;
+export function moduleNameFor(kind, { nativeUsb = null, board = null } = {}) {
+  if (!FIRMWARES.includes(kind)) return null;
+  // The board named its hardware: exactly that module.
+  if (board && HARDWARE.includes(board)) return `${board}-${kind}`;
+  // Older firmware: a board on a USB-UART bridge chip is the classic
+  // DevKit, native USB is an S3 — the one each firmware is used on.
+  if (nativeUsb === false) return `esp32-devkit-${kind}`;
+  return NODE_TYPE_MODULES[kind];
 }
 
 // The neighbours worth placing next to a board that was just added: the

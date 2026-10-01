@@ -1,8 +1,8 @@
 {
   "noditronModule": 1,
-  "name": "esp32-cnc",
-  "displayName": "cnc",
-  "version": "0.4.0",
+  "name": "esp32s3-8io-cnc",
+  "displayName": "esp32-S3 8IO · CNC",
+  "version": "0.5.0",
   "description": "conucon's CNC module (grbl core): a socket port that is the board's shell as a wire, over USB or WiFi; Connectivity and Shell like the esp32-S3.",
   "swatchColor": "#7c3aed",
   "block": {
@@ -34,7 +34,7 @@
             "id": "io_esp32cnc_can",
             "name": "CAN",
             "direction": null,
-            "description": "the CAN bus (TX GPIO22 / RX GPIO23): wired to the other boards on the same bus"
+            "description": "the CAN bus (TX GPIO2 / RX GPIO3): wired to the other boards on the same bus"
           }
         ],
         "ports": [
@@ -64,7 +64,25 @@
             "id": "prp_esp32cnc_chip",
             "name": "chipFamily",
             "kind": "value",
-            "value": "ESP32"
+            "value": "ESP32-S3"
+          },
+          {
+            "id": "prp_esp32cnc_board",
+            "name": "boardId",
+            "kind": "value",
+            "value": "esp32s3-8io"
+          },
+          {
+            "id": "prp_esp32cnc_variant",
+            "name": "boardVariant",
+            "kind": "value",
+            "value": "ESP32-S3-POE-ETH-8DI-8DO"
+          },
+          {
+            "id": "prp_esp32cnc_preset",
+            "name": "firmwarePreset",
+            "kind": "value",
+            "value": "cnc-esp32s3-8io"
           },
           {
             "id": "prp_esp32cnc_state",

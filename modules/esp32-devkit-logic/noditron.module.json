@@ -1,7 +1,7 @@
 {
   "noditronModule": 1,
-  "name": "esp32-devkit",
-  "displayName": "ESP32 DevKit",
+  "name": "esp32-devkit-logic",
+  "displayName": "ESP32 DevKit · Logic",
   "version": "1.10.0",
   "description": "A classic ESP32 DevKit V1 board module with all board pins exposed on the block edge, USB at the top, and connection-gated logic-module setup.",
   "swatchColor": "#c98a2f",
@@ -516,6 +516,18 @@
             "name": "onboardControls",
             "kind": "value",
             "value": "{\"buttons\":[{\"label\":\"GPIO0\",\"gpio\":0,\"role\":\"input\"},{\"label\":\"GPIO35\",\"gpio\":35,\"role\":\"input\"}],\"led\":{\"label\":\"LED\",\"gpio\":2,\"role\":\"output\"}}"
+          },
+          {
+            "id": "prp_esp32_boardid",
+            "name": "boardId",
+            "kind": "value",
+            "value": "esp32-devkit"
+          },
+          {
+            "id": "prp_esp32_firmwarepreset",
+            "name": "firmwarePreset",
+            "kind": "value",
+            "value": "logic-esp32-devkit"
           }
         ],
         "hasChildren": true,

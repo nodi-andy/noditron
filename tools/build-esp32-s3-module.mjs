@@ -1,29 +1,67 @@
 #!/usr/bin/env node
-// Builds modules/esp32-s3-devkit/noditron.module.json's board pins.
+// Builds the ESP32-S3 logic modules' board pins:
 //
-//   node tools/build-esp32-s3-module.mjs
+//   node tools/build-esp32-s3-module.mjs 8io   -> modules/esp32s3-8io-logic
+//   node tools/build-esp32-s3-module.mjs 2io   -> modules/esp32s3-2io-logic
 //
-// Regenerates the Waveshare board's ports and canvas drawing, preserving
-// its connection dialog. The library ID stays stable for existing installs.
+// Regenerates the board's ports and canvas drawing, preserving its
+// connection dialog (a board with no manifest yet starts from the 8io
+// one's). The library ID stays stable for existing installs.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
-const MODULE_PATH = path.join(here, '..', 'modules', 'esp32-s3-devkit', 'noditron.module.json');
-const CLASSIC_PATH = path.join(here, '..', 'modules', 'esp32-devkit', 'noditron.module.json');
-
-// Waveshare ESP32-S3-POE-ETH-8DI-8DO:
-// https://www.waveshare.com/wiki/ESP32-S3-POE-ETH-8DI-8DO
-// EXIO virtual GPIOs 1000..1007 match conucon's live IO protocol.
-const LEFT = Array.from({ length: 8 }, (_, i) => ['DI' + (i + 1), i + 4, 'digital-input']);
-const RIGHT = Array.from({ length: 8 }, (_, i) => ['DO' + (i + 1), 1000 + i, 'digital-output']);
+const VARIANT = process.argv[2] || '8io';
+const BOARDS = {
+  // Waveshare ESP32-S3-POE-ETH-8DI-8DO:
+  // https://www.waveshare.com/wiki/ESP32-S3-POE-ETH-8DI-8DO
+  // EXIO virtual GPIOs 1000..1007 match conucon's live IO protocol.
+  '8io': {
+    id: 'esp32s3-8io',
+    displayName: 'esp32-S3 8IO \u00b7 Logic',
+    boardVariant: 'ESP32-S3-POE-ETH-8DI-8DO',
+    preset: 'logic-esp32s3-8io',
+    can: { tx: 2, rx: 3 },
+    left: Array.from({ length: 8 }, (_, i) => ['DI' + (i + 1), i + 4, 'digital-input']),
+    right: [
+      ...Array.from({ length: 8 }, (_, i) => ['DO' + (i + 1), 1000 + i, 'digital-output']),
+      ['CAN', null, 'can'], ['CAN speed', null, 'can-speed'],
+      ['RS485 TX', 17, 'rs485'], ['RS485 RX', 18, 'rs485'],
+    ],
+    reserved: new Map([[17, 'RS485 TX'], [18, 'RS485 RX']]),
+    description: 'Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8, DO1-D8, one CAN pin with configurable speed, a socket port carrying its shell, and USB firmware installation.',
+  },
+  // Waveshare ESP32-S3 RS485/CAN — the board with two isolated IOs: its
+  // 20-pin P1 header brings out IO4-IO14 as plain GPIO (IO3 is left to the
+  // console, see conucon's Machines/waveshare_s3.h), the CAN transceiver is
+  // on TX15/RX16.
+  '2io': {
+    id: 'esp32s3-2io',
+    displayName: 'esp32-S3 2IO \u00b7 Logic',
+    boardVariant: 'ESP32-S3-RS485-CAN (2 IO)',
+    preset: 'logic-esp32s3-2io',
+    can: { tx: 15, rx: 16 },
+    left: Array.from({ length: 6 }, (_, i) => ['IO' + (i + 4), i + 4, 'gpio']),
+    right: [
+      ...Array.from({ length: 5 }, (_, i) => ['IO' + (i + 10), i + 10, 'gpio']),
+      ['CAN', null, 'can'], ['CAN speed', null, 'can-speed'],
+    ],
+    reserved: new Map(),
+    description: 'Waveshare ESP32-S3 RS485/CAN (2 IO): the P1 header GPIOs IO4-IO14, one CAN pin (TX15/RX16) with configurable speed, a socket port carrying its shell, and USB firmware installation.',
+  },
+};
+const BOARD = BOARDS[VARIANT];
+if (!BOARD) throw new Error(`unknown board variant ${VARIANT}: ${Object.keys(BOARDS).join(', ')}`);
+const MODULE_PATH = path.join(here, '..', 'modules', `${BOARD.id}-logic`, 'noditron.module.json');
+const TEMPLATE_PATH = path.join(here, '..', 'modules', 'esp32s3-8io-logic', 'noditron.module.json');
+const CLASSIC_PATH = path.join(here, '..', 'modules', 'esp32-devkit-logic', 'noditron.module.json');
 // One CAN pin, like the socket: which way it is wired decides — a wire into
 // it sends on the bus, a wire out of it receives (see devkitCircuit's
-// mapEndpoint, role 'can'). The transceiver sits on TX2/RX3 either way.
-RIGHT.push(['CAN', null, 'can'], ['CAN speed', null, 'can-speed']);
-RIGHT.push(['RS485 TX', 17, 'rs485'], ['RS485 RX', 18, 'rs485']);
-const RESERVED = new Map([[17, 'RS485 TX'], [18, 'RS485 RX']]);
+// mapEndpoint, role 'can'). The transceiver's own pins are the board's.
+const LEFT = BOARD.left;
+const RIGHT = BOARD.right;
+const RESERVED = BOARD.reserved;
 const NOTES = new Map();
 
 const PIN_SPACING = 40;
@@ -90,7 +128,7 @@ function build() {
         : pin.role === 'socket'
           ? 'the board\'s shell: out carries every line it prints (the latest is the value), in writes what arrives to it'
         : pin.role === 'can'
-          ? 'the CAN bus (TX2/RX3): a wire into it sends the value on the bus, a wire out of it carries what the bus delivers'
+          ? `the CAN bus (TX${BOARD.can.tx}/RX${BOARD.can.rx}): a wire into it sends the value on the bus, a wire out of it carries what the bus delivers`
         : pin.gpio === null
           ? pin.role
           : pin.note
@@ -190,7 +228,8 @@ pill.style.setProperty('--esp-scale', String(helpers.contentScale || 1));
 pill.title = hint + ' \\u2014 connection settings';
 `.trim();
 
-const module_ = JSON.parse(fs.readFileSync(MODULE_PATH, 'utf8'));
+const module_ = JSON.parse(fs.readFileSync(fs.existsSync(MODULE_PATH) ? MODULE_PATH : TEMPLATE_PATH, 'utf8'));
+module_.name = `${BOARD.id}-logic`;
 const block = Object.values(module_.block.blocks)[0];
 const { pins, ports, logicalPorts, geometry } = build();
 
@@ -232,11 +271,13 @@ setProp('dialog', currentDialog
     "log('Nothing to send -- add a Digital I/O block inside this ESP32 DevKit with a real pin set first.');",
     "log('Nothing to send -- connect a supported circuit signal directly to DI, DO, or CAN.');",
   ));
-module_.displayName = block.name = 'esp32-S3';
-module_.version = '1.10.0';
-setProp('boardVariant', 'ESP32-S3-POE-ETH-8DI-8DO');
-setProp('firmwarePreset', 'logic-esp32-s3-waveshare');
-setProp('canPins', JSON.stringify({ tx: 2, rx: 3 }));
+module_.displayName = BOARD.displayName;
+block.name = 'esp32-S3';
+module_.version = '1.11.0';
+setProp('boardId', BOARD.id);
+setProp('boardVariant', BOARD.boardVariant);
+setProp('firmwarePreset', BOARD.preset);
+setProp('canPins', JSON.stringify(BOARD.can));
 setProp('usbOrientation', 'top');
 setProp('onboardControls', JSON.stringify({
   buttons: [
@@ -247,11 +288,12 @@ setProp('onboardControls', JSON.stringify({
   led: { label: 'RGB', gpio: 38, role: 'output', type: 'addressable' },
 }));
 
-module_.description = 'Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8, DO1-D8, one CAN pin with configurable speed, a socket port carrying its shell, and USB firmware installation.';
+module_.description = BOARD.description;
 block.description = '';
 
+fs.mkdirSync(path.dirname(MODULE_PATH), { recursive: true });
 fs.writeFileSync(MODULE_PATH, `${JSON.stringify(module_, null, 2)}\n`);
 
 const reserved = pins.filter((p) => p.reserved).map((p) => p.label);
-console.log(`esp32-s3-devkit: ${pins.length} pins (${LEFT.length + 1} left, ${RIGHT.length} right, 1 top), ${ports.length} ports`);
+console.log(`${BOARD.id}-logic: ${pins.length} pins (${LEFT.length + 1} left, ${RIGHT.length} right, 1 top), ${ports.length} ports`);
 console.log(`  block ${geometry.width}x${geometry.height}, reserved: ${reserved.join(', ') || 'none'}`);

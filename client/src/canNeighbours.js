@@ -27,7 +27,7 @@ import { createConnection } from '/nodigraph/src/model/Connection.js';
 import * as serialConsole from './serialConsole.js';
 import { collectBoardBlocks, findContainingLevel } from './devkitCircuit.js';
 import { addModuleBlock, resolveModuleByName } from './library.js';
-import { parseNodesOutput, canNeighbours, NODE_TYPE_MODULES } from './moduleDiscovery.js';
+import { parseNodesOutput, canNeighbours, NODE_TYPE_MODULES, moduleNameFor } from './moduleDiscovery.js';
 import { noteNodes, bridgeForNode, refreshBridgedStates } from './canBridge.js';
 
 const CAN_PORT_NAME = 'can';
@@ -137,7 +137,9 @@ export async function placeNeighbours(nodigraph, board, nodes, { status = () => 
     let peer = findBoardByNodeId(nodigraph, node.id)?.block || null;
     if (!peer) {
       if (offered?.has(node.id)) continue;
-      const moduleName = NODE_TYPE_MODULES[node.type];
+      // The module for the hardware the node's heartbeat named, else the
+      // board each firmware is used on around here.
+      const moduleName = moduleNameFor(node.type, { board: node.board }) || NODE_TYPE_MODULES[node.type];
       status(`${node.type} ${node.name || node.id} heard on CAN: placing ${moduleName}...`);
       // The manifest first (it may be fetched), then the paste, in one go
       // on the board's level.

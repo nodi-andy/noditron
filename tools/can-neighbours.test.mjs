@@ -37,7 +37,8 @@ function load() {
     resolveModuleByName: null,
     parseNodesOutput,
     canNeighbours: (nodes) => nodes.filter((n) => !n.self && n.via === 'can' && ['cnc', 'logic'].includes(n.type)),
-    NODE_TYPE_MODULES: { cnc: 'esp32-cnc', logic: 'esp32-s3-devkit' },
+    NODE_TYPE_MODULES: { cnc: 'esp32s3-2io-cnc', logic: 'esp32s3-8io-logic' },
+    moduleNameFor: (kind, { board = null } = {}) => (board ? `${board}-${kind}` : null),
     noteNodes: (id, nodes) => calls.noted.push([id, nodes.length]),
     bridgeForNode: (nodeId) => calls.onBus?.get(nodeId) || null,
     refreshBridgedStates: () => { calls.refreshed += 1; },
@@ -89,7 +90,7 @@ function placer(calls, { can = true } = {}) {
     resolve: async (nodigraph, name) => ({ manifest: { name }, source: { name } }),
     add: (nodigraph, manifest) => {
       const name = manifest.name;
-      const block = boardBlock(name === 'esp32-cnc' ? 'cnc' : 'esp32-S3', { can, kind: name === 'esp32-cnc' ? 'cnc-module' : 'esp32-devkit' });
+      const block = boardBlock(name.endsWith('-cnc') ? 'cnc' : 'esp32-S3', { can, kind: name.endsWith('-cnc') ? 'cnc-module' : 'esp32-devkit' });
       nodigraph.project.getLevel().blocks.set(block.id, block);
       calls.placed.push(name);
       calls.placedInto = nodigraph.project.path.slice();
@@ -105,7 +106,7 @@ test('a CNC heard on CAN is placed beside the board, named, wired CAN to CAN and
   const board = boardBlock('esp32-S3', { nodeId: 'a1d148c4' });
   const nodigraph = fakeNodigraph([board]);
   const result = await api.placeNeighbours(nodigraph, board, nodes, { ...placer(calls) });
-  assert.deepEqual(calls.placed, ['esp32-cnc'], 'the WiFi-only node is not placed');
+  assert.deepEqual(calls.placed, ['esp32s3-2io-cnc'], 'the WiFi-only node is not placed');
   const cnc = [...nodigraph.project.rootBlock.children.blocks.values()].find((b) => b !== board);
   assert.equal(cnc.name, 'CNC');
   assert.equal(cnc.props.find((p) => p.name === 'nodeId').value, '0dd04644');
@@ -137,7 +138,7 @@ test('from inside the board the neighbour still lands on the board\x27s level, w
   board.children = { blocks: new Map(), connections: new Map() };
   const inside = fakeNodigraph([board], { path: [board.id] });
   const result = await api.placeNeighbours(inside, board, nodes, { ...placer(calls) });
-  assert.deepEqual(calls.placed, ['esp32-cnc']);
+  assert.deepEqual(calls.placed, ['esp32s3-2io-cnc']);
   assert.deepEqual(calls.placedInto, [], 'pasted with the root as the level being edited');
   assert.deepEqual(inside.project.path, [board.id], 'and the view is back inside the board');
   assert.equal(inside.project.rootBlock.children.blocks.size, 2, 'the CNC sits beside the board at the root');
@@ -152,12 +153,12 @@ test('the poll never puts back a block that was offered before', async () => {
   const offered = new Set();
   const atRoot = fakeNodigraph([board]);
   await api.placeNeighbours(atRoot, board, nodes, { ...placer(calls), offered });
-  assert.deepEqual(calls.placed, ['esp32-cnc']);
+  assert.deepEqual(calls.placed, ['esp32s3-2io-cnc']);
   assert.ok(offered.has('0dd04644'));
   const placedCnc = [...atRoot.project.rootBlock.children.blocks.values()].find((b) => b !== board);
   atRoot.project.rootBlock.children.blocks.delete(placedCnc.id); // the user deletes it
   await api.placeNeighbours(atRoot, board, nodes, { ...placer(calls), offered });
-  assert.deepEqual(calls.placed, ['esp32-cnc'], 'not placed a second time by the poll');
+  assert.deepEqual(calls.placed, ['esp32s3-2io-cnc'], 'not placed a second time by the poll');
 });
 
 test('scanAndPlaceNeighbours asks the board, notes what it heard for the bridge, then places', async () => {

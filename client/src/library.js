@@ -20,6 +20,7 @@
 import { generateId } from '/nodigraph/src/model/Block.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { pasteSelection, isClipboardPayload } from '/nodigraph/src/model/clipboard.js';
+import { canonicalModuleName } from './moduleDiscovery.js';
 import { getStoredToken } from '/nodigraph/src/model/githubSync.js';
 import { rehydrateKindLogic } from './palette.js';
 
@@ -313,6 +314,9 @@ export async function installFromRepo(nodigraph, { owner, repo, ref, path = DEFA
 // noditron-module that carries one of that name — installed on the way,
 // so it is a plain tile in the Add Block window from then on.
 export async function resolveModuleByName(nodigraph, name) {
+  // A name from before the <hardware>-<firmware> scheme (older firmware,
+  // older projects) is today's module of that name.
+  name = canonicalModuleName(name);
   const installed = getInstalledModules(nodigraph).find((m) => m.name === name);
   if (installed) {
     return { manifest: await fetchManifest(installed.owner, installed.repo, installed.ref, installed.path), source: installed };

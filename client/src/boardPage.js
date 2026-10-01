@@ -53,10 +53,16 @@ export async function whoServesThisPage(fetchImpl = fetch) {
   }
 }
 
-// The module for the board this page came from. A logic board reached over
-// the network is the S3 unless it says it is the classic DevKit by name.
+// The module for the board this page came from: the one for its hardware
+// when /api/version names it (`board`, builds 20260930a and later). Before
+// that, a logic board reached over the network is the 8DI/8DO S3 unless it
+// says it is the classic DevKit by name.
 export function moduleNameForBoard(info) {
-  if (info?.type === 'logic' && /^esp32(-devkit)?$/i.test(String(info.name || ''))) return 'esp32-devkit';
+  if (info?.board) {
+    const named = moduleNameFor(info.type, { board: info.board });
+    if (named) return named;
+  }
+  if (info?.type === 'logic' && /^esp32(-devkit)?$/i.test(String(info.name || ''))) return 'esp32-devkit-logic';
   return moduleNameFor(info?.type, { nativeUsb: null });
 }
 

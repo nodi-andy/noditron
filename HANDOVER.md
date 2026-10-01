@@ -641,7 +641,11 @@ ping
 - **CAN watchdog (both firmwares)**: error-passive (a counter >= 128) for
   3 s → driver uninstall + install, at most every 30 s (`can_watch` in the
   CNC's Serial.cpp, `canWatch` in the S3's main.cpp; the S3's install is
-  now `canInstall(tx, rx, bitrate)`). A first version also restarted on a
+  now `canInstall(tx, rx, bitrate)`). Since build 20260930k only while
+  another node is heard (a frame within 5 s): alone on the bus a node is
+  error passive by nature, and the restart every 33 s just spammed the
+  console (`[CAN] started` + `[CAN] restarted: error passive`). Entering
+  and leaving error passive is announced once each instead. A first version also restarted on a
   "stuck" TX queue — wrong: the CNC mirrors every console line onto the
   bus, so its queue is always full, and the restarts every 3 s broke the
   bus for the S3.
@@ -1069,3 +1073,302 @@ changes on both boards:
     - the ones synthesized for realtime bytes and ABORT over UART2/CAN
     - the second `ok` from `$V=`
     - JMP's `ok:` / `error:` text plus status (now a `[MSG:JMP …]` line)
+
+## 2026-09-30 — three boards, two firmwares, six named variants
+
+- **Boards.** `esp32-devkit` (classic DevKit V1), `esp32s3-2io` (Waveshare
+  ESP32-S3 RS485/CAN, two isolated IOs — the board conucon's
+  `Machines/waveshare_s3.h` targets, CAN TX15/RX16), `esp32s3-8io`
+  (Waveshare ESP32-S3-POE-ETH-8DI-8DO, CAN TX2/RX3). Firmware `logic` /
+  `cnc`. Names everywhere are `<hardware>-<firmware>`: noditron modules
+  (`modules/<name>/`), firmware presets (`serialFlash.js`), conucon envs
+  (`platformio.ini`, aliases extending the old envs), conucon's installer
+  keys (`server.js` FIRMWARE_TARGETS, `gui.html`). Old module names
+  (`esp32-devkit`, `esp32-s3-devkit`, `esp32-cnc`) resolve through
+  `MODULE_ALIASES` in `client/src/moduleDiscovery.js`.
+- **Boards say what they are.** Builds 20260930a print
+  `[INFO] node=<id> type=<logic|cnc> board=<hardware> ...` (CNC:
+  `NODITRON_BOARD` from the machine file; Logic: `LOGIC_BOARD_ID`), and
+  `/api/version` carries `board`. `serialConsole.parseNodeLine` reads it;
+  `moduleNameFor(kind, { board })` places `<board>-<kind>`. Older firmware
+  is placed by USB chip as before. The heartbeat frame (0x7EE) still
+  carries only the type, so a neighbour heard on CAN is placed as the
+  board each firmware is used on (`NODE_TYPE_MODULES`).
+- **COM10** = the `esp32s3-2io` board: ESP32-S3 rev v0.2, 16 MB flash, MAC
+  28:84:85:56:8a:bc → node id **`85568abc`**, node name `CNC`. Flashed with
+  `cnc-s3` build 20260930a (`pio run -d modules/esp32_cnc -e cnc-s3 -t upload
+  --upload-port COM10`). `ping` answers
+  `[INFO] node=85568abc type=cnc board=esp32s3-2io name=CNC ...`. Opening its
+  port resets it (native USB): wait ~3 s before `ping`, and `?` is grbl's
+  realtime status, not the shell's identity — use `ping`. With nothing else
+  on the bus, CAN TX fails (BUS_OFF) until a second node and termination.
+- **Bundled firmware** under `firmware-assets/<firmware>/<hardware>.bin`
+  plus per-firmware bootloader/partition tables (the CNC's partition table
+  is not the Logic Module's). Copied from conucon's builds by
+  `scratchpad/copy_bins.sh` this session; rebuild with the six envs.
+- **8DI/8DO as a CNC node** (`waveshare_s3_8io.h`, `cnc-esp32s3-8io`): CAN
+  and shell only — its inputs are opto-isolated and its outputs sit behind
+  the TCA9554, so no stepper can be pulsed from it without wiring to the
+  raw GPIOs.
+
+
+- **Pin settings on the S3 (build 20260930b).** `x.dir.pin = 1` was refused
+  with `error: x.dir.pin: Invalid value` — the pin check in
+  `SettingsDefinitions.cpp` (`isOutputGpio`) was the classic ESP32's table,
+  which forbids GPIO 1 and 3 (its UART0) and anything above 33. A refused
+  set leaves the stored value as it was, which is what shows after a
+  reboot. The check is now per chip: on the S3, GPIO 0-21 and 38-48 minus
+  the native USB pair 19/20 and the flash lines 26-32; the settings' upper
+  bound is 48 there. CNC presets carry build 20260930b.
+
+- **Errors explain themselves (CNC build 20260930c).** Every grbl error line
+  is `error:<code>: <meaning and what to do>` (`Error.cpp` ErrorNames), e.g.
+  `error:5: The feature this needs is switched off - for home/$H:
+  homing.enable = on ($22=1); ...`. The code stays first for grbl senders.
+- **Limit switches on another node (CNC build 20260930e).** The 2-IO board's
+  pins are step and direction, so the X limit switches sit on a Logic
+  Module's GPIO1/2 and it reports them in the settings tree, under the
+  axis: `x limit min on`, `x limit min off`, `x limit max on`, or
+  `x.limit.min = on`; `ls x limit` shows pin, state, min, max (README
+  "Limit switches on another node"; a flat `limit x min` existed in build
+  20260930d only). Reported switches OR into `limits_get_state()`, so homing ends its
+  approach on one like on a pin; the wrong end while homing, both ends, or a
+  switch in any other state → motors stop, ALARM:1 with a `[MSG:limit ...]`
+  line; a hard-limit alarm needs `reset`, then `unlock` or `home`. Shell
+  lines from CAN run in the client task, so they reach a homing cycle in
+  progress. Verified on COM10: idle switch → alarm, both ends → alarm, a
+  reported switch ended the seek approach of `home`; the test's scripted
+  second press fell into grbl's 250 ms `homing.debounce` pause, the locate
+  approach ran its 5 mm and grbl raised alarm 9 by itself — a real switch
+  closing on contact does not have that problem.
+- **COM10 settings changed for that test:** `homing.enable = on`,
+  `homing.cycle0 = X`, `homing.cycle1` cleared, `homing.seek = 300`,
+  `homing.feed = 100` (were 2000 / 200). With homing on the board boots into
+  Alarm until homed (grbl's rule). `y.limit.pin` is still the machine
+  file's GPIO9 and floats active (`Pn:Y` in status) — set `y.limit.pin = -1`
+  (and `x.limit.pin = -1`) on this 2-pin machine. The axis stands at
+  X = -5.000 after the failed locate pass (about 6 mm toward min in all).
+
+- **COM26 = the second `esp32s3-2io` board, Logic Module** (build
+  20260930f, env `logic-esp32s3-2io`, now a real variant with
+  `-DLOGIC_WAVESHARE_2IO=1`): node id **`85569aec`**, AP name
+  LOGICMOD-9AEC. `ap` and `wifi` default off on this board (RADIO_DEFAULT)
+  and were also switched off explicitly on it, persisted; CAN (TX15/RX16,
+  250 kbit/s) is started at boot, design or no design.
+- **Edge inputs** (esp32_logic README "Limit switches for a CNC node"): the
+  two isolated inputs, GPIO1 = x min and GPIO2 = x max by default (`ls
+  limit`: axis, min/max pin, invert, can, per-input state with the edge
+  count, dropped), on CHANGE interrupts. The ISR counts every edge and
+  queues it; `edgeTask` on **core 0** (priority 3) drains the queue while
+  the circuit keeps running in `loop()` on core 1. Each change is put on
+  the bus as `x limit min on` / `x limit max off` (the CNC's own words) and
+  into a per-input FIFO that the circuit's din block on that pin reads one
+  entry per tick, so nothing shorter than a tick is lost. First edge at
+  once, edges within 5 ms folded, final level re-reported if it differs.
+  Verified on COM26 by driving the pins with `io 1 0` / `io 1 1` (the `io`
+  command now sets the pin to output): `[LIMIT] x limit min on (gpio 1,
+  edges 1)`, `[CAN] tx x limit min on`; TX times out until the CNC is on
+  the bus with termination. `limit min pin 1` re-arms a pin after such a
+  test. Pressed = LOW with the pull-up; `limit invert on` flips it.
+- **Cores:** the circuit, serial shell, CAN receive and the network servers
+  stay in `loop()` on core 1 (WiFi/lwIP have always been on core 0); what
+  moved to core 0 is the time-critical edge capture and its bus reports.
+  Moving CAN receive and HTTP/WebSocket handling off `loop()` needs queues
+  between the cores (they call straight into the circuit) — not done.
+
+- **Heartbeat and nodes list (Logic build 20260930g, CNC build 20260930f).**
+  Every CAN module already sent a heartbeat on 0x7EE (CNC once a second;
+  Logic once a second when it hears others, every 5 s alone — and the 2IO
+  logic board now has CAN up at boot, so it always sends). Two things were
+  missing: the frame said nothing about the hardware, and a node once
+  heard stayed in the list forever. Now bits 4-6 of the flags byte carry
+  the hardware (1 esp32-devkit, 2 esp32s3-2io, 3 esp32s3-8io; 0 = older
+  build), `nodes` prints `board=<hardware>` per node and `/api/nodes`
+  carries `board`, and a node silent for 30 s is dropped from the table
+  (`[NODES] lost ...`) — pruned with every heartbeat and before every
+  listing, so `nodes` says who is on the bus now. noditron's
+  `parseNodesOutput` reads `board=` and `placeNeighbours` places
+  `<board>-<type>` for a neighbour heard on CAN, falling back to
+  `NODE_TYPE_MODULES` for older firmware. Verified on COM26 (`nodes` →
+  `logic 85569aec esp32-s3 v1.2 self board=esp32s3-2io`); the CNC build is
+  compiled but **COM10 was unplugged before it could be flashed** — flash it
+  with `pio run -d modules/esp32_cnc -e cnc-s3 -t upload --upload-port
+  COM10` (or from noditron's dialog). Discovery between the two boards
+  needs the CAN bus wired and terminated; neither has seen the other yet.
+
+- **Firmware over the CAN bus (CNC build 20260930g, Logic build 20260930h).**
+  Any node the PC reaches (USB console or HTTP `/api/ota`) relays an image
+  to any other node on the bus (`ota <node> <size> <md5>` at its shell;
+  `tools/ota-can.py --port COM26 --node CNC --file firmware.bin` in
+  conucon). Receiver and relay are in both firmwares (see either README,
+  "Firmware over the bus"): data on CAN 0x7EC in 224-byte blocks, acks on
+  0x7ED, Update into the spare slot, MD5 checked, reboot. The bus
+  between COM26 (Logic, 85569aec, name `esp32-s3`) and COM10 (CNC,
+  85568abc, name `CNC`) is **up** — `nodes` on either lists the other.
+- **CAN OTA verified both ways (2026-10-01, CNC and Logic build 20260930j).**
+  Logic (COM26) → CNC: 1.16 MB in 97 s; CNC (COM10) → Logic: 0.94 MB in
+  82 s, ~11 kB/s with 8 blocks in flight (`tools/ota-can.py` defaults to
+  8 now; both consoles buffer 4 KB, `Serial.setRxBufferSize(4096)` in the
+  CNC's `Serial.cpp` from build i). Two things had to change for the
+  reverse direction: the CNC read the bus by polling with the TWAI
+  driver's default receive queue of 5 frames, so a node's multi-line reply
+  lost its middle and `ota` said `no reply` (queue is 64 now, both
+  firmwares); and a relay whose PC tool had quit kept treating every
+  console byte as image data forever — it looked like a hung board. A
+  relay now ends itself after 10 s without a console byte or when the
+  target reports ack 2 (gave up), printing `[OTA] FAIL ...`. Presets in
+  `serialFlash.js` carry build j of both.
+- **`wifi off` on the CNC started the AP (fixed in build 20260930k).**
+  grbl's single radio mode made `wifi off` mean "AP instead" and `ap off`
+  mean "station instead if one is saved"; now each switches only its own
+  radio off (mode None when it was the one running). Both boards on build
+  k, both rebuilt and copied into firmware-assets; presets carry k.
+- **Logic Module inputs (GPIO1/GPIO2)**: `INPUT_PULLUP`, `limit invert
+  off` → pull the pin to GND for `on`, open or 3V3 is `off`. 3.3 V logic
+  only.
+- **Jog buttons over the bus (2026-10-01, CNC and Logic build 20260930l).**
+  A third `esp32s3-2io` (COM11, node 855691c0, name `joystick`) runs the
+  Logic Module with `jog minus pin 1`, `jog plus pin 2`. Held sends
+  `x jog minus|plus [feed]` every 100 ms, released `x jog stop`; the CNC's
+  x/jog leaf (`module_jog` in Module.cpp) starts one $J on the first pulse,
+  renews on every further one and cancels (0x85) 200 ms after the last, so
+  a lost stop, a dead box or a dropped bus stops the axis. Same word for
+  start and renew on purpose. A limit switch during a jog cancels the jog
+  with no alarm and blocks that direction while on (module_remote_limit's
+  State::Jog branch). Logic side: `jog` settings tree, EdgeInput.role
+  (limit or jog), pulses from edgeTask on core 0. A jog pin takes its slot
+  from the limit switch of the same end. Docs in both READMEs.
+- **Jog ping/pong (build 20260930m, both).** First field test: pulses
+  queued on the CNC (gated line queue) and drained after the release, so
+  the watchdog kept seeing pulses and the axis ran on. Now the CNC answers
+  each acted-on pulse with `x jogging plus|minus` (`stop` when refused or
+  ended) and the Logic Module keeps exactly one pulse in flight: next only
+  after the answer (150 ms timeout = lost), refused → one try per 500 ms.
+  Presets carry m.
+- **Jog gate and segments (build 20260930n, both).** Second field test: a
+  short press, then the axis ran on and the CNC was dead on USB and CAN
+  (the joystick's tec hit 128, its node table lost the CNC's heartbeat).
+  A hung CNC keeps stepping whatever the planner holds, and the jog was a
+  100 m move. Now (1) each pulse plans at most a 250 ms segment, never
+  more than ~2 ahead, absolute targets clamped to soft limits; (2) the
+  Logic Module is a gate: the press sends `x jog <dir>` once, after that
+  it only reflects the CNC's `x jogging ...` lines back as `x jog <dir>`
+  while the GPIO holds the gate open (rate-limited to `jog period`), so
+  the CNC drives the loop and nothing is queued; (3) the CNC's CAN
+  watchdog recovers from bus-off (initiate_recovery, then twai_start).
+  The hang's cause is not found: no trace survives a hardware reset. If
+  it repeats, catch the CNC console at the moment (a panic prints there)
+  and `can` on both boards before resetting.
+- **The hang, found (build 20260930o, both).** Not a crash: the USB
+  console. arduino-esp32 2.0.9's HWCDC queues 256 bytes and, once the PC
+  has read the port once, blocks 100 ms on every write that does not fit
+  — which is every write from the moment the terminal is closed while the
+  board stays plugged in (the endpoint is never read again). The CNC
+  prints status reports, `[CODE:DONE]`, ok and the CAN echoes from both
+  its tasks, so both crawled: heartbeats stopped, pulses piled up, the
+  jog stuttered, then nothing answered. (The `?@can>` on the joystick is
+  not a symptom: a plain broadcast line carries no sender id, so every
+  `x jogging ...` shows as `?`.) Verified on 2026-10-01: the gate loop at
+  1000 mm/min with COM10 closed for 3.3 s kept 10 pulses/s (largest gap
+  126 ms), the CNC answered at once when the port reopened.
+  Every hang followed a closed terminal: CNC (3x), the limit board on
+  COM26 (its USB and CAN "dead"). Fix: `Serial.setTxBufferSize(4096)`
+  before begin and `Serial.setTxTimeoutMs(0)` after, on both firmwares —
+  the console never blocks, output nobody reads is dropped.
+- **Jog lookahead (CNC build 20260930o).** One segment ahead stuttered at
+  10000 mm/min: the axis needs ~70 mm to reach speed and as much to stop,
+  grbl plans every block as the last and braked at the end of the two
+  segments it had. `jogSegment` now keeps braking distance + one segment
+  planned ahead of the measured position (v²/2a + 250 ms of travel: 111 mm
+  at 10000 mm/min, 5 mm at 1000). That is also what a hung controller
+  would run. Presets carry o.
+- **Runaway after one real press (Logic build 20260930p).** First press
+  on the real button: the joystick's plus input stayed `Held (edges 207)`
+  with the pin released, the gate stayed open, the axis ran (4 m on the
+  counter) until the jog pins were removed over COM11. Both pins read
+  Released afterwards: a missed edge, not wiring - the ESP32 drops an
+  edge that lands while the interrupt status is being cleared, and the
+  stored level stays LOW. Fix: edgeTask polls every input each pass
+  (2 ms) and treats an undelivered level change as an edge; the gate
+  reads the GPIO live before every reflection. Also still open: at
+  10000 mm/min the lookahead is 111 mm; set `jog feed` on the joystick
+  to something sane for hand jogging. Presets carry p (Logic) / o (CNC).
+- **Inputs scanned PLC-style (Logic build 20260930q).** Build p still let
+  a bouncing release through as release/press/release (one press, the
+  axis moved twice; the plus input counted 1183 edges). The user's call:
+  no interrupts - a 10 ms scan on core 0 reads every configured pin,
+  debounces (3 scans = 30 ms), reports accepted changes, runs the jog
+  gate; loop() on core 1 keeps reading CAN and USB every pass. ISR, edge
+  queue, settle window and `limit dropped` are gone. Joystick on q with
+  `jog feed 1000`; limit board on q over the bus. Presets carry q.
+- **Start and continue separated (build 20260930r, both).** "Very rarely
+  the motor drives longer": a pulse in flight at the release started the
+  jog again (one word did both), and a `$J` segment queued behind the
+  stop ran after the cancel. Now `x jog start <dir> [feed]` goes out on
+  the press edge only; the gate answers `x jogging minus|plus` with `x
+  jog continue`, which renews and never starts (unanswered when no jog
+  runs, so the loop just ends); `jogging stop` is not reflected; a stop
+  drops queued `$J=` lines (`module_drop_queued_lines`). Presets carry r.
+
+## Design note — two `esp32s3-2io` CNC boards as X and Y of one machine
+
+Asked 2026-09-30: can two RS485/CAN boards, each driving one axis, act as
+one XY machine — each axis usable alone, a combined X/Y move executed in
+sync, both starting on a CAN command without knowing the other's position?
+
+What the firmware already gives (`Serial.cpp` `can_poll`, `Module.cpp`):
+- A plain text line on CAN id 0x7F0 is fed to grbl on **every** node that
+  hears it (CAN is a broadcast bus); `<node>@can><line>` / `node <name> <line>`
+  address one node; `node * <line>` runs on all. Each board is a full
+  2-axis grbl (`N_AXIS 2`), so today a broadcast `G1 X10 Y20` runs on both
+  boards in full.
+- Realtime bytes (`!` hold, `~` cycle start, 0x85 jog cancel, `?` status)
+  act at once on the CAN path (`is_realtime_command` in `u2_recv`).
+- Per-axis `$110/$111` max rate and `$120/$121` acceleration.
+- Node id + name per board (`name x-axis`), heartbeat 0x7EE, `nodes`.
+
+Viable, in this form (an afternoon of firmware work, no new hardware):
+1. **Axis role per board** — a setting `cnc.axis = X|Y|XY` (or `role`).
+   A board with role X keeps only the X word of a broadcast line and drops
+   the Y word (and vice versa); a line with only its own axis is run as is.
+   Unaddressed lines stay broadcast, so `G1 X10 Y20 F600` reaches both.
+2. **Feed and acceleration scaling**, so a straight line stays straight:
+   for a segment with dx, dy and length d, board X runs its part at
+   F·|dx|/d and board Y at F·|dy|/d, and the acceleration must be split the
+   same way (A·|dx|/d, A·|dy|/d) — then both trapezoids have the same
+   duration and the same ramp times, and the tool path is the line. With
+   equal settings on both boards this is one multiplication per word in
+   the role filter; the ratio is known from the line itself.
+3. **Start together**: broadcast `!` (hold), send the move (planned, not
+   executed), broadcast `~`. Both boards start within the same CAN frame's
+   arrival (~100 µs at 250 kbit/s) plus grbl's realtime latency (sub-ms).
+   Without the hold, the second board starts one fragment-time later — a
+   few ms for a short line — which is visible only on fast short moves.
+4. **Position sharing** is not needed for the motion itself (each board
+   runs its own trapezoid); it is useful for monitoring and for a safety
+   check: each board can broadcast `<Idle|MPos:…>` on `?` or a periodic
+   `x.pos` and the other (or the Logic Module) can abort (`ABORT` / 0x18)
+   if one axis reports an error or alarm — both stop, nothing keeps
+   drawing a diagonal alone.
+
+What it will not give:
+- **Path accuracy on continuous contours.** grbl's look-ahead plans the
+  junction speed between consecutive segments from the whole vector; two
+  boards plan their own axis's junctions and will disagree, so the two
+  profiles drift apart at every corner of a long G-code program (each
+  finishes its segment at a slightly different time, the error grows with
+  the number of segments). Point-to-point moves (one segment, stop, next)
+  stay exact; arcs (G2/G3, split into many small segments) will not.
+- Both boards see the same **feed override** and hold/resume only if every
+  realtime byte is broadcast; nothing local may touch one board alone.
+
+The industrial answer for real contouring is one planner and cyclic
+position setpoints to each axis (CANopen 402 interpolated-position /
+cyclic-sync-position, 1–2 ms cycle, a SYNC frame both act on). At
+250 kbit/s the bus carries ~950 8-byte frames/s: two axes at 2 ms is
+possible, 1 ms is not. It means a master (a Logic Module, or one of the
+two boards) running the planner and the boards executing setpoints — a
+different firmware mode from grbl's line-based one. Recommended order:
+build 1–4 above (independent axes and synchronous single moves are what
+was asked for and are cheap), and keep the setpoint mode as the step to
+take if contouring is needed.

@@ -3,12 +3,12 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
-const manifest = JSON.parse(read('../modules/esp32-cnc/noditron.module.json'));
+const manifest = JSON.parse(read('../modules/esp32s3-2io-cnc/noditron.module.json'));
 const block = manifest.block.blocks[0];
 const prop = (name) => block.props.find((p) => p.name === name)?.value;
 
 test('the CNC module is a leaf with a socket port, a CAN pin and the shared connection dialog', () => {
-  assert.equal(manifest.name, 'esp32-cnc');
+  assert.equal(manifest.name, 'esp32s3-2io-cnc');
   assert.equal(prop('noditronKind'), 'cnc-module');
   assert.deepEqual(block.logicalPorts.map((p) => [p.name, p.direction]), [['socket', 'in'], ['CAN', null]]);
   assert.equal(block.hasChildren, false);

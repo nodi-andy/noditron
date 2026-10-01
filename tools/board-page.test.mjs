@@ -33,7 +33,7 @@ function load(overrides = {}) {
     resolveModuleByName: async (nodigraph, name) => ({ manifest: { name }, source: { name } }),
     addModuleBlock: (nodigraph, manifest) => {
       const block = {
-        id: `board-${manifest.name}`, name: manifest.name === 'esp32-s3-devkit' ? 'esp32-S3' : manifest.name,
+        id: `board-${manifest.name}`, name: manifest.name === 'esp32s3-8io-logic' ? 'esp32-S3' : manifest.name,
         props: [{ name: 'noditronKind', value: 'esp32-devkit' }, { name: 'connectionState', value: 'disconnected' }],
         children: null, geometry: { x: 0, y: 0, width: 200, height: 120 },
       };
@@ -41,7 +41,7 @@ function load(overrides = {}) {
       calls.placed.push(manifest.name);
       return [block];
     },
-    moduleNameFor: (kind) => (kind === 'cnc' ? 'esp32-cnc' : kind === 'logic' ? 'esp32-s3-devkit' : null),
+    moduleNameFor: (kind, { board } = {}) => (board ? `${board}-${kind}` : kind === 'cnc' ? 'esp32s3-2io-cnc' : kind === 'logic' ? 'esp32s3-8io-logic' : null),
     scanAndPlaceNeighbours: async (nodigraph, board) => { calls.neighbours.push(board.id); return { nodes: [], neighbours: [], placed: [], wired: [] }; },
     describeNeighbours: (label) => `${label}: nothing else heard on its CAN bus.`,
   };
@@ -122,7 +122,7 @@ test('the example diagram gives way to the board, connected to the page\'s host,
   const nodigraph = fakeNodigraph(fakeProject(example()));
   const result = await api.installBoardPage(nodigraph, { host: '192.168.0.1', fetchImpl: answering() });
   assert.ok(result?.board);
-  assert.deepEqual(calls.placed, ['esp32-s3-devkit']);
+  assert.deepEqual(calls.placed, ['esp32s3-8io-logic']);
   const rootNames = [...nodigraph.project.rootBlock.children.blocks.values()].map((b) => b.name);
   assert.deepEqual(rootNames, ['esp32-S3'], 'Block A, B, C are gone; the board is the diagram');
   const prop = (name) => result.board.props.find((p) => p.name === name)?.value;
@@ -186,10 +186,11 @@ test('a board that does not answer leaves its block placed, entered and honestly
 
 test('the module for the board: the S3 over the network, the classic DevKit by name, the CNC by type', () => {
   const { api } = load();
-  assert.equal(api.moduleNameForBoard({ type: 'logic', name: 'esp32-s3' }), 'esp32-s3-devkit');
-  assert.equal(api.moduleNameForBoard({ type: 'logic', name: 'esp32' }), 'esp32-devkit');
-  assert.equal(api.moduleNameForBoard({ type: 'logic', name: 'esp32-devkit' }), 'esp32-devkit');
-  assert.equal(api.moduleNameForBoard({ type: 'cnc', name: 'CNC' }), 'esp32-cnc');
+  assert.equal(api.moduleNameForBoard({ type: 'logic', name: 'esp32-s3' }), 'esp32s3-8io-logic');
+  assert.equal(api.moduleNameForBoard({ type: 'logic', name: 'esp32' }), 'esp32-devkit-logic');
+  assert.equal(api.moduleNameForBoard({ type: 'logic', name: 'esp32-devkit' }), 'esp32-devkit-logic');
+  assert.equal(api.moduleNameForBoard({ type: 'cnc', name: 'CNC' }), 'esp32s3-2io-cnc');
+  assert.equal(api.moduleNameForBoard({ type: 'logic', name: 'esp32-s3', board: 'esp32s3-2io' }), 'esp32s3-2io-logic', 'the board\'s own hardware id wins');
   assert.equal(api.moduleNameForBoard({ type: 'other' }), null);
 });
 
@@ -262,5 +263,5 @@ test('the board page flushes the store once the block is in place', async () => 
   nodigraph.persist = () => { persist(); target.nodigraphSaveProject({ blocks: [...nodigraph.project.rootBlock.children.blocks.keys()] }); };
   await api.installBoardPage(nodigraph, { host: '192.168.0.1', fetchImpl: answering(), store });
   assert.equal(uploads.length, 1, 'written once, at the end');
-  assert.deepEqual(JSON.parse(uploads[0].text), { blocks: ['board-esp32-s3-devkit'] }, 'and it is the project with the board in it');
+  assert.deepEqual(JSON.parse(uploads[0].text), { blocks: ['board-esp32s3-8io-logic'] }, 'and it is the project with the board in it');
 });

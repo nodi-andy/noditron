@@ -4,7 +4,7 @@ import test from 'node:test';
 import { traceDesign } from '../client/src/designImport.js';
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
-const module = JSON.parse(read('../modules/esp32-s3-devkit/noditron.module.json'));
+const module = JSON.parse(read('../modules/esp32s3-8io-logic/noditron.module.json'));
 const board = module.block.blocks[0];
 const pins = JSON.parse(board.props.find(p => p.name === 'pinMap').value);
 const strip = s => s.replace(/^import .*;$/gm, '').replace(/export /g, '');
@@ -20,8 +20,8 @@ function wired(from, to) {
 }
 
 test('Waveshare name, eight isolated inputs, eight driver outputs and CAN pins', () => {
-  assert.equal(module.version, '1.10.0');
-  assert.equal(module.displayName, 'esp32-S3');
+  assert.equal(module.version, '1.11.0');
+  assert.equal(module.displayName, 'esp32-S3 8IO · Logic');
   assert.equal(board.name, 'esp32-S3');
   assert.deepEqual(pins.filter(p => p.role === 'digital-input').map(p => p.gpio), [4,5,6,7,8,9,10,11]);
   assert.deepEqual(pins.filter(p => p.role === 'digital-output').map(p => p.exio), [1,2,3,4,5,6,7,8]);
@@ -155,12 +155,12 @@ test('Waveshare preset is selected after S3 detection', () => {
   const start = source.indexOf('      const family = detected.chipName');
   const finish = '      installBtn.disabled = !matchingPreset;';
   const end = source.indexOf(finish, start) + finish.length;
-  const presets = [{ id: 'generic', chip: 'ESP32-S3' }, { id: 'logic-esp32-s3-waveshare', chip: 'ESP32-S3' }];
+  const presets = [{ id: 'generic', chip: 'ESP32-S3' }, { id: 'logic-esp32s3-8io', chip: 'ESP32-S3' }];
   const select = { options: presets.map(p => ({ value: p.id })) };
   new Function('detected', 'presets', 'firmwareSelect', 'installBtn', 'props', source.slice(start, end))(
-    { chipName: 'ESP32-S3 (QFN56)' }, presets, select, {}, { firmwarePreset: 'logic-esp32-s3-waveshare' },
+    { chipName: 'ESP32-S3 (QFN56)' }, presets, select, {}, { firmwarePreset: 'logic-esp32s3-8io' },
   );
-  assert.equal(select.value, 'logic-esp32-s3-waveshare');
+  assert.equal(select.value, 'logic-esp32s3-8io');
 });
 
 test('an older running build exposes the firmware update action', () => {
@@ -169,7 +169,7 @@ test('an older running build exposes the firmware update action', () => {
   assert.match(source, /info\.build < preferredPreset\.build/);
   assert.match(source, /showRunning\(info\)/);
   const flashSource = read('../client/src/serialFlash.js');
-  assert.match(flashSource, /build: '20260928b'/);
+  assert.match(flashSource, /const BUILD = '20260930r'/);
 });
 
 test('existing DevKit input wires retain their IDs and obsolete wired pins survive', () => {

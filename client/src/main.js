@@ -4,6 +4,7 @@
 // so window.nodigraph (see that file's own comment) may not exist the
 // instant this module starts; a short poll covers that gap without this
 // file needing to know anything about nodigraph's internal timing.
+import { canonicalModuleName } from './moduleDiscovery.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { rehydrateKindLogic, migrateLegacyDataBlock } from './palette.js';
 import { installAddBlockDialog } from './addBlockDialog.js';
@@ -196,9 +197,9 @@ async function boot() {
     function moduleNameOf(block) {
       const source = (block.props || []).find((p) => p.name === 'noditronModuleSource')?.value;
       try {
-        return JSON.parse(source || '{}').name || 'esp32-devkit';
+        return canonicalModuleName(JSON.parse(source || '{}').name || 'esp32-devkit-logic');
       } catch {
-        return 'esp32-devkit';
+        return 'esp32-devkit-logic';
       }
     }
     let changed = false;

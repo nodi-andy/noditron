@@ -18,7 +18,7 @@ const circuit = new Function(
   strip(read('../client/src/devkitCircuit.js')) + '\nreturn { buildInternalDevkitDesign, canonicalDesign, designsMatch, isDevkitDirty, markDevkitSent, hasAnyCircuit };',
 )(serial, kindOf, () => '', traceDesign);
 
-const manifest = JSON.parse(read('../modules/esp32-s3-devkit/noditron.module.json'));
+const manifest = JSON.parse(read('../modules/esp32s3-8io-logic/noditron.module.json'));
 const template = manifest.block.blocks[0];
 const pinMap = JSON.parse(template.props.find((p) => p.name === 'pinMap').value);
 
