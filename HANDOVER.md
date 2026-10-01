@@ -1181,7 +1181,7 @@ changes on both boards:
   Logic once a second when it hears others, every 5 s alone — and the 2IO
   logic board now has CAN up at boot, so it always sends). Two things were
   missing: the frame said nothing about the hardware, and a node once
-  heard stayed in the list forever. Now bits 4-6 of the flags byte carry
+  heard stayed in the list forever. Now bits 5-7 of the flags byte carry
   the hardware (1 esp32-devkit, 2 esp32s3-2io, 3 esp32s3-8io; 0 = older
   build), `nodes` prints `board=<hardware>` per node and `/api/nodes`
   carries `board`, and a node silent for 30 s is dropped from the table
