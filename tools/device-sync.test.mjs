@@ -56,6 +56,8 @@ function stubFactories() {
       return t;
     },
     digitalIo: (gpio, direction) => make(`GPIO${gpio}`, 'digital-io', [['pin', gpio], ['direction', direction], ['value', 0]], [['in', 'in'], ['out', 'out']]),
+    route: () => make('Gate', 'route', [], [['sel', 'in'], ['in', 'in'], ['out1', 'out'], ['out2', 'out'], ['out3', 'out'], ['out4', 'out']]),
+    delay: (ms) => make('Delay', 'delay', [['ms', ms]], [['in', 'in'], ['out', 'out']]),
     connection: ({ sourceBlockId, sourcePortId, targetBlockId, targetPortId }) => ({ id: `c${(n += 1)}`, sourceBlockId, sourcePortId, targetBlockId, targetPortId }),
   };
 }
@@ -214,4 +216,79 @@ test('dirty means the compiled design is not what the device was last confirmed 
   board.children.connections.set(extra.id, extra);
   assert.equal(circuit.isDevkitDirty(board, { blocks: new Map(), connections: new Map() }), true);
   assert.equal(circuit.isDevkitDirty(freshBoard(), { blocks: new Map(), connections: new Map() }), false, 'nothing to send is not unsaved');
+});
+
+test('the CNC settings are circuit: a changed pin setting is a different design, key order is not', () => {
+  // What buildPinMappedDesign sends for a placed CNC with nothing wired to
+  // its in or out: one `cnc` block carrying grbl's settings, reached by no
+  // belt. A wire from X step to IO1 changes only x/step/pin.
+  const cncDesign = (settings) => ({ blocks: [{ id: 1, type: 'cnc', gx: 0, gy: 1, data: { settings } }], nextId: 2 });
+  const unwired = cncDesign({ 'x/steps_per_mm': 100, 'x/step/pin': -1, 'x/dir/pin': -1 });
+  const wired = cncDesign({ 'x/steps_per_mm': 100, 'x/step/pin': 1, 'x/dir/pin': -1 });
+  const reordered = cncDesign({ 'x/dir/pin': -1, 'x/step/pin': 1, 'x/steps_per_mm': 100 });
+  assert.notEqual(circuit.canonicalDesign(unwired), circuit.canonicalDesign({ blocks: [] }), 'placing the CNC is a change');
+  assert.notEqual(circuit.canonicalDesign(wired), circuit.canonicalDesign(unwired), 'X step on IO1 is a change');
+  assert.ok(circuit.designsMatch(wired, reordered), 'the same settings read back in another order still match');
+});
+
+test('a CAN wire to another board is not a circuit: the device\'s own is still loaded', () => {
+  const board = freshBoard();
+  const other = freshBoard();
+  other.id = 'other-board';
+  const level = {
+    blocks: new Map([[board.id, board], [other.id, other]]),
+    connections: new Map([['bus', { sourceBlockId: board.id, sourcePortId: boardPort(board, 'CAN'), targetBlockId: other.id, targetPortId: boardPort(other, 'CAN') }]]),
+  };
+  assert.equal(circuit.hasAnyCircuit(board, level), false, 'the bus between two boards');
+  const data = { id: 'd1', props: [{ name: 'noditronKind', value: 'data' }], logicalPorts: [], ports: [] };
+  level.blocks.set(data.id, data);
+  level.connections.set('w', { sourceBlockId: data.id, sourcePortId: 'x', targetBlockId: board.id, targetPortId: boardPort(board, 'CAN') });
+  assert.equal(circuit.hasAnyCircuit(board, level), true, 'a block beside it wired to its pin is');
+});
+
+test('loading a device circuit nothing here can show leaves the drawing as it was', () => {
+  const board = freshBoard();
+  board.children.blocks.set('kept', { id: 'kept', name: 'Kept', props: [], logicalPorts: [], ports: [] });
+  const result = importDesign({ design: { blocks: [{ id: 1, type: 'i2cout', gx: 0, gy: 0, data: {} }] }, esp: board, pinMap, factories: stubFactories(), replace: true });
+  assert.equal(result.restored, true);
+  assert.ok(board.children.blocks.has('kept'), 'the block that was there is still there');
+});
+
+test('a jog button box: the Gate (Route) and a Delay compile and come back as drawn', () => {
+  // Per button: press/release -> Match 1/0 -> start / stop -> CAN; the
+  // CNC's echo -> Match -> Delay -> Gate (sel = the button) -> out2 ->
+  // `x jog continue` -> CAN. Held, every echo is answered 100 ms later;
+  // released, the Gate sends it to the unwired out1.
+  const board = build(({ add, wire, f }) => {
+    for (const [pin, dir] of [['DI1', 'minus'], ['DI2', 'plus']]) {
+      const press = add(f.match(['1', '0'], 2));
+      const start = add(f.data(`x jog start ${dir}`));
+      const stop = add(f.data('x jog stop'));
+      wire(pin, [press, 'in']);
+      wire([press, 'out1'], [start, 'in']);
+      wire([press, 'out2'], [stop, 'in']);
+      wire([start, 'out'], 'CAN');
+      wire([stop, 'out'], 'CAN');
+      const echo = add(f.match([`x jogging ${dir}`], 1));
+      const wait = add(f.delay(100));
+      const gate = add(f.route());
+      const cont = add(f.data('x jog continue'));
+      wire('CAN', [echo, 'in']);
+      wire([echo, 'out1'], [wait, 'in']);
+      wire(pin, [gate, 'sel']);
+      wire([wait, 'out'], [gate, 'in']);
+      wire([gate, 'out2'], [cont, 'in']);
+      wire([cont, 'out'], 'CAN');
+    }
+  });
+  const notes = [];
+  const design = circuit.buildInternalDevkitDesign(board, null, { notes });
+  assert.deepEqual(notes, [], 'nothing left out');
+  assert.equal(design.blocks.filter((b) => b.type === 'route').length, 2);
+  assert.equal(design.blocks.filter((b) => b.type === 'timer' && b.data.mode === 'delay' && b.data.onTime === 100).length, 2);
+  const edges = traceDesign(design).edges.map((e) => `${e.from.type}${e.output ?? ''}>${e.to.type}${e.input ?? ''}`);
+  assert.ok(edges.includes('timer>route2'), 'the delay feeds the gate\'s channel');
+  assert.ok(edges.includes('din>route0'), 'the button is the gate\'s sel');
+  assert.ok(edges.includes('route1>data'), 'out2 (firmware output 1) feeds continue');
+  roundTrip(board);
 });

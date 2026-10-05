@@ -13,7 +13,56 @@ import { createConnection } from '/nodigraph/src/model/Connection.js';
 import * as serialConsole from './serialConsole.js';
 import * as devkitCircuit from './devkitCircuit.js';
 import { importDesign } from './designImport.js';
-import { createStandaloneDataBlock, createContentRouteBlock, createAndBlock, createTimerBlock, createDigitalIOBlock } from './palette.js';
+import { createStandaloneDataBlock, createContentRouteBlock, createAndBlock, createTimerBlock, createDigitalIOBlock, createCncBlock, createRouteBlock, createDelayBlock } from './palette.js';
+
+const portIdByName = (block, name) => {
+  const logical = (block.logicalPorts || []).find((lp) => lp.name === name);
+  return logical ? (block.ports || []).find((p) => p.logicalId === logical.id)?.id || null : null;
+};
+
+// A CNC block holding `settings` (grbl's settings-tree paths, as the
+// design carries them): every named value in its groups set from them,
+// and the Homing group's axes wired in the order homing/cycle0..5 give —
+// the inverse of devkitCircuit's cncSettingsOf / cncHomingCycles.
+function cncBlockWith(make, set, settings) {
+  const block = make(createCncBlock);
+  for (const group of block.children?.blocks?.values() || []) {
+    if (!group.children) continue;
+    const name = String(group.name).toLowerCase();
+    for (const leaf of group.children.blocks.values()) {
+      const key = `${name}/${String(leaf.name).toLowerCase()}`;
+      if (!(key in settings)) continue;
+      const value = settings[key];
+      const isBool = leaf.props.find((p) => p.name === 'noditronKind')?.value === 'digital-io';
+      set(leaf, 'value', isBool ? (Number(value) >= 1 || value === true ? 1 : 0) : value);
+      leaf.description = serializeBlockDescription(leaf);
+    }
+    if (name === 'homing') rewireHoming(group, settings);
+    group.description = serializeBlockDescription(group);
+  }
+  return block;
+}
+
+function rewireHoming(group, settings) {
+  const axes = [...group.children.blocks.values()].filter((b) => b.props.find((p) => p.name === 'noditronKind')?.value === 'cnc-home-axis');
+  const axisFor = (letter) => axes.find((a) => String(a.props.find((p) => p.name === 'axis')?.value || a.name).toUpperCase() === letter);
+  const homes = new Set(axes.map((a) => portIdByName(a, 'home')));
+  for (const [id, conn] of group.children.connections) if (homes.has(conn.targetPortId)) group.children.connections.delete(id);
+  let previous = null; // the axes of the last cycle that had any
+  for (let i = 0; i < 6; i += 1) {
+    const letters = String(settings[`homing/cycle${i}`] || '').toUpperCase().replace(/[^A-Z]/g, '');
+    const inCycle = [...letters].map(axisFor).filter(Boolean);
+    if (!inCycle.length) continue;
+    for (const axis of inCycle) {
+      const sources = previous ? previous.map((a) => [a.id, portIdByName(a, 'done')]) : [[group.id, portIdByName(group, 'home')]];
+      for (const [sourceBlockId, sourcePortId] of sources) {
+        const conn = createConnection({ sourceBlockId, sourcePortId, targetBlockId: axis.id, targetPortId: portIdByName(axis, 'home') });
+        group.children.connections.set(conn.id, conn);
+      }
+    }
+    previous = inCycle;
+  }
+}
 
 function pinMapFor(block) {
   try {
@@ -30,7 +79,7 @@ function setProp(block, name, value) {
   else block.props.push({ id: `${block.id}:${name}`, name, kind: 'value', value });
 }
 
-function factoriesFor(nodigraph) {
+export function factoriesFor(nodigraph) {
   // The palette's `finish` adds the new block to the current level,
   // selects it and persists — none of which a block bound for inside a
   // board should do. Only the block itself is wanted.
@@ -85,6 +134,13 @@ function factoriesFor(nodigraph) {
       set(block, 'pin', gpio);
       set(block, 'direction', direction);
       block.name = `GPIO${gpio}`;
+      return block;
+    },
+    cnc: (settings) => cncBlockWith(make, set, settings),
+    route: () => make(createRouteBlock),
+    delay: (ms) => {
+      const block = make(createDelayBlock);
+      set(block, 'ms', ms);
       return block;
     },
     connection: createConnection,

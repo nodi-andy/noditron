@@ -27,12 +27,13 @@ test('who is behind whom: nodes heard via can, forgotten with their bridge or wh
 // the far board's lines, then its ok.
 const source = fs.readFileSync(new URL('../client/src/serialConsole.js', import.meta.url), 'utf8');
 function consoleWith(sessions) {
-  return new Function('getSession', 'ensureOpenPlain', source
+  return new Function('getSession', 'ensureOpenPlain', 'isFlashing', source
     .replace(/^import .*;$/gm, '')
     .replace(/export /g, '')
     + '\nreturn { shell, identify, closeConsole, setLogIncoming, setBridgeResolver, bridgeFor, subscribeConsoleLines };')(
     (id) => sessions[id] || null,
     async (id) => sessions[id] || null,
+    () => false,
   );
 }
 

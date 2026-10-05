@@ -164,6 +164,10 @@ export function installDialogSystem(nodigraph) {
         linkKind: () => serialFlash.getSession(block.id)?.kind || (serialConsole.bridgeFor(block.id) ? 'can' : 'serial'),
         detectChip: (onLog) => serialFlash.detectChip(block.id, { onLog }),
         flash: (files, eraseAll, onProgress, onLog) => serialFlash.flash(block.id, files, { eraseAll, onProgress, onLog }),
+        // True while this block's firmware install holds the port; the
+        // dialog's own pollers (grbl state, connectivity) check it and skip
+        // rather than reach for the console mid-write (see serialFlash.flash).
+        isFlashing: () => serialFlash.isFlashing(block.id),
         // `forget` (true from a dialog's own Disconnect button) also drops
         // the remembered port, so the next load does not offer it again.
         disconnect: (forget) => serialFlash.disconnect(block.id, { forget: Boolean(forget) }),

@@ -17,7 +17,9 @@
 
 // `board=<hardware>` at the end (firmware builds 20260930f/g and later) is
 // what the node's heartbeat said about its hardware — see HARDWARE.
-const NODE_LINE_RE = /^(logic|cnc|node)\s+([0-9a-f]{8})(?:\s+(\S+))?\s+v(\S+)\s+(self|seen\s+(\d+)s\s+ago\s+via\s+(\S+))(?:\s+board=(\S+))?\s*$/;
+// The firmware calls every board `noditron` now (it said `logic` before);
+// both stand for the logic firmware's node type, `logic`, here.
+const NODE_LINE_RE = /^(noditron|logic|cnc|node)\s+([0-9a-f]{8})(?:\s+(\S+))?\s+v(\S+)\s+(self|seen\s+(\d+)s\s+ago\s+via\s+(\S+))(?:\s+board=(\S+))?\s*$/;
 
 export function parseNodesOutput(lines) {
   const nodes = [];
@@ -27,7 +29,7 @@ export function parseNodesOutput(lines) {
     // A node without a name prints its version where the name would be;
     // the regex only takes a name when a version still follows it.
     nodes.push({
-      type: m[1],
+      type: m[1] === 'noditron' ? 'logic' : m[1],
       id: m[2],
       name: m[3] || '',
       version: m[4],

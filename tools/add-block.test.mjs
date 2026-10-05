@@ -75,9 +75,34 @@ test('every primitive is in a group, and each group entry names a kind the conta
   assert.ok(start > 0);
   const source = palette.slice(start);
   const labels = [...source.matchAll(/label: '([^']+)'/g)].map((m) => m[1]);
-  assert.deepEqual(labels, ['Logic', 'Data', 'Time & output', 'Board I/O']);
+  assert.deepEqual(labels, ['Logic', 'Data', 'Time & output', 'Board I/O', 'Communication']);
   const kinds = [...source.matchAll(/entry\('#[0-9a-f]{6}', '[^']+', '([^']+)'/g)].map((m) => m[1]);
   assert.equal(new Set(kinds).size, kinds.length, 'no kind twice');
-  assert.ok(kinds.includes('digital-io') && kinds.includes('cnc') === false, 'the CAN block is the board I/O kind "can", the board itself is a module');
+  assert.ok(kinds.includes('digital-io') && !kinds.includes('cnc-module'), 'a board itself is a module, never a palette entry');
   assert.ok(kinds.includes('can'));
+  // The CNC driver block: in the palette, offered only where a board's
+  // allowedChildKinds names it (see containerRestrictions.kindOffered).
+  assert.ok(kinds.includes('cnc'));
+  // One Gate, and it is the Route (the boolean `gate` never ran on a
+  // board); Serial and I2C are one block each, both ways, beside CAN; a
+  // Delay paces a loop that answers its own echo.
+  assert.ok(kinds.includes('route') && !kinds.includes('gate'));
+  assert.ok(/entry\('#[0-9a-f]{6}', 'Gate', 'route'/.test(source));
+  assert.ok(kinds.includes('serial') && kinds.includes('i2c') && !['serialin', 'i2cout', 'i2cin'].some((k) => kinds.includes(k)));
+  assert.ok(kinds.includes('delay'));
+});
+
+test('nodes from a current firmware say noditron, and carry the names they announce', () => {
+  const nodes = parseNodesOutput([
+    'noditron 855691c0 joystick v1.2 self board=esp32s3-2io',
+    'noditron 85568abc cnc v1.2 seen 0s ago via can board=esp32s3-2io',
+    'noditron 85569aec v1.2 seen 3s ago via can board=esp32s3-2io',
+    'logic 12345678 v1.1 seen 1s ago via wifi',
+  ]);
+  assert.deepEqual(nodes.map((n) => [n.type, n.id, n.name, n.self]), [
+    ['logic', '855691c0', 'joystick', true],
+    ['logic', '85568abc', 'cnc', false],
+    ['logic', '85569aec', '', false],
+    ['logic', '12345678', '', false],
+  ]);
 });

@@ -42,11 +42,16 @@ const BOARDS = {
     boardVariant: 'ESP32-S3-RS485-CAN (2 IO)',
     preset: 'logic-esp32s3-2io',
     can: { tx: 15, rx: 16 },
-    left: Array.from({ length: 6 }, (_, i) => ['IO' + (i + 4), i + 4, 'gpio']),
+    // IO1 and IO2 too: on a CNC they are its X step and dir.
+    left: [['IO1', 1, 'gpio'], ['IO2', 2, 'gpio'], ...Array.from({ length: 6 }, (_, i) => ['IO' + (i + 4), i + 4, 'gpio'])],
     right: [
       ...Array.from({ length: 5 }, (_, i) => ['IO' + (i + 10), i + 10, 'gpio']),
       ['CAN', null, 'can'], ['CAN speed', null, 'can-speed'],
     ],
+    // The CNC driver: conucon's logic-cnc-esp32s3-2io build has grbl
+    // inside the Logic Module firmware, so a CNC block (palette.js's
+    // createCncBlock) may be placed in this board.
+    cncDriver: true,
     reserved: new Map(),
     description: 'Waveshare ESP32-S3 RS485/CAN (2 IO): the P1 header GPIOs IO4-IO14, one CAN pin (TX15/RX16) with configurable speed, a socket port carrying its shell, and USB firmware installation.',
   },
@@ -92,7 +97,9 @@ function build() {
     // The USB socket, as the classic module does it: a pin with no GPIO
     // behind it, carrying the board's serial link to whatever is wired to
     // it (see devkitCircuit.js's usb-serial handling).
-    { label: 'USB', gpio: null, role: 'usb-serial', inputOnly: null, side: 'top', row: null, orientation: 'usb-top' },
+    // A pin like any other, under the right-hand ones — not centred on the
+    // top edge, where it stood for a connector that is not there.
+    { label: 'USB', gpio: null, role: 'usb-serial', inputOnly: null, side: 'right', row: RIGHT.length, orientation: 'usb-top' },
     // The board's shell as a port (see client/src/socketLink.js): out by
     // default — the lines the board prints — flipped to in from the
     // Inspector to feed lines into its shell instead. Below CAN In, no
@@ -138,7 +145,7 @@ function build() {
     ports.push({ id: `prt_${base}`, logicalId: `io_${base}`, side: pin.side, offset, manualOffset: true });
   }
 
-  const rows = Math.max(LEFT.length, RIGHT.length);
+  const rows = Math.max(LEFT.length, RIGHT.length) + 1;  // socket under the left pins, USB under the right
   const height = FIRST_PIN_OFFSET + (rows - 1) * PIN_SPACING + 70;
   return { pins, ports, logicalPorts, geometry: { x: 0, y: 0, width: 300, height } };
 }
@@ -278,6 +285,18 @@ setProp('boardId', BOARD.id);
 setProp('boardVariant', BOARD.boardVariant);
 setProp('firmwarePreset', BOARD.preset);
 setProp('canPins', JSON.stringify(BOARD.can));
+// Raised whenever the pins move: a board placed before takes the new
+// slots once (main.js, devkitCircuit.relayoutBoard), wires kept.
+setProp('pinLayout', '2');
+// What may go inside: the manifest's own list, plus the CNC block where
+// the board's firmware has the CNC driver (BOARD.cncDriver).
+{
+  let allowed = [];
+  try { allowed = JSON.parse((block.props || []).find((p) => p.name === 'allowedChildKinds')?.value || '[]'); } catch { allowed = []; }
+  allowed = allowed.filter((kind) => kind !== 'cnc');
+  if (BOARD.cncDriver) allowed.push('cnc');
+  setProp('allowedChildKinds', JSON.stringify(allowed));
+}
 setProp('usbOrientation', 'top');
 setProp('onboardControls', JSON.stringify({
   buttons: [
@@ -295,5 +314,5 @@ fs.mkdirSync(path.dirname(MODULE_PATH), { recursive: true });
 fs.writeFileSync(MODULE_PATH, `${JSON.stringify(module_, null, 2)}\n`);
 
 const reserved = pins.filter((p) => p.reserved).map((p) => p.label);
-console.log(`${BOARD.id}-logic: ${pins.length} pins (${LEFT.length + 1} left, ${RIGHT.length} right, 1 top), ${ports.length} ports`);
+console.log(`${BOARD.id}-logic: ${pins.length} pins (${LEFT.length + 1} left, ${RIGHT.length + 1} right), ${ports.length} ports`);
 console.log(`  block ${geometry.width}x${geometry.height}, reserved: ${reserved.join(', ') || 'none'}`);

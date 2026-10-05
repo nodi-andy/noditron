@@ -21,12 +21,43 @@ test('the CNC module is a leaf with a socket port, a CAN pin and the shared conn
   assert.match(prop('html'), /grbl running/);
 });
 
+// A board that answers nothing (or answers as a Logic Module) gets the
+// CNC firmware from the dialog: the bundled build for this board, every
+// part of it (bootloader, partition table, app). Over USB the chip is
+// detected first so the pill can say "needs firmware". No file picker:
+// every board the CNC firmware is built for ships its build here.
+test('the CNC dialog installs the bundled CNC firmware', () => {
+  const dialog = prop('dialog');
+  for (const piece of [
+    'FIRMWARE',
+    "/^cnc-/.test(p.id)",
+    'p.board === props.boardId',
+    'Install firmware',
+    'helpers.serial.fetchPresetParts(preset)',
+    'helpers.serial.flash(',
+    'helpers.serial.detectChip(log)',
+    "'connected:needs-firmware:' + chipName",
+    "showFirmware('running', info)",
+    "showFirmware('logic', info)",
+    "showFirmware('none', null)",
+    "link === 'can'",
+  ]) {
+    assert.ok(dialog.includes(piece), piece);
+  }
+  for (const gone of ["type = 'file'", 'Install file', 'guessAddress', 'Erase the whole flash']) {
+    assert.ok(!dialog.includes(gone), `no longer: ${gone}`);
+  }
+  assert.equal(prop('firmwarePreset'), 'cnc-esp32s3-2io');
+  assert.match(prop('html'), /Install the CNC firmware/);
+  assert.doesNotMatch(prop('html'), /Logic Module firmware/);
+});
+
 // identify() tells a CNC module from a Logic Module by its info line.
 const source = read('../client/src/serialConsole.js');
 function consoleFor(session) {
-  return new Function('getSession', 'ensureOpenPlain', source
+  return new Function('getSession', 'ensureOpenPlain', 'isFlashing', source
     .replace(/^import .*;$/gm, '')
-    .replace(/export /g, '') + '\nreturn { identify, closeConsole, setLogIncoming };')(() => session, async () => session);
+    .replace(/export /g, '') + '\nreturn { identify, closeConsole, setLogIncoming };')(() => session, async () => session, () => false);
 }
 
 test('a CNC module answers ping with its own info line and identify reports kind cnc', async () => {

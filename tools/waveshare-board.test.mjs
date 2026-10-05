@@ -273,3 +273,22 @@ test('a Data both triggered and written from the same route keeps the trigger; t
   const rows = design.blocks.filter(b => b.type === 'data').map(b => b.data.value);
   assert.deepEqual(rows, ['X100', 'X0'], 'one row per route: the Data row stands, the write wire has no belt');
 });
+
+test('a CAN circuit names the board\'s own transceiver pins: 15/16 on the 2IO board', () => {
+  // The firmware starts TWAI on exactly what the can block says; the 2IO
+  // board declares its transceiver in its module's canPins.
+  const twoIo = JSON.parse(read('../modules/esp32s3-2io-logic/noditron.module.json')).block.blocks[0];
+  const esp = structuredClone(twoIo);
+  const data = {
+    id: 'payload', logicalPorts: [{ id: 'payload-out', name: 'out', direction: 'out' }],
+    ports: [{ id: 'payload-port', logicalId: 'payload-out' }],
+    props: [{ name: 'noditronKind', value: 'data' }, { name: 'value', value: 'hello' }],
+  };
+  const can = esp.ports.find(p => esp.logicalPorts.find(lp => lp.id === p.logicalId)?.name === 'CAN').id;
+  esp.children = {
+    blocks: new Map([[data.id, data]]),
+    connections: new Map([['w', { sourceBlockId: data.id, sourcePortId: 'payload-port', targetBlockId: esp.id, targetPortId: can }]]),
+  };
+  const design = circuit.buildInternalDevkitDesign(esp);
+  assert.deepEqual(design.blocks.find(b => b.type === 'can').data, { tx: 15, rx: 16, bitrate: 250000, format: 'string' });
+});

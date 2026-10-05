@@ -189,17 +189,25 @@ export function installSerialReconnect(nodigraph, { openDialog = () => {} } = {}
     return { offerAll };
   }
 
+  // A port that vanishes and comes straight back is the same board
+  // re-enumerating (an ESP32-S3's native USB does that on a reset or when
+  // its firmware starts its own USB stack — see serialFlash.portLost):
+  // its session keeps it, and no card is shown. Only a board that stays
+  // away is dropped, and only a port nobody's session was waiting for is
+  // offered as a newcomer.
   navigator.serial.addEventListener('connect', (event) => {
     const port = event.port || event.target;
-    if (port) offerAll([port]);
+    if (!port) return;
+    if (serialFlash.portReturned(port)) return;
+    offerAll([port]);
   });
   navigator.serial.addEventListener('disconnect', async (event) => {
     const port = event.port || event.target;
-    const found = port && serialFlash.findSessionByPort(port);
-    if (!found) return;
-    serialConsole.closeConsole(found.blockId);
-    await serialFlash.disconnect(found.blockId);
-    const block = boards().find((b) => b.id === found.blockId);
+    const lost = port && serialFlash.portLost(port);
+    if (!lost) return;
+    if (await lost.returned) return;
+    serialConsole.closeConsole(lost.blockId);
+    const block = boards().find((b) => b.id === lost.blockId);
     if (block) setState(block, 'disconnected');
   });
 

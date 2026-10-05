@@ -29,9 +29,9 @@ test('console writes are cut into whole shell lines, a partial tail kept for lat
 // The console's design read and save go over HTTP for a WiFi session.
 const source = fs.readFileSync(new URL('../client/src/serialConsole.js', import.meta.url), 'utf8');
 function consoleOver(session) {
-  return new Function('getSession', 'ensureOpenPlain', source
+  return new Function('getSession', 'ensureOpenPlain', 'isFlashing', source
     .replace(/^import .*;$/gm, '')
-    .replace(/export /g, '') + '\nreturn { readDesign, sendDesign };')(() => session, async () => session);
+    .replace(/export /g, '') + '\nreturn { readDesign, sendDesign };')(() => session, async () => session, () => false);
 }
 
 test('over WiFi a design is read from design.json and saved through /save-design', async () => {

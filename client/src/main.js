@@ -6,7 +6,7 @@
 // file needing to know anything about nodigraph's internal timing.
 import { canonicalModuleName } from './moduleDiscovery.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
-import { rehydrateKindLogic, migrateLegacyDataBlock } from './palette.js';
+import { rehydrateKindLogic, migrateLegacyDataBlock, migrateDelayBlock } from './palette.js';
 import { installAddBlockDialog } from './addBlockDialog.js';
 import { installCanBridge } from './canBridge.js';
 import { startRuntime, kindOf, getLastResult, getBoundaryOutput, getPortValue, setBoundaryInput, setBoundaryOutput, clearBoundaryOutput, setChildOutput, clearChildOutputs } from './runtime.js';
@@ -22,6 +22,7 @@ import { installSerialReconnect } from './serialReconnect.js';
 import { createSocketLinks } from './socketLink.js';
 import { installBoardPage, installProjectStore } from './boardPage.js';
 import { placeNeighbours } from './canNeighbours.js';
+import { reconcileWithDevice } from './deviceSync.js';
 import * as BlockDescription from '/nodigraph/src/model/BlockDescription.js';
 
 // Block code lives in strings (palette.js, the module manifests) and runs
@@ -40,9 +41,11 @@ const NO_SUB_ARCHITECTURE_KINDS = [
   'digital-io', 'and', 'or', 'gate', 'not', 'data', 'add',
   // conucon's Logic Module blocks (see palette.js) — every one is a leaf
   // the firmware runs directly; none has an inside.
-  'boot', 'serial', 'serialin', 'can', 'i2cout', 'i2cin', 'pwmout', 'pwmin', 'slice', 'route', 'croute',
+  'boot', 'serial', 'serialin', 'can', 'i2c', 'i2cout', 'i2cin', 'pwmout', 'pwmin', 'slice', 'route', 'croute', 'delay',
   // A CNC module is grbl behind a gcode input: nothing to build inside.
   'cnc-module',
+  // One axis in a CNC's homing order (see palette.js's createHomeAxisBlock).
+  'cnc-home-axis',
 ];
 const ESP32_TEMPLATE_PROP_NAMES = ['render', 'html', 'dialog', 'allowedChildKinds', 'usbOrientation', 'boardVariant', 'pinMap', 'onboardControls', 'firmwarePreset', 'canPins'];
 
@@ -75,6 +78,13 @@ async function boot() {
   const offeredOnBus = new Set();
   const canBridge = installCanBridge(nodigraph, {
     onNodes: (board, nodes) => placeNeighbours(nodigraph, board, nodes, { offered: offeredOnBus, status: (message) => console.info(`[noditron] ${message}`) }),
+    // A board online through another is read like one plugged in: its
+    // circuit comes over the bus (serialConsole.readDesign) and is loaded
+    // into an empty block, or compared with the one drawn.
+    onOnline: async (board) => {
+      const result = await reconcileWithDevice(nodigraph, board);
+      console.info(`[noditron] ${board.name} (over CAN): ${result.message}`);
+    },
   });
 
   // Three independent draw contributors, composed into the single
@@ -214,6 +224,9 @@ async function boot() {
       const templateBlock = await templateFor(moduleNameOf(block));
       if (!templateBlock) continue;
       if (devkitCircuit.migrateWaveshareBoard(block, templateBlock, level)) changed = true;
+      // The module's pins moved (its pinLayout): this board takes the new
+      // slots once, before the loop below adds the pins it gained.
+      if (devkitCircuit.relayoutBoard(block, templateBlock, level)) changed = true;
       // The CNC module's `gcode` input became its `socket` (see
       // socketLink.js): the same port, renamed in place, so a wire already
       // on it stays — and the template's socket is then not added twice.
@@ -280,6 +293,7 @@ async function boot() {
     let changed = false;
     for (const block of level.blocks.values()) {
       if (migrateLegacyDataBlock(block)) changed = true;
+      if (migrateDelayBlock(block)) changed = true;
       if (block.children && migrateDataBlocks(block.children)) changed = true;
     }
     return changed;
@@ -378,6 +392,23 @@ async function boot() {
     if (!pin || pin.gpio === null || pin.reserved) return null;
     const live = livePins.getCachedPins(block.id)?.find(p => Number(p.gpio) === Number(pin.gpio));
     return live ? (live.state ? '#3ecf5d' : '#64748b') : null;
+  };
+  // A Match's outputs named by what each one matches (its `routes`, row
+  // by row), so the block reads `1` / `0` or `x jogging minus` rather
+  // than out1 / out2. An empty row matches everything.
+  window.nodigraphPortLabel = (block, port) => {
+    if (kindOf(block) !== 'croute') return null;
+    const outs = (block.ports || [])
+      .map((pin) => ({ pin, lp: (block.logicalPorts || []).find((l) => l.id === pin.logicalId) }))
+      .filter(({ lp }) => lp?.direction === 'out');
+    const index = outs.findIndex(({ pin }) => pin.id === port.id);
+    if (index < 0) return null;
+    let routes = [];
+    try { routes = JSON.parse((block.props || []).find((p) => p.name === 'routes')?.value || '[]'); } catch { return null; }
+    if (!Array.isArray(routes) || index >= routes.length) return null;
+    const text = routes[index] === null || routes[index] === undefined ? '' : String(routes[index]);
+    if (!text) return 'any';
+    return text.length > 18 ? `${text.slice(0, 17)}…` : text;
   };
   window.nodigraphPortValue = (block, port) => {
     if (kindOf(block) !== 'esp32-devkit' || !devkitCircuit.isDevkitRunning(block) || !serialFlash.getSession(block.id)) return undefined;
@@ -501,7 +532,9 @@ async function boot() {
   }
   window.nodigraphBeforeSave = createDeviceSaver({
     project: nodigraph.project,
-    getSession: serialFlash.getSession,
+    // A board online through another on the bus is saved through that one
+    // (serialConsole.sendDesign), so it counts as connected here too.
+    getSession: (blockId) => serialFlash.getSession(blockId) || serialConsole.bridgeFor(blockId),
     sendDesign: serialConsole.sendDesign,
     persist: nodigraph.persist,
     openDialog: dialogSystem.openDialog,

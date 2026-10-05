@@ -29,6 +29,15 @@ export function prepareAdd(nodigraph) {
   nodigraph.prepareAdd?.();
 }
 
+// Kinds offered only where a container names them: a driver block is only
+// any use inside a board whose firmware has that driver (the CNC, see
+// palette.js's createCncBlock), so an unrestricted level does not offer it.
+const OPT_IN_KINDS = new Set(['cnc']);
+
+export function kindOffered(allowed, kind) {
+  return allowed === null ? !OPT_IN_KINDS.has(kind) : allowed.includes(kind);
+}
+
 export function getAllowedChildKinds(nodigraph) {
   const container = addTarget(nodigraph);
   const prop = (container?.props || []).find((p) => p.name === 'allowedChildKinds');

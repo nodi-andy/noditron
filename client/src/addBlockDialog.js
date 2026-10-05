@@ -24,8 +24,8 @@
 import { generateId } from '/nodigraph/src/model/Block.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
 import { paletteGroups } from './palette.js';
-import { getInstalledModules, listBundledModules, fetchManifest, addModuleBlock, resolveModuleByName } from './library.js';
-import { getAllowedChildKinds, prepareAdd, addTarget } from './containerRestrictions.js';
+import { getInstalledModules, fetchManifest, addModuleBlock, resolveModuleByName } from './library.js';
+import { getAllowedChildKinds, kindOffered, prepareAdd, addTarget } from './containerRestrictions.js';
 import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
 import { moduleNameFor, MODULE_NAMES } from './moduleDiscovery.js';
@@ -340,7 +340,10 @@ export function installAddBlockDialog(nodigraph) {
             ? 'The board is starting but nothing answered as a module yet. Place it anyway to install or check its firmware from its own dialog:'
             : 'Nothing answered on this link. The board may have no firmware yet; place it anyway and install one from its own dialog:', true);
           choice.hidden = false;
-          for (const name of MODULE_NAMES) {
+          // Every board runs noditron (the logic firmware, with the CNC as a
+          // block where a board has it): one choice per board, not a
+          // separate CNC firmware beside it.
+          for (const name of MODULE_NAMES.filter((n) => n.endsWith('-logic'))) {
             choice.appendChild(tile({ swatchColor: '#8b93a3', text: `Place ${name}` }, async () => {
               try {
                 await placeUnverified(name);
@@ -382,15 +385,14 @@ export function installAddBlockDialog(nodigraph) {
         run('wifi', ipInput.value);
       });
 
-      // Modules placed on their own, unconnected: every one this server
-      // bundles, plus those this project installed from elsewhere.
+      // Modules placed on their own, unconnected: those this project
+      // installed from elsewhere. The boards themselves are not offered
+      // here as one tile per board and firmware (esp32-S3 2IO · Logic,
+      // · CNC, ...): every board is noditron, and it is added by
+      // connecting to it (Connect USB / Connect IP above), which knows
+      // which board it is.
       const known = new Map();
-      for (const mod of getInstalledModules(nodigraph)) known.set(mod.name, mod);
-      try {
-        for (const mod of await listBundledModules()) if (!known.has(mod.name)) known.set(mod.name, mod);
-      } catch (err) {
-        setStatus(err.message, true);
-      }
+      for (const mod of getInstalledModules(nodigraph)) if (!MODULE_NAMES.includes(mod.name)) known.set(mod.name, mod);
       if (host.hidden) return; // closed while the list was loading
       for (const mod of known.values()) {
         modules.grid.appendChild(tile({ swatchColor: mod.swatchColor || '#8b93a3', text: mod.displayName, sub: mod.version ? `v${mod.version}` : '' }, async () => {
@@ -408,7 +410,7 @@ export function installAddBlockDialog(nodigraph) {
 
     // ── The primitives, grouped; only the kinds this container allows. ──
     for (const { label, entries } of paletteGroups(nodigraph)) {
-      const visible = entries.filter((entry) => (allowed === null || allowed.includes(entry.kind)) && (!EMBEDDED() || EMBEDDED_KINDS.has(entry.kind)));
+      const visible = entries.filter((entry) => kindOffered(allowed, entry.kind) && (!EMBEDDED() || EMBEDDED_KINDS.has(entry.kind)));
       if (!visible.length) continue;
       const g = group(label);
       for (const entry of visible) {

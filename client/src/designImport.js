@@ -53,7 +53,7 @@ export function traceDesign(design) {
       if (b.type === 'route' && x === b.gx) {
         if (y === b.gy) return { block: b, input: 0 };
         const ch = y - b.gy - 1;
-        if (ch >= 0 && ch < b.h) return { block: b, input: ch + 1 };
+        if (ch >= 0 && ch < b.h - 1) return { block: b, input: ch + 1 };
         continue;
       }
       if (b.type === 'and' && x === b.gx) {
@@ -119,6 +119,12 @@ export function traceDesign(design) {
       for (let i = 0; i < b.h; i += 1) away(b.gx + b.w, b.gy + i, i);
       continue;
     }
+    if (b.type === 'route') {
+      // A Route sends out of output i's cell, (gx+w, gy+1+i), for the
+      // rows below its control row — never its other faces.
+      for (let i = 0; i < b.h - 1; i += 1) away(b.gx + b.w, b.gy + 1 + i, i);
+      continue;
+    }
     for (let dx = 0; dx < b.w; dx += 1) {
       away(b.gx + dx, b.gy - 1, null);
       away(b.gx + dx, b.gy + b.h, null);
@@ -152,14 +158,32 @@ const isUsbSerial = (b) => b.type === 'serial' && Number(b.data?.uart ?? 0) === 
 // `factories`: { data(value), match(routes, outputs), and(), timer(on,
 // off), digitalIo(gpio, direction), connection({...}) }. `replace` clears
 // what is inside first. Returns what was made and what could not be.
+// The CNC block's pin ports and the grbl setting each one is — the same
+// table as devkitCircuit's CNC_PIN_PATHS, read the other way: a setting
+// naming a GPIO is a wire from that port to the board pin on it.
+const CNC_PIN_PORTS = {
+  'x/step/pin': 'X step', 'x/dir/pin': 'X dir', 'y/step/pin': 'Y step', 'y/dir/pin': 'Y dir',
+  'stepper/disable/pin': 'enable', 'x/limit/pin': 'X limit', 'y/limit/pin': 'Y limit',
+};
+const CNC_INPUT_PORTS = new Set(['X limit', 'Y limit']);
+
 export function importDesign({ design, esp, pinMap = [], factories, replace = false }) {
   const { blocks, edges } = traceDesign(design);
   esp.hasChildren = true;
   if (!esp.children) esp.children = { blocks: new Map(), connections: new Map() };
+  // What was there, put back if nothing of the device's circuit can be
+  // made here: replacing the CNC board's drawing with a design of only a
+  // `cnc` block (which this did not know) left the board empty.
+  const before = replace ? { blocks: new Map(esp.children.blocks), connections: new Map(esp.children.connections) } : null;
   if (replace) {
     esp.children.blocks.clear();
     esp.children.connections.clear();
   }
+  // The CNC: one block however many firmware blocks stand for it (its
+  // `in`/`out` as `cnc`, its home input as `cnchome`), made with the
+  // settings the design carries (see devkitCircuit's CNC section).
+  const cncSettings = blocks.find((b) => b.type === 'cnc' && b.data?.settings)?.data.settings || null;
+  let cncChild = null;
 
   // Helpers the compiler adds that have no block of their own here: the
   // boot that wakes a constant once, and the clock that resends a Data
@@ -214,8 +238,15 @@ export function importDesign({ design, esp, pinMap = [], factories, replace = fa
       r = childFor(b, () => factories.match(routes, Math.max(routes.length, b.h, 1)));
     } else if (b.type === 'and') {
       r = childFor(b, () => factories.and());
+    } else if (b.type === 'timer' && d.mode === 'delay' && factories.delay) {
+      r = childFor(b, () => factories.delay(Number(d.onTime) || 100));
     } else if (b.type === 'timer') {
       r = childFor(b, () => factories.timer(Number(d.onTime) || 500, Number(d.offTime) || 500));
+    } else if (b.type === 'route' && factories.route) {
+      r = childFor(b, () => factories.route());
+    } else if ((b.type === 'cnc' || b.type === 'cnchome') && factories.cnc) {
+      if (!cncChild) cncChild = childFor(b, () => factories.cnc(cncSettings || {})).child;
+      r = { child: cncChild };
     } else if (isUsbSerial(b)) {
       const port = boardPort(usbLabel);
       r = port ? { board: port } : null;
@@ -244,6 +275,14 @@ export function importDesign({ design, esp, pinMap = [], factories, replace = fa
       const outs = outputPortIds(child);
       return { blockId: child.id, portId: outs[edge.output ?? 0] || null };
     }
+    if (b.type === 'cnc') return { blockId: child.id, portId: portIdOf(child, 'out') };
+    if (b.type === 'route') {
+      // Output i is out(i+1); out3/out4 ship hidden and show once wired.
+      const name = `out${(edge.output ?? 0) + 1}`;
+      const logical = (child.logicalPorts || []).find((lp) => lp.name === name);
+      if (logical) delete logical.hidden;
+      return { blockId: child.id, portId: portIdOf(child, name) };
+    }
     return { blockId: child.id, portId: portIdOf(child, 'out') || portIdOf(child, 'value') };
   }
   function targetEnd(b, edge) {
@@ -252,7 +291,11 @@ export function importDesign({ design, esp, pinMap = [], factories, replace = fa
     if (r.board) return { blockId: esp.id, portId: r.board };
     const child = r.child;
     if (b.type === 'and') return { blockId: child.id, portId: portIdOf(child, edge.input === 'b' ? 'b' : 'a') };
+    if (b.type === 'timer' && b.data?.mode === 'delay') return { blockId: child.id, portId: portIdOf(child, 'in') };
     if (b.type === 'timer') return null; // nothing feeds a timer
+    if (b.type === 'route') return { blockId: child.id, portId: portIdOf(child, edge.input === 0 ? 'sel' : 'in') };
+    if (b.type === 'cnc') return { blockId: child.id, portId: portIdOf(child, 'in') };
+    if (b.type === 'cnchome') return { blockId: child.id, portId: portIdOf(child, 'home') };
     if (b.type === 'data' && edge.input === 'write') {
       // The write port is hidden on a fresh Data (see palette.js); a wire
       // into it shows it, as the Inspector would.
@@ -273,6 +316,24 @@ export function importDesign({ design, esp, pinMap = [], factories, replace = fa
     const to = targetEnd(edge.to, edge);
     if (!from || !to) continue;
     connect(from.blockId, from.portId, to.blockId, to.portId);
+  }
+  // The CNC's pin settings as the wires they were drawn as.
+  if (cncChild && cncSettings) {
+    for (const [path, portName] of Object.entries(CNC_PIN_PORTS)) {
+      const gpio = Number(cncSettings[path]);
+      if (!(gpio >= 0)) continue;
+      const pin = pinByGpio(gpio);
+      const boardPin = pin && boardPort(pin.label);
+      const cncPort = portIdOf(cncChild, portName);
+      if (!boardPin || !cncPort) continue;
+      if (CNC_INPUT_PORTS.has(portName)) connect(esp.id, boardPin, cncChild.id, cncPort);
+      else connect(cncChild.id, cncPort, esp.id, boardPin);
+    }
+  }
+  if (before && !created.length && !connections.length && blocks.length && skipped.length) {
+    for (const [id, block] of before.blocks) esp.children.blocks.set(id, block);
+    for (const [id, conn] of before.connections) esp.children.connections.set(id, conn);
+    return { created: [], connections: [], skipped, restored: true };
   }
 
   // Left to right by how far a block sits from the sources, top to bottom

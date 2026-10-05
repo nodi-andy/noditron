@@ -11,7 +11,7 @@
 // `device.writable` write bypasses Transport.write's own mandatory SLIP
 // framing (there is no raw-write it exposes directly) — both operate on
 // the exact same port serialFlash.js's session already holds open.
-import { getSession, ensureOpenPlain } from './serialFlash.js';
+import { getSession, ensureOpenPlain, isFlashing } from './serialFlash.js';
 
 const consoles = new Map(); // blockId -> { queue: Uint8Array, waiters: [] }
 
@@ -39,6 +39,11 @@ export function bridgeFor(blockId) {
 // reading a transport that just got replaced out from under it — so throw
 // it out and let the next openConsole() call start clean.
 async function ensurePlain(blockId) {
+  // A firmware install owns the port; reopening it here (which ensureOpenPlain
+  // does whenever a bootloader session is live) would reset the chip and
+  // steal the reader mid-write. A stray poll waits for the next connect
+  // instead (see serialFlash.isFlashing).
+  if (isFlashing(blockId)) throw new Error('a firmware install is in progress');
   const before = getSession(blockId);
   if (before?.esploader || before?.bootloaderDirty) closeConsole(blockId);
   await ensureOpenPlain(blockId);
@@ -142,6 +147,19 @@ export function setLogIncoming(on) {
 // mark into it goes stale the moment either of them runs. This just sees
 // every chunk once, on its way in.
 const MAX_LOG_BUFFER = 4096; // a stream with no newline in it must not grow forever
+// What a console line is compared against to tell a repeat (see
+// logCompleteLines): a JSON line against the last one of its `type`, an
+// `ok <command>` against the last ok for that command, any other line
+// against the last other line.
+function repeatKindOf(line) {
+  if (line.startsWith('{')) {
+    try { return `json:${JSON.parse(line).type ?? ''}`; } catch { /* not JSON after all */ }
+  }
+  const ok = /^ok\s+(\S+)/.exec(line);
+  if (ok) return `ok:${ok[1]}`;
+  return 'line';
+}
+
 function logCompleteLines(state, chunk) {
   if (!logIncoming) return;
   const text = (state.logBuf || '') + new TextDecoder().decode(chunk);
@@ -152,14 +170,17 @@ function logCompleteLines(state, chunk) {
     const line = part.replace(/\r$/, '');
     if (!line) continue;
     // Only when it actually changes. Live pin state is *polled* (see
-    // livePins.js — a request every 150ms for as long as a board is on
-    // screen), so the board dutifully answers with the same
-    // {"type":"io",...} line several times a second whether anything moved
-    // or not. Logging each one buries the lines that carry news. A repeat
-    // is still delivered to whoever is waiting on it — this only decides
-    // what is worth printing.
-    if (line === state.lastLogged) continue;
-    state.lastLogged = line;
+    // livePins.js — a `pins` request every few seconds for as long as a
+    // board is on screen), so the board dutifully answers with the same
+    // {"type":"io",...} line whether anything moved or not. Logging each
+    // one buries the lines that carry news. A repeat is compared with the
+    // last line of its own kind, not the last line: every answer ends in
+    // its `ok pins ...`, so the io line never followed itself and printed
+    // every time. A repeat is still delivered to whoever is waiting on
+    // it — this only decides what is worth printing.
+    const kind = repeatKindOf(line);
+    if (state.lastLoggedByKind?.get(kind) === line) continue;
+    (state.lastLoggedByKind ||= new Map()).set(kind, line);
     console.log('[serial]', line);
   }
 }
@@ -182,7 +203,12 @@ function logCompleteLines(state, chunk) {
 // that reached it from another node (`<from>@<port>><text>` — `cnc@can>ok`,
 // `a1d148c4@socket>hello`), a circuit's [USB] value, CAN/socket/node/WiFi/OTA
 // notices. See dispatchLines.
-const ANNOUNCEMENT_RE = /^([\w?*-]+@\w+>|socket (in|out): |\[(USB|CAN|SOCKET|NODES|WIFI|OTA)\] )/;
+// grbl built into the board answers after the board's own `ok` (`cnc>...`,
+// and `cnc@can<...` for a line another node sent it): by then one of the
+// app's queued polls has usually started, and the answer was taken for
+// that poll's and hidden — `cnc unlock` in the shell showed nothing.
+// The app never sends `cnc` lines itself, so these are always shown.
+const ANNOUNCEMENT_RE = /^([\w?*-]+@\w+>|cnc>|cnc@can<|socket (in|out): |\[(USB|CAN|SOCKET|NODES|WIFI|OTA)\] )/;
 const lineListeners = new Map(); // blockId -> Set<(event) => void>
 const activeCommands = new Map(); // blockId -> count of commands in flight
 const quietCommands = new Map(); // blockId -> count of quiet commands in flight
@@ -232,6 +258,10 @@ function dispatchLines(state, chunk) {
     // or the socket traffic would vanish from the box whenever a poll
     // happened to be in flight.
     const announcement = ANNOUNCEMENT_RE.test(line);
+    if (!announcement && isLateQuietOk(state.blockId, line)) {
+      notifyLineListeners(state.blockId, { line, unsolicited: false, quiet: true });
+      continue;
+    }
     const unsolicited = !inCommand || announcement;
     const quiet = inQuiet && !announcement;
     notifyLineListeners(state.blockId, { line, unsolicited, quiet });
@@ -400,7 +430,38 @@ async function writeRaw(blockId, bytes) {
 // socketLink.js), so a terminal view can say so.
 async function writeLine(blockId, text, { via = null } = {}) {
   await writeRaw(blockId, new TextEncoder().encode(`${text}\n`));
-  notifyLineListeners(blockId, { line: String(text), outgoing: true, unsolicited: false, quiet: quietCommands.get(blockId) > 0, via });
+  const quiet = quietCommands.get(blockId) > 0;
+  if (quiet) rememberQuietLine(blockId, String(text));
+  notifyLineListeners(blockId, { line: String(text), outgoing: true, unsolicited: false, quiet, via });
+}
+
+// A quiet command can be done before its `ok <command>` terminator
+// arrives: the pin poll returns on its JSON line, so the `ok pins 1,2,...`
+// after it landed with nothing waiting and showed in the terminal as
+// something the board said on its own, every poll. The quiet lines sent
+// in the last few seconds are kept, and an ok that names one of them is
+// that command's traffic (see isLateQuietOk).
+const QUIET_OK_WINDOW_MS = 5000;
+const recentQuietLines = new Map(); // blockId -> [{ line, at }]
+function rememberQuietLine(blockId, line) {
+  const now = Date.now();
+  const list = (recentQuietLines.get(blockId) || []).filter((entry) => now - entry.at < QUIET_OK_WINDOW_MS);
+  list.push({ line, at: now });
+  recentQuietLines.set(blockId, list.slice(-16));
+}
+// The firmware's ok echoes the line it answers, cut to 45 characters and
+// `...` when longer (conucon's shellOk).
+function isLateQuietOk(blockId, line) {
+  const match = /^ok (.+)$/.exec(line);
+  if (!match) return false;
+  const echoed = match[1];
+  const now = Date.now();
+  const list = recentQuietLines.get(blockId) || [];
+  const index = list.findIndex((entry) => now - entry.at < QUIET_OK_WINDOW_MS
+    && (entry.line === echoed || (echoed.endsWith('...') && entry.line.startsWith(echoed.slice(0, -3)))));
+  if (index < 0) return false;
+  list.splice(index, 1);
+  return true;
 }
 
 // "Is anything running over there?", asked the way the firmware is most
@@ -508,8 +569,10 @@ const RESET_LOOP_RE = /Brownout detector was triggered|Guru Meditation Error/i;
 // response: [CIRCUIT] Load failed, retrying in 500ms").
 async function identifyCommand(blockId, { timeoutMs = 3000, pingEveryMs = 500, bootGraceMs = 20000 } = {}) {
   await ensurePlain(blockId);
-  const state = openConsole(blockId);
+  let state = openConsole(blockId);
   state.queue = new Uint8Array(0);
+  let transport = getSession(blockId)?.transport;
+  let rejoined = 0;
   // Asked repeatedly, not once. Opening the port drives DTR/RTS and so
   // resets the board (see serialFlash.releaseResetLines), and the firmware
   // answers nothing at all until setup() has mounted SPIFFS — formatting
@@ -540,6 +603,26 @@ async function identifyCommand(blockId, { timeoutMs = 3000, pingEveryMs = 500, b
   // fail while it is mid-reset are expected and cost nothing but the next
   // 500ms.
   while (Date.now() < deadline) {
+    // The one exception: the board came back on a new port while this
+    // waited (see serialFlash.portReturned — its USB device re-enumerated
+    // and the session now holds the fresh handle). The reader here is on
+    // the dead one, so the console moves over: open the new port and ask
+    // there. Bounded, so a board that re-enumerates on every open cannot
+    // keep this going forever.
+    const now = getSession(blockId);
+    if (now && now.transport !== transport && rejoined < 2) {
+      rejoined += 1;
+      closeConsole(blockId);
+      try {
+        await ensurePlain(blockId);
+        state = openConsole(blockId);
+        state.queue = new Uint8Array(0);
+        transport = getSession(blockId)?.transport;
+        nextPing = 0;
+      } catch {
+        // Not open yet — the next tick tries again.
+      }
+    }
     if (Date.now() >= nextPing) {
       try {
         await probe(blockId);
@@ -661,16 +744,31 @@ async function sendDesignOverHttp(session, design) {
   return `[DESIGN] Saved ${text.length} bytes OK`;
 }
 
-async function readDesignCommand(blockId, { timeoutMs = 4000 } = {}) {
+// `line` is what is asked: `design` for the board on this link, or
+// `design <node>` for a node behind it on the bus — that board fetches the
+// node's circuit over CAN in parts and prints the whole the same way (see
+// conucon's designFromNode), so it is read exactly like its own. Fetching
+// takes the board a moment before the first line, and CAN traffic it
+// relays meanwhile can come first: lines are skipped until the design
+// starts or the board says why it cannot.
+async function readDesignCommand(blockId, { timeoutMs = 4000, line = 'design' } = {}) {
   const session = getSession(blockId);
-  if (session?.kind === 'wifi') return readDesignOverHttp(session);
+  if (session?.kind === 'wifi') {
+    if (line !== 'design') throw new Error('a node behind the bus is read through a board on USB');
+    return readDesignOverHttp(session);
+  }
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
-  await writeLine(blockId, 'design');
-  const begin = await readLine(state, timeoutMs);
-  const m = begin.match(/^\[DESIGN] BEGIN (\d+)/);
-  if (!m) throw new Error(`Unexpected response: ${begin}`);
+  await writeLine(blockId, line);
+  const deadline = Date.now() + timeoutMs;
+  let m = null;
+  while (!m) {
+    const begin = await readLine(state, Math.max(1, deadline - Date.now()));
+    if (/^error/.test(begin)) throw new Error(begin.replace(/^error:\s*/, ''));
+    m = begin.match(/^\[DESIGN] BEGIN (\d+)/);
+    if (!m && Date.now() >= deadline) throw new Error(`Unexpected response: ${begin}`);
+  }
   const len = Number(m[1]);
   const bytes = await readBytes(state, len, timeoutMs);
   await readLine(state, timeoutMs); // the blank line after the raw payload
@@ -889,6 +987,175 @@ export function buildMinimalDesign(childBlocks, connections = [], notes = null) 
     row += 1;
   }
 
+  // Route gates (conucon's `route`): a Route whose `sel` comes from an
+  // Input pin, whose `in` comes from a pin or Timer — through a Match row
+  // and/or a Delay (the firmware's `timer` in mode "delay") — and whose
+  // outputs end, each through an optional Data, in one Output pin.
+  // sel "0" -> out1, "1" -> out2 (firmware out[i] = noditron out(i+1),
+  // the order Route's own fn counts in); an unwired output drops the value.
+  // Layout per Route (T = row*3, C = T+hm+1, E = C+2, A = E+matchRow):
+  //   T     sel pin @ (0,T) -> belt (2,T) -> croute @ (3,T) -> rows -> Data @ (6,.) -> sink @ (9,T)
+  //   T+1.. belt (2,.) S down the pin's right face, then E along row C -> route sel cell @ (9,C)
+  //   E     source @ (0,E) -> belt (2,E) -> croute @ (3,E) -> row A -> belt (5,A)
+  //         -> delay @ (6,A) -> belt (8,A) -> route channel @ (9,A)
+  //   C+1+i route out i @ (10,.) -> Data @ (11,.) -> belt (13,.) -> sink @ (14,.)
+  const routeChildren = childBlocks.filter((c) => propOf(c, 'noditronKind') === 'route');
+  const delayChildren = childBlocks.filter((c) => propOf(c, 'noditronKind') === 'delay');
+  const crouteKids = childBlocks.filter((c) => propOf(c, 'noditronKind') === 'croute');
+  const childById = (id) => childBlocks.find((c) => c.id === id) || null;
+  const feedOf = (block, name) => connections.find((c) => c.targetBlockId === block.id && portName(block, c.targetPortId) === name) || null;
+  const isOutputPin = (c) => Boolean(c) && pinChildren.includes(c) && propOf(c, 'direction') === 'output';
+  const isInputPin = (c) => Boolean(c) && pinChildren.includes(c) && propOf(c, 'direction') !== 'output';
+  const repeatable = (c) => propOf(c, 'repeatable') === true;
+  const outIndexOf = (block, portId) => (block.ports || [])
+    .map((pin) => (block.logicalPorts || []).find((lp) => lp.id === pin.logicalId))
+    .filter((lp) => lp?.name && lp.direction === 'out')
+    .map((lp) => lp.name)
+    .indexOf(portName(block, portId));
+  const routesOf = (croute) => {
+    let routes = [];
+    try { routes = JSON.parse(propOf(croute, 'routes') || '[]'); } catch { routes = []; }
+    return (Array.isArray(routes) ? routes : []).map((m) => (m === null || m === undefined ? '' : String(m)));
+  };
+  const pinBlockAt = (child, gx, gy, size = {}) => {
+    if (!idByChildId.has(child.id)) {
+      const id = placeBool(child, gx, gy);
+      Object.assign(blocks.find((b) => b.id === id), size);
+      return true;
+    }
+    if (!repeatable(child) && !isOutputPin(child)) return false;
+    const before = idByChildId.get(child.id);
+    idByChildId.delete(child.id);
+    const id = placeBool(child, gx, gy);
+    Object.assign(blocks.find((b) => b.id === id), size);
+    idByChildId.set(child.id, before);
+    return true;
+  };
+  const rowsTo = (block) => {
+    const rows = [];
+    let sink = null;
+    for (const conn of connections.filter((c) => c.sourceBlockId === block.id)) {
+      const index = outIndexOf(block, conn.sourcePortId);
+      if (index < 0) return null;
+      let data = null;
+      let end = conn;
+      const next = childById(conn.targetBlockId);
+      if (next && dataChildren.includes(next) && portName(next, conn.targetPortId) === 'in') {
+        data = next;
+        end = connections.find((c) => c.sourceBlockId === next.id && portName(next, c.sourcePortId) === 'out');
+        if (!end) return null;
+      }
+      const target = childById(end.targetBlockId);
+      if (!isOutputPin(target) || (sink && sink !== target) || rows.some((r) => r.index === index)) return null;
+      sink = target;
+      rows.push({ index, data });
+    }
+    if (!rows.length) return null;
+    rows.sort((a, b) => a.index - b.index);
+    return { rows: rows.some((r) => r.data) ? rows.filter((r) => r.data) : rows, all: rows, sink };
+  };
+  const dataRow = (gx, gy, data) => {
+    blocks.push({ id: nextBlockId++, type: 'belt', gx, gy, data: { dir: 'E' } });
+    if (data) {
+      const dataId = nextBlockId++;
+      idByChildId.set(data.id, dataId);
+      blocks.push({ id: dataId, type: 'data', gx: gx + 1, gy, w: 2, h: 1, data: { value: String(propOf(data, 'value') ?? '') } });
+    } else {
+      blocks.push({ id: nextBlockId++, type: 'belt', gx: gx + 1, gy, data: { dir: 'E' } });
+      blocks.push({ id: nextBlockId++, type: 'belt', gx: gx + 2, gy, data: { dir: 'E' } });
+    }
+    blocks.push({ id: nextBlockId++, type: 'belt', gx: gx + 3, gy, data: { dir: 'E' } });
+  };
+  for (const route of routeChildren) {
+    const name = route.name || 'Route';
+    const selConn = feedOf(route, 'sel');
+    const sel = selConn && childById(selConn.sourceBlockId);
+    if (!isInputPin(sel) || idByChildId.has(sel.id)) {
+      notes?.push(`${name} is left out: its sel needs an Input pin of its own (one the board has not already used elsewhere).`);
+      continue;
+    }
+    let conn = feedOf(route, 'in');
+    let delay = null;
+    let match = null;
+    let matchRow = 0;
+    let src = conn && childById(conn.sourceBlockId);
+    if (src && delayChildren.includes(src) && !idByChildId.has(src.id)) {
+      delay = src; conn = feedOf(delay, 'in'); src = conn && childById(conn.sourceBlockId);
+    }
+    if (src && crouteKids.includes(src) && !idByChildId.has(src.id)) {
+      match = src; matchRow = outIndexOf(match, conn.sourcePortId); conn = feedOf(match, 'in'); src = conn && childById(conn.sourceBlockId);
+    }
+    const srcOk = src && ((isInputPin(src) && (!idByChildId.has(src.id) || repeatable(src))) || (timerChildren.includes(src) && !idByChildId.has(src.id)));
+    if (!srcOk || matchRow < 0 || (match && connections.some((c) => c.sourceBlockId === match.id && c.targetBlockId !== (delay || route).id))) {
+      notes?.push(`${name} is left out: its in needs an Input pin, CAN or a Timer — straight, through one Match row, through a Delay, or both.`);
+      continue;
+    }
+    const outs = rowsTo(route);
+    if (!outs) {
+      notes?.push(`${name} is left out: each output it uses goes (through a Data, if any) to one and the same Output pin.`);
+      continue;
+    }
+    if (outs.rows.length < outs.all.length) notes?.push(`${name}: an output wired straight to the pin beside one through a Data is not on the board; only the Data rows are.`);
+    const own = crouteKids.find((c) => c !== match && !idByChildId.has(c.id) && feedOf(c, 'in')?.sourceBlockId === sel.id) || null;
+    const ownRows = own && rowsTo(own);
+
+    const T = row * 3;
+    placeBool(sel, 0, T);
+    let hm = 0;
+    if (own && ownRows) {
+      const routes = routesOf(own);
+      hm = Math.max(2, routes.length, ...ownRows.all.map((r) => r.index + 1));
+      blocks.push({ id: nextBlockId++, type: 'belt', gx: 2, gy: T, data: { dir: 'E' } });
+      const ownId = nextBlockId++;
+      idByChildId.set(own.id, ownId);
+      blocks.push({ id: ownId, type: 'croute', gx: 3, gy: T, w: 2, h: hm, data: { routes } });
+      for (const { index, data } of ownRows.rows) dataRow(5, T + index, data);
+      pinBlockAt(ownRows.sink, 9, T, { w: 2, h: hm });
+    } else if (own) {
+      notes?.push(`${own.name || 'Match'} (croute) on ${name}'s sel pin is left out: its rows go (through a Data, if any) to one and the same Output pin.`);
+    }
+    const C = T + hm + 1;
+    for (let y = T + 1; y < C; y += 1) blocks.push({ id: nextBlockId++, type: 'belt', gx: 2, gy: y, data: { dir: 'S' } });
+    for (let x = 2; x <= 8; x += 1) blocks.push({ id: nextBlockId++, type: 'belt', gx: x, gy: C, data: { dir: 'E' } });
+    const E = C + 2;
+    const A = E + matchRow;
+    if (isInputPin(src)) pinBlockAt(src, 0, E);
+    else placeTimer(src, 0, E);
+    let hM = 0;
+    if (match) {
+      const routes = routesOf(match);
+      hM = Math.max(1, routes.length, matchRow + 1);
+      blocks.push({ id: nextBlockId++, type: 'belt', gx: 2, gy: E, data: { dir: 'E' } });
+      const matchId = nextBlockId++;
+      idByChildId.set(match.id, matchId);
+      blocks.push({ id: matchId, type: 'croute', gx: 3, gy: E, w: 2, h: hM, data: { routes } });
+    } else {
+      for (let x = 2; x <= 4; x += 1) blocks.push({ id: nextBlockId++, type: 'belt', gx: x, gy: A, data: { dir: 'E' } });
+    }
+    blocks.push({ id: nextBlockId++, type: 'belt', gx: 5, gy: A, data: { dir: 'E' } });
+    if (delay) {
+      const delayId = nextBlockId++;
+      idByChildId.set(delay.id, delayId);
+      const ms = Math.max(1, Math.round(Number(propOf(delay, 'ms')) || 100));
+      blocks.push({ id: delayId, type: 'timer', gx: 6, gy: A, w: 2, h: 2, data: { onTime: ms, offTime: 0, mode: 'delay' } });
+    } else {
+      blocks.push({ id: nextBlockId++, type: 'belt', gx: 6, gy: A, data: { dir: 'E' } });
+      blocks.push({ id: nextBlockId++, type: 'belt', gx: 7, gy: A, data: { dir: 'E' } });
+    }
+    blocks.push({ id: nextBlockId++, type: 'belt', gx: 8, gy: A, data: { dir: 'E' } });
+    const maxOut = Math.max(...outs.all.map((r) => r.index));
+    const h = Math.max(3, A - C + 1, maxOut + 2);
+    const routeId = nextBlockId++;
+    idByChildId.set(route.id, routeId);
+    blocks.push({ id: routeId, type: 'route', gx: 9, gy: C, w: 1, h, data: {} });
+    for (const { index, data } of outs.rows) dataRow(10, C + 1 + index, data);
+    const first = C + 1 + outs.rows[0].index;
+    const last = C + 1 + outs.rows[outs.rows.length - 1].index;
+    pinBlockAt(outs.sink, 14, first, { w: 2, h: Math.max(2, last - first + 1) });
+    const bottom = Math.max(E + 1, A + (delay ? 1 : 0), E + hM - 1, C + h - 1, first + Math.max(2, last - first + 1) - 1);
+    row = Math.ceil((bottom + 2) / 3);
+  }
+
   // Match (conucon's `croute`) chains, laid out the way conucon's own Logic
   // Module GUI lays out its CAN designs (see esp32_logic/data/design.json):
   //   source @ (0,r) → belt (2,r) → croute @ (3,r), one row per route
@@ -909,6 +1176,7 @@ export function buildMinimalDesign(childBlocks, connections = [], notes = null) 
   };
   const chainsByTarget = new Map(); // target pin block -> [{ source, croute, rows: [{ index, data }] }]
   for (const croute of crouteChildren) {
+    if (idByChildId.has(croute.id)) continue; // laid out with a Route section above
     const inConn = connections.find((c) => c.targetBlockId === croute.id && portName(croute, c.targetPortId) === 'in');
     const source = inConn && childBlocks.find((c) => c.id === inConn.sourceBlockId);
     if (!source || !(pinChildren.includes(source) || timerChildren.includes(source))) continue;
@@ -1260,7 +1528,7 @@ export function buildMinimalDesign(childBlocks, connections = [], notes = null) 
     }).map((c) => c.targetBlockId));
     for (const child of childBlocks) {
       const kind = kindOfChild(child);
-      if (!['data', 'timer', 'and', 'croute'].includes(kind) || idByChildId.has(child.id)) continue;
+      if (!['data', 'timer', 'and', 'croute', 'route', 'delay'].includes(kind) || idByChildId.has(child.id)) continue;
       const wired = drawn.some((c) => c.sourceBlockId === child.id || c.targetBlockId === child.id);
       if (!wired) continue; // an unwired block drives nothing; nothing to say
       if (kind === 'data' && writtenTo.has(child.id)) {
@@ -1332,21 +1600,28 @@ async function readReply(state, pattern, failure, timeoutMs) {
   }
 }
 
-async function sendDesignCommand(blockId, design, { timeoutMs = 5000 } = {}) {
+// `target`: a node behind this board on the bus. The board takes the bytes
+// the same way (`save-design <node> <n>`), then writes them to that node
+// over CAN in parts (conucon's designToNode) before it confirms — a few
+// seconds for a large circuit, so its confirmation is waited for longer.
+async function sendDesignCommand(blockId, design, { timeoutMs = 5000, target = null } = {}) {
   const session = getSession(blockId);
-  if (session?.kind === 'wifi') return sendDesignOverHttp(session, design);
+  if (session?.kind === 'wifi') {
+    if (target) throw new Error('a node behind the bus is saved through a board on USB');
+    return sendDesignOverHttp(session, design);
+  }
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
   const bytes = new TextEncoder().encode(JSON.stringify(design));
-  await writeLine(blockId, `save-design ${bytes.length}`);
-  await readReply(state, /\[DESIGN] READY/, /\[DESIGN] SAVE_FAILED/, timeoutMs);
+  await writeLine(blockId, target ? `save-design ${target} ${bytes.length}` : `save-design ${bytes.length}`);
+  await readReply(state, /\[DESIGN] READY/, /\[DESIGN] SAVE_FAILED|^error/, timeoutMs);
   for (let i = 0; i < bytes.length; i += DESIGN_CHUNK_BYTES) {
     if (i) await new Promise((resolve) => setTimeout(resolve, DESIGN_CHUNK_GAP_MS));
     await writeBytes(blockId, bytes.slice(i, i + DESIGN_CHUNK_BYTES));
   }
   try {
-    return await readReply(state, /\[DESIGN] Saved \d+ bytes OK/, /\[DESIGN] (SAVE_FAILED|SPIFFS write failed)/, timeoutMs);
+    return await readReply(state, /\[DESIGN] Saved \d+ bytes OK/, /\[DESIGN] (SAVE_FAILED|SPIFFS write failed)|^error/, target ? Math.max(timeoutMs, 30000) : timeoutMs);
   } catch (err) {
     if (!/Timed out waiting for the device/.test(err.message)) throw err;
     throw new Error(`The board did not confirm the ${bytes.length}-byte design. Reset the board, reconnect and save again.`);
@@ -1469,8 +1744,15 @@ export function identify(blockId, ...args) {
   return queueCommand(blockId, () => identifyCommand(blockId, ...args), { quiet: true });
 }
 
-export function readDesign(blockId, ...args) {
-  return queueCommand(blockId, () => readDesignCommand(blockId, ...args), { quiet: true });
+// A board behind another on the bus is read through that one: the bridge's
+// link, its queue, `design <node>` (see readDesignCommand). The far board
+// sends its circuit in parts of 138 bytes, a few dozen ms each.
+export function readDesign(blockId, opts = {}) {
+  const bridge = bridgeFor(blockId);
+  if (bridge) {
+    return queueCommand(bridge.bridgeId, () => readDesignCommand(bridge.bridgeId, { ...opts, timeoutMs: Math.max(opts.timeoutMs || 0, 20000), line: `design ${bridge.target}` }), { quiet: true });
+  }
+  return queueCommand(blockId, () => readDesignCommand(blockId, opts), { quiet: true });
 }
 
 export function setPin(blockId, ...args) {
@@ -1481,6 +1763,10 @@ export function readPins(blockId, ...args) {
   return queueCommand(blockId, () => readPinsCommand(blockId, ...args), { quiet: true });
 }
 
-export function sendDesign(blockId, ...args) {
-  return queueCommand(blockId, () => sendDesignCommand(blockId, ...args), { quiet: true });
+// A board behind another on the bus is saved through that one, on its
+// link and queue (see sendDesignCommand's `target`).
+export function sendDesign(blockId, design, opts = {}) {
+  const bridge = bridgeFor(blockId);
+  if (bridge) return queueCommand(bridge.bridgeId, () => sendDesignCommand(bridge.bridgeId, design, { ...opts, target: bridge.target }), { quiet: true });
+  return queueCommand(blockId, () => sendDesignCommand(blockId, design, opts), { quiet: true });
 }

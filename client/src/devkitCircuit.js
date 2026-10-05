@@ -69,6 +69,39 @@ export function migrateWaveshareBoard(block, template, level) {
   return changed || !alreadyWaveshare;
 }
 
+// A board placed from an older pin layout of its module (the template's
+// `pinLayout` prop is newer): its pins take the template's slots, matched
+// by name, so every wire stays on its pin; a pin the module no longer has
+// goes, unless a wire is on it. Once — the prop then matches, and slots
+// the user moves after that are kept.
+export function relayoutBoard(block, template, level) {
+  const want = String(propValue(template, 'pinLayout', ''));
+  if (!want || String(propValue(block, 'pinLayout', '')) === want) return false;
+  const connections = [...(level?.connections?.values?.() || []), ...(block.children?.connections?.values?.() || [])];
+  const wired = (logical) => (block.ports || []).some((p) => p.logicalId === logical.id && connections.some((c) =>
+    (c.sourceBlockId === block.id && c.sourcePortId === p.id) || (c.targetBlockId === block.id && c.targetPortId === p.id)));
+  const keep = new Set();
+  for (const logical of block.logicalPorts || []) {
+    const tplLogical = (template.logicalPorts || []).find((lp) => lp.name === logical.name);
+    const tplPin = tplLogical && (template.ports || []).find((p) => p.logicalId === tplLogical.id);
+    if (tplPin) {
+      for (const p of block.ports || []) {
+        if (p.logicalId === logical.id) Object.assign(p, { side: tplPin.side, offset: tplPin.offset, manualOffset: true });
+      }
+      keep.add(logical.id);
+    } else if (wired(logical)) {
+      keep.add(logical.id);
+    }
+  }
+  block.logicalPorts = (block.logicalPorts || []).filter((lp) => keep.has(lp.id));
+  block.ports = (block.ports || []).filter((p) => keep.has(p.logicalId));
+  if (template.geometry?.height > (block.geometry?.height || 0)) block.geometry.height = template.geometry.height;
+  const prop = (block.props || []).find((p) => p.name === 'pinLayout');
+  if (prop) prop.value = want;
+  else block.props.push({ id: `prp_pinlayout_${block.id}`, name: 'pinLayout', kind: 'value', value: want });
+  return true;
+}
+
 export function findContainingLevel(level, blockId) {
   if (!level) return null;
   if (level.blocks?.has(blockId)) return level;
@@ -143,6 +176,10 @@ function buildPinMappedDesign(esp, blocks, connections, { socketLinks = new Map(
   const SOCKET_IN_GPIO = 2003;
   const socketLinkOf = (portId) => socketLinks.get(portId) || { far: 'host', dest: 'host', name: '' };
   const CAN_IN_GPIO = 2001;
+  // The CNC pin (logic-cnc firmware: grbl built in), the same way.
+  const CNC_OUT_GPIO = 2004;
+  const CNC_IN_GPIO = 2005;
+  const CNC_HOME_GPIO = 2006; // the CNC's `home`: a rising signal homes it
   let canBitrate = 250000;
 
   const speedPort = (esp.ports || []).find((port) => logicalName(esp, port.id) === 'CAN speed');
@@ -180,6 +217,11 @@ function buildPinMappedDesign(esp, blocks, connections, { socketLinks = new Map(
         { id: `${esp.id}:${key}:value`, name: 'value', kind: 'range', min: 0, max: 1, value: 0 },
         { id: `${esp.id}:${key}:kind`, name: 'noditronKind', kind: 'value', value: 'digital-io' },
         ...(pin.exio ? [{ id: `${esp.id}:${key}:exio`, name: 'exio', kind: 'value', value: pin.exio }] : []),
+        // A pin the firmware may declare more than once (serialConsole's
+        // Route sections place a CAN block per row that sends or receives):
+        // every `can` block transmits what it is given and fires what the
+        // bus delivers (conucon main.cpp circuitRecv / canDrain).
+        ...(pin.repeatable ? [{ id: `${esp.id}:${key}:repeatable`, name: 'repeatable', kind: 'value', value: true }] : []),
       ],
     };
     syntheticPins.set(key, block);
@@ -213,7 +255,7 @@ function buildPinMappedDesign(esp, blocks, connections, { socketLinks = new Map(
     if (boardPin?.role === 'can' || boardPin?.role === 'can-out' || boardPin?.role === 'can-in') {
       if (boardPin.role === 'can-out' && !isTarget) throw new Error('CAN Out only accepts data to transmit.');
       if (boardPin.role === 'can-in' && isTarget) throw new Error('CAN In only provides received data.');
-      const pin = syntheticPinBlock({ label: 'CAN', gpio: isTarget ? CAN_OUT_GPIO : CAN_IN_GPIO }, isTarget ? 'output' : 'input');
+      const pin = syntheticPinBlock({ label: 'CAN', gpio: isTarget ? CAN_OUT_GPIO : CAN_IN_GPIO, repeatable: true }, isTarget ? 'output' : 'input');
       return { blockId: pin.id, portId: pin.ports[0].id };
     }
     if (usbPortNames.has(portName)) {
@@ -228,6 +270,9 @@ function buildPinMappedDesign(esp, blocks, connections, { socketLinks = new Map(
       }
       return null;
     }
+    if (cncPinUse.has(Number(mappedPin.gpio))) {
+      throw new Error(`${portName} is the CNC's ${cncPinUse.get(Number(mappedPin.gpio))}; wire the circuit to another pin.`);
+    }
     if (mappedPin.reserved || (isTarget && mappedPin.inputOnly) || (!isTarget && mappedPin.outputOnly)) {
       throw new Error(`${portName} cannot be used as a digital ${isTarget ? 'output' : 'input'}.`);
     }
@@ -235,8 +280,57 @@ function buildPinMappedDesign(esp, blocks, connections, { socketLinks = new Map(
     return { blockId: pin.id, portId: pin.ports[0].id };
   }
 
-  const mapped = [];
+  // The CNC block (palette.js's createCncBlock): grbl, built into the
+  // board's firmware. `in` and `out` compile like the CAN pin, into the
+  // firmware's `cnc` block; the step / dir / enable / limit ports are
+  // grbl's pin settings — a wire from `X step` to IO4 is x/step/pin 4 and
+  // nothing at run time, an unwired one is no pin (-1) — and the named
+  // values in its subgraph are the rest of its settings (cncSettingsOf).
+  // The circuit is the machine's settings: they ride on the `cnc` block,
+  // and the board puts them into grbl when the circuit loads.
+  const cncBlocks = blocks.filter((block) => kindOf(block) === 'cnc');
+  if (cncBlocks.length > 1) throw new Error('One CNC per board: its firmware runs one grbl.');
+  const cnc = cncBlocks[0] || null;
+  const cncPinUse = new Map(); // gpio -> the CNC port wired to it
+  const cncSettings = cnc ? { ...cncSettingsOf(cnc) } : null;
+  if (cnc) for (const path of Object.values(CNC_PIN_PATHS)) cncSettings[path] = -1;
+  const runtimeConnections = [];
   for (const conn of connections) {
+    const cncEnd = !cnc ? null : conn.sourceBlockId === cnc.id ? 'source' : conn.targetBlockId === cnc.id ? 'target' : null;
+    if (!cncEnd) { runtimeConnections.push(conn); continue; }
+    const portName = logicalName(cnc, cncEnd === 'source' ? conn.sourcePortId : conn.targetPortId);
+    if (portName === 'home' && cncEnd === 'target') {
+      const pin = syntheticPinBlock({ label: 'CNC home', gpio: CNC_HOME_GPIO }, 'output');
+      runtimeConnections.push({ ...conn, targetBlockId: pin.id, targetPortId: pin.ports[0].id });
+      continue;
+    }
+    if (portName === 'in' || portName === 'out') {
+      const pin = syntheticPinBlock({ label: 'CNC', gpio: portName === 'in' ? CNC_OUT_GPIO : CNC_IN_GPIO }, portName === 'in' ? 'output' : 'input');
+      runtimeConnections.push(cncEnd === 'source'
+        ? { ...conn, sourceBlockId: pin.id, sourcePortId: pin.ports[0].id }
+        : { ...conn, targetBlockId: pin.id, targetPortId: pin.ports[0].id });
+      continue;
+    }
+    const path = CNC_PIN_PATHS[portName];
+    if (!path) continue;
+    const otherBlockId = cncEnd === 'source' ? conn.targetBlockId : conn.sourceBlockId;
+    const otherPortId = cncEnd === 'source' ? conn.targetPortId : conn.sourcePortId;
+    if (otherBlockId !== esp.id) throw new Error(`CNC ${portName} goes to one of the board's pins.`);
+    const boardPinName = logicalName(esp, otherPortId);
+    const boardPin = pinsByPortName.get(boardPinName);
+    const gpio = Number(boardPin?.gpio);
+    if (!boardPin || !(gpio >= 0 && gpio < 1000) || boardPin.reserved) {
+      throw new Error(`CNC ${portName} needs one of the chip's own GPIOs; ${boardPinName} is not one.`);
+    }
+    if (cncPinUse.has(gpio) && cncPinUse.get(gpio) !== portName) {
+      throw new Error(`${boardPinName} cannot be both the CNC's ${cncPinUse.get(gpio)} and its ${portName}.`);
+    }
+    cncPinUse.set(gpio, portName);
+    cncSettings[path] = gpio;
+  }
+
+  const mapped = [];
+  for (const conn of runtimeConnections) {
     const source = mapEndpoint(conn.sourceBlockId, conn.sourcePortId, false);
     const target = mapEndpoint(conn.targetBlockId, conn.targetPortId, true);
     if (!source || !target) continue;
@@ -249,23 +343,126 @@ function buildPinMappedDesign(esp, blocks, connections, { socketLinks = new Map(
     });
   }
 
-  const design = serialConsole.buildMinimalDesign([...blocks, ...syntheticPins.values(), ...(usesUsb ? [usbTarget] : [])], mapped, notes);
+  // The board's own CAN transceiver pins (its module's `canPins`): the
+  // firmware starts TWAI on exactly what the `can` block names, and the
+  // 2IO board's transceiver is on 15/16, not the 8IO's 2/3 this used to
+  // write for every board — a CAN circuit saved to a 2IO board had no bus
+  // and drove GPIO2 as an output.
+  let canPins = { tx: 2, rx: 3 };
+  try {
+    const declared = JSON.parse(propValue(esp, 'canPins', '') || 'null');
+    if (Number.isInteger(declared?.tx) && Number.isInteger(declared?.rx)) canPins = { tx: declared.tx, rx: declared.rx };
+  } catch { /* no canPins on this board: the 8IO's own */ }
+  const design = serialConsole.buildMinimalDesign([...blocks.filter((block) => block !== cnc), ...syntheticPins.values(), ...(usesUsb ? [usbTarget] : [])], mapped, notes);
   // The board's socket port for a socket pin block, whichever way it faces.
   const socketPortFor = () => [...socketPinPorts.values()][0] || null;
   for (const block of design.blocks) {
     if (block.type === 'dout' && block.data?.gpio === CAN_OUT_GPIO) {
       block.type = 'can';
-      block.data = { tx: 2, rx: 3, bitrate: canBitrate, format: 'string' };
+      block.data = { ...canPins, bitrate: canBitrate, format: 'string' };
     } else if (block.type === 'din' && block.data?.gpio === CAN_IN_GPIO) {
       block.type = 'can';
-      block.data = { tx: 2, rx: 3, bitrate: canBitrate, format: 'string' };
+      block.data = { ...canPins, bitrate: canBitrate, format: 'string' };
+    } else if ((block.type === 'dout' && block.data?.gpio === CNC_OUT_GPIO) || (block.type === 'din' && block.data?.gpio === CNC_IN_GPIO)) {
+      block.type = 'cnc';
+      block.data = {};
+    } else if (block.type === 'dout' && block.data?.gpio === CNC_HOME_GPIO) {
+      block.type = 'cnchome';
+      block.data = {};
     } else if ((block.type === 'dout' && block.data?.gpio === SOCKET_OUT_GPIO) || (block.type === 'din' && block.data?.gpio === SOCKET_IN_GPIO)) {
       const link = socketLinkOf(socketPortFor());
       block.type = 'socket';
       block.data = { dest: link.dest || 'host', name: link.name || '' };
     }
   }
+  // The CNC's settings ride on its `cnc` block — one with nothing wired to
+  // `in` or `out` still gets one, since placing the CNC is what sets the
+  // machine up.
+  if (cncSettings) {
+    let target = design.blocks.find((block) => block.type === 'cnc');
+    if (!target) {
+      const below = design.blocks.reduce((bottom, block) => Math.max(bottom, (block.gy || 0) + (block.h || 1)), 0);
+      target = { id: design.nextId || design.blocks.length + 1, type: 'cnc', gx: 0, gy: below + 1, data: {} };
+      design.nextId = target.id + 1;
+      design.blocks.push(target);
+    }
+    target.data = { ...target.data, settings: cncSettings };
+  }
   return design;
+}
+
+// The CNC block's pin ports and the grbl setting each one is (see
+// buildPinMappedDesign's CNC section and palette.js's createCncBlock).
+const CNC_PIN_PATHS = {
+  'X step': 'x/step/pin', 'X dir': 'x/dir/pin', 'Y step': 'y/step/pin', 'Y dir': 'y/dir/pin',
+  enable: 'stepper/disable/pin', 'X limit': 'x/limit/pin', 'Y limit': 'y/limit/pin',
+};
+
+// The named values in a CNC block's subgraph, as grbl's settings-tree
+// paths: a Data block `maxrate` in the group `X` is x/maxrate, one
+// directly inside the CNC is its own name. A Bool is an on/off setting
+// (homing enable) and goes as 1 / 0.
+function cncSettingsOf(cnc) {
+  const settings = {};
+  const valueOf = (block) => {
+    const value = propValue(block, 'value', '');
+    if (kindOf(block) === 'digital-io') return Number(value) >= 1 || value === true ? 1 : 0;
+    return value === true ? 1 : value === false ? 0 : value;
+  };
+  const isSetting = (block) => kindOf(block) === 'data' || kindOf(block) === 'digital-io';
+  for (const child of cnc.children ? cnc.children.blocks.values() : []) {
+    if (isSetting(child)) {
+      settings[String(child.name).toLowerCase()] = valueOf(child);
+      continue;
+    }
+    if (!child.children) continue;
+    const group = String(child.name).toLowerCase();
+    for (const leaf of child.children.blocks.values()) {
+      if (isSetting(leaf)) settings[`${group}/${String(leaf.name).toLowerCase()}`] = valueOf(leaf);
+    }
+    if ([...child.children.blocks.values()].some((b) => kindOf(b) === 'cnc-home-axis')) Object.assign(settings, cncHomingCycles(child));
+  }
+  return settings;
+}
+
+// grbl homes in up to six cycles, each the axes that home together
+// (homing/cycle0 first). The Homing group's wiring says which: an axis
+// whose `home` comes from Homing's own `home` is in the first cycle, one
+// whose `home` comes from another axis's `done` in the cycle after that
+// axis (after the last of them, if several feed it). An unwired axis is
+// not homed. A cycle with no axis is 0.
+const CNC_HOMING_CYCLES = 6;
+function cncHomingCycles(homing) {
+  const blocks = homing.children.blocks;
+  const connections = [...homing.children.connections.values()];
+  const axes = [...blocks.values()].filter((b) => kindOf(b) === 'cnc-home-axis');
+  const level = new Map();
+  const visiting = new Set();
+  const levelOf = (axis) => {
+    if (level.has(axis.id)) return level.get(axis.id);
+    if (visiting.has(axis.id)) throw new Error(`Homing: ${axis.name} waits on itself — the axes' done → home wires go round in a circle.`);
+    visiting.add(axis.id);
+    let at = null;
+    for (const conn of connections) {
+      if (conn.targetBlockId !== axis.id || logicalName(axis, conn.targetPortId) !== 'home') continue;
+      if (conn.sourceBlockId === homing.id) { at = Math.max(at ?? 0, 0); continue; }
+      const source = blocks.get(conn.sourceBlockId);
+      if (!source || kindOf(source) !== 'cnc-home-axis') continue;
+      const before = levelOf(source);
+      if (before !== null) at = Math.max(at ?? 0, before + 1);
+    }
+    visiting.delete(axis.id);
+    level.set(axis.id, at);
+    return at;
+  };
+  const cycles = Array.from({ length: CNC_HOMING_CYCLES }, () => '');
+  for (const axis of axes) {
+    const at = levelOf(axis);
+    if (at === null) continue;
+    if (at >= CNC_HOMING_CYCLES) throw new Error(`Homing: grbl homes in at most ${CNC_HOMING_CYCLES} steps.`);
+    cycles[at] += String(propValue(axis, 'axis', axis.name)).toUpperCase();
+  }
+  return Object.fromEntries(cycles.map((axesInCycle, i) => [`homing/cycle${i}`, axesInCycle ? [...axesInCycle].sort().join('') : 0]));
 }
 
 export function buildExternalDevkitDesign(esp, level) {
@@ -341,6 +538,11 @@ export function isDevkitRunning(esp) {
 // own by an older compiler, an idle CAN block — is not circuit either:
 // it runs nothing, and one board's leftover declarations used to keep a
 // matching circuit reading as unsaved forever.
+//
+// The CNC's settings are circuit too, wired or not: they ride on its `cnc`
+// block (see buildPinMappedDesign), which nothing has to reach — its pins
+// are grbl settings, not wires at run time. Left to the edges alone, a
+// changed setting, or a wire from `X step` to IO1, never read as unsaved.
 export function canonicalDesign(design) {
   const { blocks, edges } = traceDesign(design);
   const signature = (b) => {
@@ -349,7 +551,7 @@ export function canonicalDesign(design) {
       if (k === 'dir') continue;
       data[k] = b.data[k];
     }
-    return `${b.type}${JSON.stringify(data)}`;
+    return `${b.type}${stableJson(data)}`;
   };
   const wired = new Set();
   for (const e of edges) {
@@ -367,8 +569,21 @@ export function canonicalDesign(design) {
     }
     return index.get(b);
   };
-  const lines = edges.map((e) => `${nameOf(e.from)}[${e.output ?? ''}] -> ${nameOf(e.to)}[${e.input ?? ''}]`).sort();
-  return JSON.stringify(lines);
+  const lines = edges.map((e) => `${nameOf(e.from)}[${e.output ?? ''}] -> ${nameOf(e.to)}[${e.input ?? ''}]`);
+  for (const b of blocks) {
+    if (b.type === 'cnc' && b.data?.settings) lines.push(`cnc settings ${stableJson(b.data.settings)}`);
+  }
+  return JSON.stringify(lines.sort());
+}
+
+// JSON with every object's keys sorted, so the same settings compare equal
+// whatever order they were written or read back in.
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((k) => `${JSON.stringify(k)}:${stableJson(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
 }
 
 export function designsMatch(a, b) {
@@ -377,9 +592,18 @@ export function designsMatch(a, b) {
 
 // Anything at all the board could be sent: blocks or wires inside it, or
 // a wire to one of its pins from the level it sits in.
+// A wire to another board is not one: boards on a bus are wired CAN to
+// CAN (canNeighbours.js), and the compiler leaves such wires out (see
+// buildExternalDevkitDesign) — counted here, every board on a bus had a
+// "circuit", so its device's own was never loaded into it.
 export function hasAnyCircuit(esp, level) {
+  const isBoard = (id) => {
+    const other = level?.blocks?.get?.(id);
+    return Boolean(other) && BOARD_KINDS.includes(kindOf(other));
+  };
   return Boolean(esp.children?.blocks?.size || esp.children?.connections?.size
-    || Array.from(level?.connections?.values?.() || []).some((c) => c.sourceBlockId === esp.id || c.targetBlockId === esp.id));
+    || Array.from(level?.connections?.values?.() || []).some((c) => (c.sourceBlockId === esp.id && !isBoard(c.targetBlockId))
+      || (c.targetBlockId === esp.id && !isBoard(c.sourceBlockId))));
 }
 
 // "Unsaved" means the design this would send is not the one the device

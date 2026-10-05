@@ -491,7 +491,7 @@
             "id": "prp_mtg8v3ep8",
             "name": "allowedChildKinds",
             "kind": "value",
-            "value": "[\"digital-io\",\"timer\",\"and\",\"or\",\"not\",\"data\",\"add\",\"boot\",\"serial\",\"serialin\",\"can\",\"i2cout\",\"i2cin\",\"pwmout\",\"pwmin\",\"slice\",\"route\",\"croute\"]"
+            "value": "[\"digital-io\",\"timer\",\"delay\",\"and\",\"or\",\"not\",\"data\",\"add\",\"boot\",\"serial\",\"serialin\",\"can\",\"i2cout\",\"i2cin\",\"i2c\",\"pwmout\",\"pwmin\",\"slice\",\"route\",\"croute\"]"
           },
           {
             "id": "prp_esp32_usbOrientation",

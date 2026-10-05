@@ -10,9 +10,10 @@
 // client/src/socketLink.js): in by default, so whatever arrives is written
 // to the shell line by line; flipped to out it carries what grbl says. The
 // dialog is the same Connect / Connectivity / Shell the esp32-S3 has,
-// with the machine's own controls in place of a circuit section; the
-// Connectivity and Shell code is taken from the S3 manifest so the two
-// never drift apart.
+// with the machine's own controls in place of a circuit section and a
+// Firmware section that installs the bundled CNC build; the Connectivity
+// and Shell code is taken from the S3 manifest so the two never drift
+// apart.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,14 +47,23 @@ const SECTIONS = s3Dialog.slice(secStart, secEnd)
   // S3's own — a radio only ever fires `change` when it becomes checked,
   // which is exactly the `ap on` / `wifi on` branch of each — and the
   // status refresh sets `checked` on whichever `wifi status` reports on.
-  .replace("box.type = 'checkbox';", "box.type = 'radio';\n    box.name = 'cnc-radio';");
+  .replace("box.type = 'checkbox';", "box.type = 'radio';\n    box.name = 'cnc-radio';")
+  // A firmware install owns the port; the 10s connectivity poll must not
+  // reach for the console while one runs (serialConsole throws if it tries,
+  // but skipping keeps the hint quiet). serialFlash.isFlashing is the guard.
+  .replace(
+    "    if (netBusy || !container.isConnected) return;",
+    "    if (netBusy || !container.isConnected) return;\n    if (helpers.serial.isFlashing && helpers.serial.isFlashing()) return;",
+  );
 if (!SECTIONS.includes("box.name = 'cnc-radio'")) throw new Error('the S3 connectivity section no longer has the checkbox line this adapts');
+if (!SECTIONS.includes('helpers.serial.isFlashing()')) throw new Error('the S3 connectivity section no longer has the refreshConnectivity guard line this adapts');
 
 const STATUS_HTML = s3Html
   .replace("text = dirty ? 'Running \\u00b7 circuit not saved' : 'Logic Module running';", "text = 'grbl running';")
   .replace('const dirty = helpers.devkit.dirty ? helpers.devkit.dirty() : false;', 'const dirty = false;')
-  .replace("hint = dirty ? 'Save the circuit to the device' : 'Connected';", "hint = 'Connected';");
-if (!STATUS_HTML.includes("'grbl running'")) throw new Error('the S3 html no longer has the running text this adapts');
+  .replace("hint = dirty ? 'Save the circuit to the device' : 'Connected';", "hint = 'Connected';")
+  .replace("hint = 'Install the Logic Module firmware';", "hint = 'Install the CNC firmware';");
+if (!STATUS_HTML.includes("'grbl running'") || !STATUS_HTML.includes("'Install the CNC firmware'")) throw new Error('the S3 html no longer has the running/needs-firmware text this adapts');
 
 const RENDER = `
 const g = block.geometry;
@@ -116,6 +126,120 @@ container.appendChild(heading);
   disconnectBtn.disabled = true;
   connectRow.append(connectBtn, wifiBtn, disconnectBtn);
   container.appendChild(connectRow);
+
+  // ── Firmware: the bundled CNC build for this board (every board the
+  // CNC firmware is built for ships one, see serialFlash's
+  // FIRMWARE_PRESETS). Over USB the files go through the ROM bootloader;
+  // over WiFi the app image goes to the board's own update endpoint; over
+  // CAN nothing can be written. Shown whenever a link is open: a board
+  // that answered nothing needs it, a running one can take an update.
+  const firmwareSection = document.createElement('div');
+  firmwareSection.style.cssText = sectionStyle + 'display:none;';
+  const firmwareLabel = document.createElement('div');
+  firmwareLabel.textContent = 'FIRMWARE';
+  firmwareLabel.style.cssText = labelStyle;
+  firmwareSection.appendChild(firmwareLabel);
+  const firmwareHint = document.createElement('p');
+  firmwareHint.style.cssText = 'margin:0 0 10px;font-size:11px;color:var(--text-muted);';
+  firmwareSection.appendChild(firmwareHint);
+  const inputStyle = 'padding:5px 6px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;';
+  const presets = (helpers.serial.firmwarePresets || []).filter((p) => /^cnc-/.test(p.id) && (p.board === props.boardId || (!p.board && p.chip === props.chipFamily)));
+  const preferredPreset = presets.find((p) => p.id === props.firmwarePreset) || presets[0] || null;
+  const presetRow = document.createElement('div');
+  presetRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;';
+  const firmwareSelect = document.createElement('select');
+  firmwareSelect.style.cssText = inputStyle + 'flex:1;min-width:0;';
+  for (const preset of presets) {
+    const option = document.createElement('option');
+    option.value = preset.id;
+    option.textContent = preset.label + (preset.build ? ' (build ' + preset.build + ')' : '');
+    firmwareSelect.appendChild(option);
+  }
+  if (preferredPreset) firmwareSelect.value = preferredPreset.id;
+  if (!presets.length) {
+    firmwareSelect.disabled = true;
+    const none = document.createElement('option');
+    none.textContent = 'No CNC firmware bundled for ' + (props.boardVariant || props.chipFamily || 'this board');
+    firmwareSelect.appendChild(none);
+  }
+  const installBtn = document.createElement('button');
+  installBtn.type = 'button';
+  installBtn.textContent = 'Install firmware';
+  installBtn.style.cssText = primaryBtnStyle;
+  installBtn.disabled = !presets.length;
+  presetRow.append(firmwareSelect, installBtn);
+  firmwareSection.appendChild(presetRow);
+  const progressEl = document.createElement('div');
+  progressEl.style.cssText = 'margin:8px 0 0;font-size:11px;color:var(--text-muted);';
+  firmwareSection.appendChild(progressEl);
+  container.appendChild(firmwareSection);
+
+  // What the section says, from what answered: 'running' (a CNC module,
+  // maybe older than the bundled build), 'logic' (a Logic Module, which
+  // the CNC build replaces), or 'none' (nothing answered).
+  function showFirmware(state, info) {
+    const link = helpers.serial.linkKind();
+    firmwareSection.style.display = '';
+    installBtn.disabled = link === 'can' || !presets.length;
+    if (state === 'running') {
+      const update = Boolean(preferredPreset && preferredPreset.build && info && info.build && info.build < preferredPreset.build);
+      firmwareLabel.textContent = update ? 'FIRMWARE UPDATE AVAILABLE' : 'FIRMWARE';
+      installBtn.textContent = update ? 'Update firmware' : 'Reinstall firmware';
+      firmwareHint.textContent = 'Build ' + ((info && info.build) || '?') + ' installed' + (update ? ', build ' + preferredPreset.build + ' bundled.' : '.');
+    } else {
+      firmwareLabel.textContent = state === 'logic' ? 'LOGIC MODULE FIRMWARE INSTALLED' : 'NO CNC FIRMWARE DETECTED';
+      installBtn.textContent = 'Install firmware';
+      firmwareHint.textContent = (state === 'logic' ? 'The CNC build replaces it. ' : '') + 'Install the bundled CNC build for this board.';
+    }
+    if (link === 'can') firmwareHint.textContent = 'Firmware cannot be written over CAN -- connect this board over USB (or WiFi) to install.';
+    else if (link === 'wifi') firmwareHint.textContent += ' Over WiFi the app image goes to the board\\'s own update endpoint; a blank board needs USB.';
+  }
+
+  async function installFiles(files) {
+    const button = installBtn;
+    button.disabled = true;
+    const original = button.textContent;
+    button.textContent = 'Installing...';
+    try {
+      await helpers.serial.flash(
+        files,
+        false,
+        (fileIndex, written, total) => {
+          progressEl.textContent = 'File ' + (fileIndex + 1) + '/' + files.length + ': ' + Math.round((written / total) * 100) + '%';
+        },
+        log,
+      );
+      progressEl.textContent = '';
+      statusEl.textContent = 'Flashed -- waiting for the board to boot...';
+      await new Promise((resolve) => setTimeout(resolve, 2500));
+      await afterPortOpen();
+    } catch (err) {
+      progressEl.textContent = '';
+      statusEl.textContent = 'Install failed: ' + err.message;
+      log('Install failed: ' + err.message);
+    } finally {
+      button.disabled = false;
+      button.textContent = original;
+    }
+  }
+  installBtn.addEventListener('click', async () => {
+    const preset = presets.find((p) => p.id === firmwareSelect.value);
+    if (!preset) return;
+    installBtn.disabled = true;
+    let files;
+    try {
+      // Every part of the preset together -- bootloader and partition
+      // table included, a harmless rewrite on a board that has them and
+      // the only way a blank chip ever boots (see the S3 dialog).
+      files = await helpers.serial.fetchPresetParts(preset);
+      log('Fetched ' + preset.label + ' (' + files.map((f) => f.name).join(', ') + ').');
+    } catch (err) {
+      log('Could not fetch ' + preset.label + ': ' + err.message);
+      installBtn.disabled = false;
+      return;
+    }
+    await installFiles(files);
+  });
 
   // ── The machine: the CNC module's own web page, which already has the
   // status, jog, start/stop and file controls — shown inside the dialog
@@ -203,34 +327,68 @@ ${SECTIONS}
     startConnectivity();
   }
 
+  function reportIdentified(info) {
+    if (info.kind === 'cnc') {
+      log('ping: grbl v' + info.version + ' build ' + info.build + ', state ' + (info.machineState || '?') + '.');
+      helpers.setProp('connectionState', 'connected:running');
+      // Who this node is, for another board's socket to address (see
+      // devkitCircuit's socketLinksFor).
+      if (info.node) helpers.setProp('nodeId', info.node);
+      if (info.nodeName) helpers.setProp('nodeName', info.nodeName);
+      showRunning(info);
+      showFirmware('running', info);
+      return;
+    }
+    statusEl.textContent = 'That is a Logic Module, not a CNC module -- install the CNC firmware below to make it one.';
+    log('ping answered as a Logic Module (build ' + info.build + ').');
+    helpers.setProp('connectionState', 'connected:unknown');
+    showFirmware('logic', info);
+  }
+
+  // The one place that decides what is on the other end: the console's
+  // own 'ping' first (harmless on a running board), and only when nothing
+  // answers, over USB, the chip itself through its ROM bootloader -- that
+  // tells a blank board from a dead link, and which family the firmware
+  // has to be for. Reused after Connect and again after an install once
+  // the board has had a moment to boot.
   async function afterPortOpen() {
     statusEl.textContent = 'Connected -- asking who is there...';
+    const link = helpers.serial.linkKind();
     try {
       const info = await helpers.console.identify();
-      if (info.verified && info.kind === 'cnc') {
-        log('ping: grbl v' + info.version + ' build ' + info.build + ', state ' + (info.machineState || '?') + '.');
-        helpers.setProp('connectionState', 'connected:running');
-        // Who this node is, for another board's socket to address (see
-        // devkitCircuit's socketLinksFor).
-        if (info.node) helpers.setProp('nodeId', info.node);
-        if (info.nodeName) helpers.setProp('nodeName', info.nodeName);
-        showRunning(info);
-        return;
-      }
-      if (info.verified) {
-        statusEl.textContent = 'That is a Logic Module, not a CNC module.';
-        log('ping answered as a Logic Module (build ' + info.build + ').');
-        helpers.setProp('connectionState', 'connected:unknown');
-        return;
-      }
-      statusEl.textContent = helpers.serial.linkKind() === 'can'
-        ? 'Reached over CAN through ' + ((helpers.serial.getSession() || {}).target || 'another board') + ', but it did not answer. Its firmware needs the node protocol (CNC build 20260927b or later): connect it over USB once to install.'
-        : 'Connected, but nothing answered as a CNC module. Its firmware may predate the module shell (build 20260925a).';
-      helpers.setProp('connectionState', 'connected:unknown');
+      if (info.verified) { reportIdentified(info); return; }
     } catch (err) {
-      statusEl.textContent = 'Connected, but could not identify the board: ' + err.message;
-      helpers.setProp('connectionState', 'connected:unknown');
+      log('Console check failed: ' + err.message);
     }
+    if (link === 'can') {
+      statusEl.textContent = 'Reached over CAN through ' + ((helpers.serial.getSession() || {}).target || 'another board') + ', but it did not answer. Its firmware needs the node protocol (CNC build 20260927b or later): connect it over USB once to install.';
+      helpers.setProp('connectionState', 'connected:unknown');
+      showFirmware('none', null);
+      return;
+    }
+    let chipName = '';
+    if (link === 'serial') {
+      try {
+        const detected = await helpers.serial.detectChip(log);
+        chipName = detected.chipName;
+        log('Detected ' + detected.chipName + ' (bootloader @ 0x' + detected.bootloaderOffset.toString(16) + ').');
+        // Detecting left the board in its ROM bootloader, not running
+        // whatever it has; identify() resets it out (see serialFlash's
+        // reopenPlain) and asks once more, so a board that only needed
+        // longer to boot says so here instead of being reported as blank.
+        try {
+          const after = await helpers.console.identify();
+          if (after.verified) { reportIdentified(after); return; }
+        } catch (err) {
+          log('Console re-check failed: ' + err.message);
+        }
+      } catch (err) {
+        log('Chip detect failed: ' + err.message);
+      }
+    }
+    statusEl.textContent = (chipName ? chipName + ' detected, but ' : 'Connected, but ') + 'nothing answered as a CNC module. Its firmware may predate the module shell (build 20260925a), or be missing -- install it below.';
+    helpers.setProp('connectionState', chipName ? 'connected:needs-firmware:' + chipName : 'connected:unknown');
+    showFirmware('none', null);
   }
 
   const existing = helpers.serial.getSession();
@@ -285,6 +443,7 @@ ${SECTIONS}
     wifiBtn.disabled = false;
     disconnectBtn.disabled = true;
     machineSection.style.display = 'none';
+    firmwareSection.style.display = 'none';
     netSection.style.display = 'none';
     helpers.setProp('connectionState', 'disconnected');
   });
@@ -335,8 +494,8 @@ for (const board of BOARDS) {
     noditronModule: 1,
     name: `${board.id}-cnc`,
     displayName: board.displayName,
-    version: '0.5.0',
-    description: "conucon's CNC module (grbl core): a socket port that is the board's shell as a wire, over USB or WiFi; Connectivity and Shell like the esp32-S3.",
+    version: '0.6.0',
+    description: "conucon's CNC module (grbl core): a socket port that is the board's shell as a wire, over USB or WiFi; firmware installation (the bundled build); Connectivity and Shell like the esp32-S3.",
     swatchColor: '#7c3aed',
     block: { format: 'nodigraph/clipboard-v1', blocks: [block], connections: [] },
   };

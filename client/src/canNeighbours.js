@@ -54,6 +54,32 @@ export function setBlockProp(block, name, value) {
 }
 
 // { block, level } of the board block carrying `nodeId`, or null.
+// The name a node gives itself on the bus (`name joystick` in its shell,
+// announced to every node — see conucon's iamIn) shown on its block: a
+// block still titled as placed (`esp32-S3`, `ESP32 DevKit`) or with the
+// node's previous name takes the new one; a block renamed by hand in
+// noditron keeps the title it was given. Returns whether any block changed.
+export function applyNodeNames(nodigraph, board, nodes) {
+  let changed = false;
+  for (const node of nodes || []) {
+    // An unnamed node prints its default (`esp32-s3`) on its own line: not a label.
+    if (!node.name || /^esp32/i.test(node.name)) continue;
+    const block = node.self ? board : findBoardByNodeId(nodigraph, node.id)?.block;
+    if (!block) continue;
+    const before = propOf(block, 'nodeName') || '';
+    const placedTitle = /^esp32/i.test(String(block.name || '')) || block.name === before || !block.name;
+    if (before !== node.name) {
+      setBlockProp(block, 'nodeName', node.name);
+      changed = true;
+    }
+    if (placedTitle && block.name !== node.name) {
+      block.name = node.name;
+      changed = true;
+    }
+  }
+  return changed;
+}
+
 export function findBoardByNodeId(nodigraph, nodeId) {
   if (!nodeId) return null;
   return collectBoardBlocks(nodigraph.project.rootBlock.children).find(({ block }) => propOf(block, 'nodeId') === nodeId) || null;
@@ -122,6 +148,11 @@ async function resolveModule(nodigraph, name) {
 // the blocks placed now, the names of the blocks wired to the board
 // (placed now or found).
 export async function placeNeighbours(nodigraph, board, nodes, { status = () => {}, offered = null, resolve = resolveModule, add = addModuleBlock, refresh = refreshBridgedStates, onBus = bridgeForNode } = {}) {
+  // Every scan: the names the nodes announce, onto their blocks.
+  if (applyNodeNames(nodigraph, board, nodes)) {
+    nodigraph.persist?.();
+    nodigraph.renderLoop?.requestRender?.();
+  }
   // Heard on CAN in this reply — or in a recent one: a board on both the
   // bus and the LAN reports whichever hello came last (see canBridge.js's
   // scan), so a node the registry still has behind this board counts.

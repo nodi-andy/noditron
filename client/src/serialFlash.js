@@ -22,7 +22,7 @@ import { ESPLoader, Transport } from '../vendor/esptool-js/esptool-js.bundle.js'
 // separately and legibly (see serialConsole.js).
 const TRACE_SERIAL = false;
 import { getStoredToken } from '/nodigraph/src/model/githubSync.js';
-import { rememberPort, forgetPort, describePortIdentity, rememberWifi, forgetWifi } from './serialMemory.js';
+import { rememberPort, forgetPort, describePortIdentity, rememberWifi, forgetWifi, portIdentity, sameIdentity } from './serialMemory.js';
 import { openWifiDevice } from './wifiTransport.js';
 
 const sessions = new Map(); // blockId -> { port, transport, esploader, chipName, bootloaderOffset }
@@ -302,6 +302,95 @@ export function findSessionByPort(port) {
   return null;
 }
 
+// A board whose USB device goes away and comes back is still the same
+// board. An ESP32-S3's native USB does exactly that: a firmware that
+// brings up its own USB stack after boot (TinyUSB in place of the ROM's
+// USB-Serial/JTAG), or one that is reset while it holds the port, drops
+// off the bus and re-enumerates. When the host notices — a quick reset
+// slips under the OS's device-change debounce, a slower one does not —
+// the browser fires 'disconnect' on the port and hands a *new*
+// SerialPort back on 'connect'; the old handle is dead for good.
+//
+// Dropping the session on 'disconnect' made every such re-enumeration
+// mid-probe into "Not connected — pick a serial port first" from
+// whatever came next (the chip detect after a quiet ping, the flash after
+// that), plus a reconnect card for a board that never went anywhere. So
+// a session whose port vanishes is kept for a grace period, and a port
+// with the same identity that shows up within it becomes the session's
+// port: same block, same session, new handle. Whatever was mid-flight on
+// the old handle fails or times out (writeRaw's own deadline sees to the
+// writes) and the next step opens the new one.
+const PORT_RETURN_GRACE_MS = 8000;
+const lostPorts = new Map(); // blockId -> { identity, promise, resolve, timer }
+
+// 'disconnect' on a port a session holds. Returns null for a port nobody
+// holds, else { blockId, returned }: `returned` settles true once the
+// board is back on a new port (the session now holds it), false once the
+// grace ran out (the session is gone).
+export function portLost(port) {
+  const found = findSessionByPort(port);
+  if (!found || found.session.kind === 'wifi') return null;
+  const { blockId } = found;
+  const previous = lostPorts.get(blockId);
+  if (previous) return { blockId, returned: previous.promise };
+  const entry = { identity: portIdentity(port), resolve: null, timer: null, promise: null };
+  entry.promise = new Promise((resolve) => {
+    entry.resolve = resolve;
+    entry.timer = setTimeout(async () => {
+      lostPorts.delete(blockId);
+      await disconnect(blockId);
+      resolve(false);
+    }, PORT_RETURN_GRACE_MS);
+  });
+  lostPorts.set(blockId, entry);
+  return { blockId, returned: entry.promise };
+}
+
+// 'connect': a port with a lost session's identity, held by nobody else,
+// is that session's board back. Returns the block id it rejoined, or null
+// for a port that is nobody's — the caller offers that one as usual.
+export function portReturned(port) {
+  const identity = portIdentity(port);
+  for (const [blockId, entry] of lostPorts) {
+    if (!sameIdentity(entry.identity, identity)) continue;
+    // Chrome hands a board it recognises (same vendor, product and serial
+    // number) back as the very SerialPort object it had, so the "new"
+    // port may be the one this session already holds: still open as far
+    // as the browser is concerned, its streams gone. That is this
+    // session's board back too; openPort closes the stale handle before
+    // the next open, so nothing is torn down here. A port some other
+    // session holds is not for this one.
+    const holder = findSessionByPort(port);
+    if (holder && holder.blockId !== blockId) continue;
+    lostPorts.delete(blockId);
+    clearTimeout(entry.timer);
+    const session = sessions.get(blockId);
+    if (!session) {
+      entry.resolve(false);
+      return null;
+    }
+    if (!holder) {
+      const stale = session.transport;
+      Promise.resolve().then(() => stale?.disconnect?.()).catch(() => {});
+    }
+    session.port = port;
+    session.transport = new Transport(port, TRACE_SERIAL);
+    session.esploader = null;
+    session.bootloaderDirty = false;
+    entry.resolve(true);
+    return blockId;
+  }
+  return null;
+}
+
+function forgetLost(blockId) {
+  const entry = lostPorts.get(blockId);
+  if (!entry) return;
+  lostPorts.delete(blockId);
+  clearTimeout(entry.timer);
+  entry.resolve(false);
+}
+
 // Most ESP32 boards' auto-reset circuit wires DTR/RTS straight into
 // GPIO0/EN (that's the whole mechanism esptool's own classicReset above
 // uses to force chip into the ROM bootloader) — and opening a Web Serial
@@ -344,6 +433,77 @@ async function releaseResetLines(transport) {
   if (usesNativeUsb(transport?.device)) return;
   await transport.setDTR(false);
   await transport.setRTS(false);
+}
+
+// A port whose device went away and came back (see portReturned) can be
+// the same SerialPort object, which the browser still counts as open
+// while its streams are gone: open() on it fails with "The port is
+// already open". So an open-looking port with no readable stream is
+// closed before anything opens it — a never-opened port just refuses the
+// close, harmlessly.
+async function closeIfStale(port) {
+  if (port?.readable) return;
+  try {
+    await port.close();
+  } catch {
+    // Already closed, or never opened.
+  }
+}
+
+async function openPort(transport, baudrate) {
+  await closeIfStale(transport.device);
+  await transport.connect(baudrate);
+}
+
+// esptool.py's ESP32S3ROM.disable_watchdogs, which esptool-js's own S3
+// class lacks: in download mode over USB-Serial/JTAG the ROM leaves the
+// RTC watchdog and the super watchdog running and nothing feeds them
+// while the host writes flash. A long enough image at the ROM's 1KB blocks
+// could let the RTC WDT fire — the chip resets, its USB device drops, and
+// the write dies partway. esptool-js runs the stub instead on other links,
+// and the stub feeds them; esptool.py disables them on exactly this link.
+// (Measured not to fire for a ~1.1MB image at 115200 on an ESP32-S3, so
+// this is the belt to the SPI-attach fix's braces, kept because esptool.py
+// does it and a larger image or a shorter WDT could still reach the limit.)
+// Best-effort: a failure here never aborts the install — the write that
+// follows either rides the watchdog out or fails on its own and says so.
+// Registers from the S3 TRM (RTC_CNTL at 0x60008000: WDTCONFIG0 0x98,
+// WDTWPROTECT 0xB0, SWD_CONF 0xB4, SWD_WPROTECT 0xB8), keys and the
+// UARTDEV_BUF_NO check from esptool.py's esp32s3.py.
+const S3_RTC_CNTL = 0x60008000;
+const S3_WDT = {
+  config0: S3_RTC_CNTL + 0x98,
+  wprotect: S3_RTC_CNTL + 0xb0,
+  wkey: 0x50d83aa1,
+  swdConf: S3_RTC_CNTL + 0xb4,
+  swdWprotect: S3_RTC_CNTL + 0xb8,
+  swdWkey: 0x8f1d312a,
+  swdAutoFeed: 0x80000000,
+};
+const S3_UARTDEV_BUF_NO = 0x3fcef14c;
+const S3_UARTDEV_BUF_NO_USB_JTAG_SERIAL = 4;
+
+async function disableRomWatchdogs(esploader, terminal) {
+  if (esploader.chip?.CHIP_NAME !== 'ESP32-S3') return false;
+  try {
+    const via = (await esploader.readReg(esploader.chip.UARTDEV_BUF_NO ?? S3_UARTDEV_BUF_NO)) & 0xff;
+    if (via !== S3_UARTDEV_BUF_NO_USB_JTAG_SERIAL) {
+      terminal.writeLine(`ROM console is not USB-Serial/JTAG (${via}); watchdogs left as they are.`);
+      return false;
+    }
+    await esploader.writeReg(S3_WDT.wprotect, S3_WDT.wkey);
+    await esploader.writeReg(S3_WDT.config0, 0);
+    await esploader.writeReg(S3_WDT.wprotect, 0);
+    await esploader.writeReg(S3_WDT.swdWprotect, S3_WDT.swdWkey);
+    const swd = await esploader.readReg(S3_WDT.swdConf);
+    await esploader.writeReg(S3_WDT.swdConf, (swd | S3_WDT.swdAutoFeed) >>> 0);
+    await esploader.writeReg(S3_WDT.swdWprotect, 0);
+    terminal.writeLine('ROM watchdogs disabled for the download.');
+    return true;
+  } catch (err) {
+    terminal.writeLine(`Could not disable the ROM watchdogs (${err.message}); continuing.`);
+    return false;
+  }
 }
 
 // Closes and reopens the same already-granted port with a brand new
@@ -418,7 +578,7 @@ async function openWithRetry(port, baudrate, graceMs) {
   for (;;) {
     const transport = new Transport(port, TRACE_SERIAL);
     try {
-      await transport.connect(baudrate);
+      await openPort(transport, baudrate);
       return transport;
     } catch (err) {
       if (Date.now() >= deadline) throw err;
@@ -441,7 +601,7 @@ export async function ensureOpenPlain(blockId, baudrate = 115200) {
   // and only a close/reopen gets the reader lock back for plain text.
   if (session.esploader || session.bootloaderDirty) return reopenPlain(blockId, baudrate);
   if (!session.port.readable) {
-    await session.transport.connect(baudrate);
+    await openPort(session.transport, baudrate);
     await releaseResetLines(session.transport);
   }
   return session;
@@ -463,6 +623,7 @@ export async function detectChip(blockId, { onLog } = {}) {
   } catch {
     // Never opened yet, or already closed — nothing to release.
   }
+  await closeIfStale(session.port); // see portReturned: the same handle, back from a re-enumeration
   const transport = new Transport(session.port, TRACE_SERIAL);
   session.transport = transport;
   session.bootloaderDirty = true; // see ensureOpenPlain — true even if the sync below fails
@@ -488,7 +649,27 @@ export async function detectChip(blockId, { onLog } = {}) {
       terminal.writeLine(`Crystal is ${await esploader.chip.getCrystalFreq(esploader)}MHz`);
       terminal.writeLine(`MAC: ${await esploader.chip.readMac(esploader)}`);
       await esploader.chip.postConnect?.(esploader);
-      terminal.writeLine('Using ROM flasher for native USB.');
+      await disableRomWatchdogs(esploader, terminal);
+      // esptool-js sizes every flash block for its stub (16KB) and never
+      // switches to the ROM's own limit when no stub runs — the chip class
+      // carries it (1KB on the S3, esptool.py's ESP32ROM.FLASH_WRITE_SIZE)
+      // but nothing reads it. The ROM answers a FLASH_BEGIN that announces
+      // 16KB blocks with status 1,5 ("received message is invalid"), which
+      // surfaced as "Failed to enter Flash download mode" on every Install
+      // over native USB, compressed or not.
+      if (esploader.chip.FLASH_WRITE_SIZE) esploader.FLASH_WRITE_SIZE = esploader.chip.FLASH_WRITE_SIZE;
+      // The ROM does not attach its SPI flash by itself — the RAM stub
+      // esptool-js normally runs does it on startup, and esptool-js (v0.6.1)
+      // defines flashSpiAttach but never calls it, so on this no-stub path
+      // nothing ever does. Without it the first FLASH_BEGIN gets no answer at
+      // all and the write dies with "Serial data stream stopped" seconds
+      // later. Attaching with the default pin config (0) is what esptool.py
+      // logs as "Enabling default SPI flash mode" before any ROM write.
+      // Verified against this exact bundle on an ESP32-S3 over native USB:
+      // without it every write stalls at the first block, with it a full
+      // ~1.1MB image writes and verifies.
+      await esploader.flashSpiAttach(0);
+      terminal.writeLine(`Using ROM flasher for native USB (${esploader.FLASH_WRITE_SIZE}-byte blocks, SPI flash attached).`);
     } else {
       session.chipName = await esploader.main();
     }
@@ -514,7 +695,29 @@ export async function detectChip(blockId, { onLog } = {}) {
 // "read it off the device, don't guess"), which is the right default for
 // a board whose flash chip might be anything; the dialog never asks the
 // user to pick those, only the per-file address.
-export async function flash(blockId, files, { eraseAll = false, onProgress, onLog } = {}) {
+// A flash owns the port exclusively: no console traffic may touch it while
+// one runs. A board that answered as running (so the dialog started its
+// grbl-state and connectivity pollers) would otherwise have one of those
+// timers fire mid-install, reach for the console, reopen the port through
+// ensureOpenPlain and reset the chip (the "Hard resetting via RTS pin"
+// that killed the long app write) out from under writeFlash. Any console
+// command on a block in here throws instead of reopening (see
+// serialConsole.ensurePlain), and the pollers skip themselves.
+const flashing = new Set();
+export function isFlashing(blockId) {
+  return blockId === undefined ? flashing.size > 0 : flashing.has(blockId);
+}
+
+export async function flash(blockId, files, opts = {}) {
+  flashing.add(blockId);
+  try {
+    return await flashInner(blockId, files, opts);
+  } finally {
+    flashing.delete(blockId);
+  }
+}
+
+async function flashInner(blockId, files, { eraseAll = false, onProgress, onLog } = {}) {
   const wifi = sessions.get(blockId);
   if (wifi?.kind === 'wifi') return flashOverWifi(wifi, files, { onProgress, onLog });
   let session = sessions.get(blockId);
@@ -537,6 +740,13 @@ export async function flash(blockId, files, { eraseAll = false, onProgress, onLo
     }
     const data = f.bytes ? f.bytes : new Uint8Array(await f.file.arrayBuffer());
     fileArray.push({ data, address: f.address });
+  }
+  // Erasing the whole chip is a stub command (esptool.py refuses it with
+  // "--no-stub" too); the ROM loader on native USB has only the per-region
+  // erase that every write does anyway.
+  if (eraseAll && session.esploader.IS_STUB !== true) {
+    onLog?.('Erasing the whole flash needs esptool\'s stub, which this native-USB link does not run — writing each region in place instead.');
+    eraseAll = false;
   }
   await session.esploader.writeFlash({
     fileArray,
@@ -562,6 +772,7 @@ export async function disconnect(blockId, { forget = false } = {}) {
     forgetPort(blockId);
     forgetWifi(blockId);
   }
+  forgetLost(blockId);
   const session = sessions.get(blockId);
   if (!session) return;
   sessions.delete(blockId);

@@ -52,6 +52,10 @@ export function bridgeForBlock(nodigraph, blockId) {
 // it stops — only for blocks this file put online, never one whose state
 // came from its own link (serialReconnect.js owns those).
 const bridged = new Set();
+// Bridged blocks whose circuit has been read since they came online (see
+// readNewlyBridged): once per time online, so the next scan does not read
+// it again, and a board that drops off the bus and comes back is.
+const circuitRead = new Set();
 
 export function refreshBridgedStates(nodigraph) {
   let changed = false;
@@ -69,6 +73,7 @@ export function refreshBridgedStates(nodigraph) {
       }
     } else if (bridged.has(block.id)) {
       bridged.delete(block.id);
+      circuitRead.delete(block.id);
       if (prop.value !== 'disconnected') {
         prop.value = 'disconnected';
         block.description = serializeBlockDescription(block);
@@ -125,7 +130,25 @@ export async function scanBridges(nodigraph, { onNodes = null } = {}) {
   }
 }
 
-export function installCanBridge(nodigraph, { onNodes = null } = {}) {
+// Every board online through a bridge whose circuit has not been read
+// since it came online, handed to `onOnline` one after the other — the
+// same reading a board gets when it is plugged in (deviceSync's
+// reconcileWithDevice, wired in main.js), here through the board that
+// hears it.
+async function readNewlyBridged(nodigraph, onOnline) {
+  if (!onOnline) return;
+  for (const { block } of collectBoardBlocks(nodigraph.project.rootBlock.children)) {
+    if (!bridged.has(block.id) || circuitRead.has(block.id)) continue;
+    circuitRead.add(block.id);
+    try {
+      await onOnline(block);
+    } catch (err) {
+      console.warn(`[noditron] ${block.name}: its circuit could not be read over the bus:`, err.message);
+    }
+  }
+}
+
+export function installCanBridge(nodigraph, { onNodes = null, onOnline = null } = {}) {
   serialConsole.setBridgeResolver((blockId) => bridgeForBlock(nodigraph, blockId));
   let nextScan = 0;
   let scanning = false;
@@ -137,6 +160,7 @@ export function installCanBridge(nodigraph, { onNodes = null } = {}) {
     nextScan = now + POLL_MS;
     try {
       await scanBridges(nodigraph, { onNodes });
+      await readNewlyBridged(nodigraph, onOnline);
     } finally {
       scanning = false;
     }

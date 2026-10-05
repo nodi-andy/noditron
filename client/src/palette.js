@@ -359,18 +359,27 @@ if (dirSelect) {
 
 export function createDigitalIOBlock(nodigraph) {
   const { x, y } = nextPosition(nodigraph);
-  const block = createBlock({ x, y, name: 'Bool' });
+  return finish(nodigraph, createBoolBlock({ x, y }));
+}
+
+// A Bool as a container's named on/off value (the CNC's homing enable, see
+// createCncBlock) has no ports, like Data's withPort: false: it is read by
+// name, never wired, and toggled on the canvas.
+function createBoolBlock({ name = 'Bool', value = 0, x = 0, y = 0, withPort = true } = {}) {
+  const block = createBlock({ x, y, name });
   // No real pin yet (Simulated) -- starts with both ports at once, `in`
   // and `out`, rather than the single direction-swapped `value` port a
   // real GPIO gets (see DIGITAL_IO_DIALOG's own syncPorts): with no actual
   // hardware direction to respect, there's no reason to pick one. A wire
   // into `in`, if present, wins over the manual value each tick (see this
   // block's own fn) -- same in-overrides-constant rule Data already uses.
-  addNamedPort(block, 'in', 'in');
-  addNamedPort(block, 'out', 'out');
+  if (withPort) {
+    addNamedPort(block, 'in', 'in');
+    addNamedPort(block, 'out', 'out');
+  }
   block.props.push({ id: generateId('prp'), name: 'pin', kind: 'value', value: null });
   block.props.push({ id: generateId('prp'), name: 'direction', kind: 'value', value: 'input' });
-  block.props.push({ id: generateId('prp'), name: 'value', kind: 'range', min: 0, max: 1, value: 0 });
+  block.props.push({ id: generateId('prp'), name: 'value', kind: 'range', min: 0, max: 1, value: value ? 1 : 0 });
   addKindProp(block, 'digital-io');
   addLogicProps(
     block,
@@ -379,7 +388,8 @@ export function createDigitalIOBlock(nodigraph) {
   );
   block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: DIGITAL_IO_HTML });
   block.props.push({ id: generateId('prp'), name: 'dialog', kind: 'value', value: DIGITAL_IO_DIALOG });
-  return finish(nodigraph, block);
+  block.description = serializeBlockDescription(block);
+  return block;
 }
 
 export function createAndBlock(nodigraph) {
@@ -1222,6 +1232,113 @@ export function createBootBlock(nodigraph) {
   return finish(nodigraph, block);
 }
 
+// Serial, both ways in one block, like CAN: a value into `in` is sent,
+// a line received comes out of `out` (conucon's `serial` and `serialin`).
+export function createSerialBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Serial' });
+  block.geometry.width = 170;
+  block.geometry.height = 90;
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'serial');
+  for (const [name, value] of [['uart', 2], ['tx', 17], ['rx', 16], ['baud', 115200], ['prefix', '']]) {
+    block.props.push({ id: generateId('prp'), name, kind: 'value', value });
+  }
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('return outputs.out === undefined ? "no data" : String(outputs.out);'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('SERIAL', [
+      { name: 'uart', label: 'UART', type: 'number', options: [0, 1, 2] },
+      { name: 'tx', label: 'TX PIN', type: 'number' },
+      { name: 'rx', label: 'RX PIN', type: 'number' },
+      { name: 'baud', label: 'BAUD', type: 'number' },
+      { name: 'prefix', label: 'PREFIX', hint: 'Written before every value sent; a line received behind it is what comes out.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+// I2C, both ways in one block: a value into `write` is written to the
+// device, a signal on `read` reads `bytes` from it onto `out` (conucon's
+// `i2cout` and `i2cin`).
+export function createI2cBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'I2C' });
+  block.geometry.width = 170;
+  block.geometry.height = 110;
+  addNamedPort(block, 'in', 'write');
+  addNamedPort(block, 'in', 'read');
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'i2c');
+  block.props.push({ id: generateId('prp'), name: 'addr', kind: 'value', value: 8 });
+  block.props.push({ id: generateId('prp'), name: 'bytes', kind: 'value', value: 1 });
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'html',
+    kind: 'value',
+    value: readoutHtml('return outputs.out === undefined ? "no read" : String(outputs.out);'),
+  });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('I2C', [
+      { name: 'addr', label: 'ADDRESS', type: 'number', hint: 'The 7-bit device address.' },
+      { name: 'bytes', label: 'BYTES', type: 'number', hint: 'How many bytes a signal on read requests.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
+// Waits: every value into `in` (re)starts it, and `ms` after the last one
+// it sends "1" on `out` — conucon's `timer` in mode "delay". A loop that
+// answers what comes back (a jog's `x jogging` echo answered with
+// `x jog continue`) runs through one, or it answers as fast as the bus
+// can carry the round trip.
+export function createDelayBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'Delay' });
+  block.geometry.width = 150;
+  block.geometry.height = 80;
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'out', 'out');
+  addKindProp(block, 'delay');
+  block.props.push({ id: generateId('prp'), name: 'ms', kind: 'value', value: 100 });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'fn',
+    kind: 'value',
+    value: [
+      'const v = inputs.in;',
+      "if (v !== undefined && helpers.changed('in', v)) return { __persist: { armedAt: Date.now() } };",
+      'const armedAt = Number(props.armedAt) || 0;',
+      "if (armedAt && Date.now() - armedAt >= (Number(props.ms) || 100)) return { out: '1', __persist: { armedAt: 0 } };",
+      'return {};',
+    ].join('\n'),
+  });
+  // The html runs with `block`, not `props` (see htmlOverlay.js).
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: readoutHtml('const ms = (block.props || []).find((p) => p.name === "ms")?.value; return (Number(ms) || 100) + " ms";') });
+  block.props.push({
+    id: generateId('prp'),
+    name: 'dialog',
+    kind: 'value',
+    value: settingsDialog('DELAY', [
+      { name: 'ms', label: 'MS', type: 'number', hint: 'How long after the last value in it sends 1 on out.' },
+    ]),
+  });
+  return finish(nodigraph, block);
+}
+
 export function createSerialOutBlock(nodigraph) {
   const { x, y } = nextPosition(nodigraph);
   const block = createBlock({ x, y, name: 'Serial TX' });
@@ -1306,6 +1423,99 @@ export function createCanBlock(nodigraph) {
       { name: 'format', label: 'FORMAT', options: ['hex', 'string'], hint: 'hex is raw ID#DATA frames; string auto-fragments plain text.' },
     ]),
   });
+  return finish(nodigraph, block);
+}
+
+// The CNC driver: grbl built into the board's firmware (conucon's
+// logic-cnc-* builds), so it is offered only inside a board that has it
+// (that board's allowedChildKinds lists 'cnc'). Its ports are the machine's:
+// `in` a line for grbl (gcode, `$X`, `x jog start plus`), `out` each line
+// grbl prints, and the axes' step / dir / enable outputs and limit inputs,
+// which go to the board's pins — a wire from `X step` to IO4 *is* the
+// setting `x/step/pin 4` (see devkitCircuit's CNC section). Everything
+// else grbl is set up with lives inside, as named blocks — a Bool for an
+// on/off setting, Data for a number — in one
+// container per group of grbl's settings tree (X, Y, Homing), the way the
+// Timer keeps T_ON/T_OFF: the circuit is the machine's settings, and
+// saving it puts them into grbl.
+const CNC_SETTINGS = [
+  ['X', [['steps_per_mm', 100], ['maxrate', 10000], ['acceleration', 200], ['maxtravel', 10000]]],
+  ['Y', [['steps_per_mm', 100], ['maxrate', 10000], ['acceleration', 200], ['maxtravel', 10000]]],
+  ['Homing', [['enable', true], ['feed', 100], ['seek', 300], ['pulloff', 1]]],
+];
+
+function createCncGroup(name, settings, x, y) {
+  const group = createBlock({ x, y, name });
+  group.geometry.width = 200;
+  group.geometry.height = 70 + settings.length * 60;
+  group.hasChildren = true;
+  group.boundaryGeometry = { x: 0, y: 0, width: 220, height: 40 + settings.length * 100 };
+  const children = settings.map(([leaf, value], i) => (typeof value === 'boolean'
+    ? createBoolBlock({ name: leaf, value, x: 30, y: 30 + i * 100, withPort: false })
+    : createDataBlock({ name: leaf, value, x: 30, y: 30 + i * 100, width: 160, height: 70, withPort: false })));
+  group.children = { blocks: new Map(children.map((c) => [c.id, c])), connections: new Map() };
+  return group;
+}
+
+// One axis in the homing order: `home` starts it, `done` is it finished.
+// Their wiring inside Homing is the order — Homing's own `home` into the
+// axes that home first, an axis's `done` into the ones that home after it,
+// axes wired from the same place homing together — and compiles to grbl's
+// homing cycles (see devkitCircuit's cncSettingsOf). An unwired axis is
+// not homed.
+function createHomeAxisBlock(axis, x, y) {
+  const block = createBlock({ x, y, name: axis.toUpperCase() });
+  block.geometry.width = 120;
+  block.geometry.height = 70;
+  addNamedPort(block, 'in', 'home');
+  addNamedPort(block, 'out', 'done');
+  addKindProp(block, 'cnc-home-axis');
+  block.props.push({ id: generateId('prp'), name: 'axis', kind: 'value', value: axis });
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return { done: inputs.home };' });
+  block.description = serializeBlockDescription(block);
+  return block;
+}
+
+// Homing: its settings, and its `home` input — the signal that homes the
+// machine — wired to the axes in the order they home. As placed, X alone,
+// grbl's own default.
+function createCncHomingGroup(x, y) {
+  const group = createCncGroup('Homing', CNC_SETTINGS.find(([name]) => name === 'Homing')[1], x, y);
+  addNamedPort(group, 'in', 'home');
+  group.geometry.width = 240;
+  group.boundaryGeometry = { x: 0, y: 0, width: 420, height: 440 };
+  const axes = ['x', 'y', 'z'].map((axis, i) => createHomeAxisBlock(axis, 240, 40 + i * 130));
+  for (const axis of axes) group.children.blocks.set(axis.id, axis);
+  wireInternal(group, 'self', 'home', axes[0], 'home');
+  group.description = serializeBlockDescription(group);
+  return group;
+}
+
+export function createCncBlock(nodigraph) {
+  const { x, y } = nextPosition(nodigraph);
+  const block = createBlock({ x, y, name: 'CNC' });
+  block.geometry.width = 200;
+  block.geometry.height = 320;
+  addNamedPort(block, 'in', 'in');
+  addNamedPort(block, 'in', 'home');
+  addNamedPort(block, 'in', 'X limit');
+  addNamedPort(block, 'in', 'Y limit');
+  addNamedPort(block, 'out', 'out');
+  for (const name of ['X step', 'X dir', 'Y step', 'Y dir', 'enable']) addNamedPort(block, 'out', name);
+  addKindProp(block, 'cnc');
+  block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: LAST_SEEN_HTML });
+
+  block.hasChildren = true;
+  block.boundaryGeometry = { x: 0, y: 0, width: 800, height: 560 };
+  const groups = CNC_SETTINGS.filter(([name]) => name !== 'Homing').map(([name, settings], i) => {
+    const group = createCncGroup(name, settings, 20 + i * 245, 60);
+    group.description = serializeBlockDescription(group);
+    return group;
+  });
+  const homing = createCncHomingGroup(20 + groups.length * 245, 60);
+  block.children = { blocks: new Map([...groups, homing].map((g) => [g.id, g])), connections: new Map() };
+  wireInternal(block, 'self', 'home', homing, 'home');
   return finish(nodigraph, block);
 }
 
@@ -1471,10 +1681,15 @@ const AS_BELT_TEXT = 'const asText = (v) => (typeof v === "boolean" ? (v ? "1" :
 
 // A true demux: `sel` picks which output the value on `in` is forwarded
 // to, counting from 0 the way conucon's own route does. out3/out4 ship
-// hidden — two ways is the ordinary case (see addNamedPort).
+// hidden — two ways is the ordinary case (see addNamedPort). Named Gate
+// in the palette: the value passes on out2 while `sel` is 1 (a held
+// button) and goes nowhere while it is 0 and out1 is left unwired. Its
+// kind stays `route`, the firmware's name, so drawings that have one keep
+// it; the old boolean Gate (createGateBlock) did the same as an AND and
+// never ran on a board, so the palette offers only this one.
 export function createRouteBlock(nodigraph) {
   const { x, y } = nextPosition(nodigraph);
-  const block = createBlock({ x, y, name: 'Route' });
+  const block = createBlock({ x, y, name: 'Gate' });
   block.geometry.width = 170;
   block.geometry.height = 170;
   addNamedPort(block, 'in', 'sel');
@@ -1628,16 +1843,21 @@ const CREATE_BY_KIND = {
   'json-field': createJsonFieldBlock,
   // conucon's own type names, deliberately (see that section's note).
   boot: createBootBlock,
-  serial: createSerialOutBlock,
+  // Serial and I2C are one block each now; the one-way kinds stay so a
+  // drawing that has one keeps its code.
+  serial: createSerialBlock,
   serialin: createSerialInBlock,
   can: createCanBlock,
+  i2c: createI2cBlock,
   i2cout: createI2cOutBlock,
   i2cin: createI2cInBlock,
+  delay: createDelayBlock,
   pwmout: createPwmOutBlock,
   pwmin: createPwmInBlock,
   slice: createSliceBlock,
   route: createRouteBlock,
   croute: createContentRouteBlock,
+  cnc: createCncBlock,
 };
 
 const CODE_PROP_NAMES = ['fn', 'render', 'html', 'dialog'];
@@ -1759,6 +1979,27 @@ export function migrateLegacyDataBlock(block) {
   return changed;
 }
 
+// A Delay block keeps the code it was placed with, and the first ones
+// shipped an html that read `props` (not given to html — see
+// htmlOverlay.js), which drew "HTML error: props is not defined" on the
+// card. Delay's code is not something anyone customises, so it is brought
+// to the current template at load. Returns whether anything changed.
+export function migrateDelayBlock(block) {
+  if ((block.props || []).find((p) => p.name === KIND_PROP)?.value !== 'delay') return false;
+  const template = createDelayBlock(stubNodigraph());
+  let changed = false;
+  for (const name of CODE_PROP_NAMES) {
+    const src = template.props.find((p) => p.name === name);
+    if (!src) continue;
+    if (String((block.props || []).find((p) => p.name === name)?.value ?? '') !== String(src.value)) {
+      setProp(block, name, src.value);
+      changed = true;
+    }
+  }
+  if (changed) block.description = serializeBlockDescription(block);
+  return changed;
+}
+
 // Only ever fills in what's actually missing — a block that already has
 // real `fn` content (hand-customized via the Logic tab, or arrived through
 // a full-fidelity path like nodigraph's own JSON clipboard/file format,
@@ -1813,7 +2054,7 @@ export function paletteGroups(nodigraph) {
         entry('#3ecf5d', 'Bool', 'digital-io', createDigitalIOBlock),
         entry('#c98a2f', 'AND gate', 'and', createAndBlock),
         entry('#c98a2f', 'OR gate', 'or', createOrBlock),
-        entry('#c98a2f', 'Gate', 'gate', createGateBlock),
+        entry('#c98a2f', 'Gate', 'route', createRouteBlock),
         entry('#c98a2f', 'NOT gate', 'not', createNotBlock),
         entry('#7c5cff', 'State', 'state', createStateBlock),
       ],
@@ -1831,6 +2072,7 @@ export function paletteGroups(nodigraph) {
       label: 'Time & output',
       entries: [
         entry('#3ecf5d', 'Timer', 'timer', createTimerBlock),
+        entry('#3ecf5d', 'Delay', 'delay', createDelayBlock),
         entry('#3ecf5d', 'LED', 'led', createLedBlock),
       ],
     },
@@ -1840,15 +2082,21 @@ export function paletteGroups(nodigraph) {
       entries: [
         entry('#7c5cff', 'Boot', 'boot', createBootBlock),
         entry('#c98a2f', 'Slice', 'slice', createSliceBlock),
-        entry('#c98a2f', 'Route', 'route', createRouteBlock),
         entry('#c98a2f', 'Match', 'croute', createContentRouteBlock),
         entry('#3ecf5d', 'PWM Out', 'pwmout', createPwmOutBlock),
         entry('#3ecf5d', 'PWM In', 'pwmin', createPwmInBlock),
-        entry('#2f6fed', 'Serial TX', 'serial', createSerialOutBlock),
-        entry('#2f6fed', 'Serial RX', 'serialin', createSerialInBlock),
+        // Only where the board's firmware has the driver (allowedChildKinds).
+        entry('#e06c2f', 'CNC', 'cnc', createCncBlock),
+      ],
+    },
+    {
+      // Each one block for both directions: what goes in is sent, what
+      // arrives comes out.
+      label: 'Communication',
+      entries: [
+        entry('#2f6fed', 'Serial', 'serial', createSerialBlock),
         entry('#2f6fed', 'CAN', 'can', createCanBlock),
-        entry('#2f6fed', 'I2C Out', 'i2cout', createI2cOutBlock),
-        entry('#2f6fed', 'I2C In', 'i2cin', createI2cInBlock),
+        entry('#2f6fed', 'I2C', 'i2c', createI2cBlock),
       ],
     },
   ];

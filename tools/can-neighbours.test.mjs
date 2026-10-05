@@ -223,3 +223,21 @@ test('the first scan asks a second time when a module was heard over WiFi, and t
   await once.api.scanAndPlaceNeighbours(nodigraph2, board2, { ...placer(once.calls), shell: shellCan, wait: async () => { throw new Error('no second ask needed'); } });
   assert.equal(once.calls.shell.length, 1, 'a CAN answer is taken at once');
 });
+
+test('the names nodes announce become their blocks\' titles, unless a block was renamed by hand', async () => {
+  const { api, calls } = load();
+  const board = boardBlock('esp32-S3', { nodeId: 'a1d148c4' });
+  const named = boardBlock('esp32-S3', { nodeId: '0dd04644', kind: 'cnc-module' });
+  const mine = boardBlock('Bench box', { nodeId: '1b2c3d4e' });
+  const nodigraph = fakeNodigraph([board, named, mine]);
+  const heard = parseNodesOutput([
+    'noditron a1d148c4 joystick v1.2 self',
+    'noditron 0dd04644 cnc v1.2 seen 0s ago via can',
+    'noditron 1b2c3d4e limitSwitches v1.2 seen 0s ago via can',
+  ]);
+  await api.placeNeighbours(nodigraph, board, heard, { ...placer(calls) });
+  assert.equal(board.name, 'joystick');
+  assert.equal(named.name, 'cnc');
+  assert.equal(mine.name, 'Bench box', 'a title given in noditron stays');
+  assert.equal(mine.props.find((p) => p.name === 'nodeName').value, 'limitSwitches', 'the name is still known, for addressing it');
+});
