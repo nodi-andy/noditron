@@ -47,7 +47,7 @@ const NO_SUB_ARCHITECTURE_KINDS = [
   // One axis in a CNC's homing order (see palette.js's createHomeAxisBlock).
   'cnc-home-axis',
 ];
-const ESP32_TEMPLATE_PROP_NAMES = ['render', 'html', 'dialog', 'allowedChildKinds', 'usbOrientation', 'boardVariant', 'pinMap', 'onboardControls', 'firmwarePreset', 'canPins'];
+const ESP32_TEMPLATE_PROP_NAMES = ['render', 'html', 'dialog', 'allowedChildKinds', 'usbOrientation', 'boardVariant', 'pinMap', 'onboardControls', 'firmwarePreset', 'canPins', 'boardId'];
 
 function waitForNodigraph() {
   return new Promise((resolve) => {
