@@ -33,9 +33,11 @@ const BOARDS = {
     description: 'Waveshare ESP32-S3-POE-ETH-8DI-8DO: DI1-DI8, DO1-D8, one CAN pin with configurable speed, a socket port carrying its shell, and USB firmware installation.',
   },
   // Waveshare ESP32-S3 RS485/CAN — the board with two isolated IOs: its
-  // 20-pin P1 header brings out IO4-IO14 as plain GPIO (IO3 is left to the
-  // console, see conucon's Machines/waveshare_s3.h), the CAN transceiver is
-  // on TX15/RX16.
+  // 20-pin P1 header brings out IO3-IO14 as plain GPIO, the CAN transceiver
+  // is on TX15/RX16. IO3/GPIO3 is free on this board: the console runs on
+  // the S3's native USB-Serial/JTAG, and the classic-ESP32 UART0-on-GPIO1/3
+  // path is not compiled into the noditron firmware (GRBL_IN_LOGIC — see
+  // conucon's Serial.cpp client_init and esp32_logic's gpioUsable).
   '2io': {
     id: 'esp32s3-2io',
     displayName: 'esp32-S3 2IO \u00b7 Logic',
@@ -43,7 +45,7 @@ const BOARDS = {
     preset: 'noditron-esp32s3-2io',
     can: { tx: 15, rx: 16 },
     // IO1 and IO2 too: on a CNC they are its X step and dir.
-    left: [['IO1', 1, 'gpio'], ['IO2', 2, 'gpio'], ...Array.from({ length: 6 }, (_, i) => ['IO' + (i + 4), i + 4, 'gpio'])],
+    left: [['IO1', 1, 'gpio'], ['IO2', 2, 'gpio'], ...Array.from({ length: 7 }, (_, i) => ['IO' + (i + 3), i + 3, 'gpio'])],
     right: [
       ...Array.from({ length: 5 }, (_, i) => ['IO' + (i + 10), i + 10, 'gpio']),
       ['CAN', null, 'can'], ['CAN speed', null, 'can-speed'],
@@ -53,7 +55,7 @@ const BOARDS = {
     // createCncBlock) may be placed in this board.
     cncDriver: true,
     reserved: new Map(),
-    description: 'Waveshare ESP32-S3 RS485/CAN (2 IO): the P1 header GPIOs IO4-IO14, one CAN pin (TX15/RX16) with configurable speed, a socket port carrying its shell, and USB firmware installation.',
+    description: 'Waveshare ESP32-S3 RS485/CAN (2 IO): the P1 header GPIOs IO3-IO14, one CAN pin (TX15/RX16) with configurable speed, a socket port carrying its shell, and USB firmware installation.',
   },
 };
 const BOARD = BOARDS[VARIANT];
