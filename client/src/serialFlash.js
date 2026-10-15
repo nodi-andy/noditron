@@ -63,102 +63,42 @@ export function getSession(blockId) {
 // family (offsets, and on some cores their actual bytes, differ).
 const FIRMWARE_REPO = { owner: 'nodi-andy', repo: 'noditron', ref: 'main' };
 const BOOT_APP0 = { path: 'firmware-assets/boot_app0.bin', address: 0xe000 };
-// Six presets: the two firmwares on each of the three boards (see
-// moduleDiscovery.HARDWARE), id <firmware>-<hardware>, matching the
-// module of the same name and the conucon env that builds it. Every
-// preset is the full bundle — bootloader, partition table, boot_app0,
-// app — and the partition table is the firmware's own (the CNC's differs
-// from the Logic Module's on the same chip).
-const BUILD = '20260930r';
-// The CNC's own build; both firmwares were rebuilt together for the CAN
-// firmware update (relay ends by itself, 64-frame receive queue).
-const CNC_BUILD = '20260930r';
-const S3_LOGIC = [
-  { path: 'firmware-assets/logic/esp32-s3-bootloader.bin', address: 0x0 },
-  { path: 'firmware-assets/logic/esp32-s3-partitions.bin', address: 0x8000 },
+// One firmware: noditron. The CNC driver is built in (it starts once a
+// circuit places a CNC block), and one image runs on both Waveshare S3
+// boards — it tells the 8DI/8DO board from the RS485/CAN one at boot by the
+// output expander only the former has (conucon's env noditron-s3,
+// detectBoard). So each board offers exactly one entry; the two S3 presets
+// differ only in which board they belong to. The classic DevKit has its own
+// image (conucon's env logic-esp32-devkit). Each preset is the full bundle
+// — bootloader, partition table, boot_app0, app.
+const BUILD = '20261011b';
+const S3_PARTS = [
+  { path: 'firmware-assets/noditron/esp32s3-bootloader.bin', address: 0x0 },
+  { path: 'firmware-assets/noditron/esp32s3-partitions.bin', address: 0x8000 },
   BOOT_APP0,
+  { path: 'firmware-assets/noditron/esp32s3.bin', address: 0x10000 },
 ];
-const CLASSIC_LOGIC = [
-  { path: 'firmware-assets/logic/esp32-bootloader.bin', address: 0x1000 },
-  { path: 'firmware-assets/logic/esp32-partitions.bin', address: 0x8000 },
+// 0x1000, not the S3's 0x0. The Arduino core states this per chip family
+// and the two genuinely differ — its boards.txt has
+// `esp32.build.bootloader_addr=0x1000` against `esp32s3.build.bootloader_addr=0x0`
+// — so a bootloader written where the other chip's goes never boots.
+const DEVKIT_PARTS = [
+  { path: 'firmware-assets/noditron/esp32-bootloader.bin', address: 0x1000 },
+  { path: 'firmware-assets/noditron/esp32-partitions.bin', address: 0x8000 },
   BOOT_APP0,
-];
-// 0x0, not the classic's 0x1000. The Arduino core states this per chip
-// family and the two genuinely differ — its boards.txt has
-// `esp32s3.build.bootloader_addr=0x0` against `esp32.build.bootloader_addr=0x1000`
-// — so an S3 bootloader written where a classic one goes leaves a board
-// that never boots.
-const S3_CNC = [
-  { path: 'firmware-assets/cnc/esp32-s3-bootloader.bin', address: 0x0 },
-  { path: 'firmware-assets/cnc/esp32-s3-partitions.bin', address: 0x8000 },
-  BOOT_APP0,
-];
-const CLASSIC_CNC = [
-  { path: 'firmware-assets/cnc/esp32-bootloader.bin', address: 0x1000 },
-  { path: 'firmware-assets/cnc/esp32-partitions.bin', address: 0x8000 },
-  BOOT_APP0,
+  { path: 'firmware-assets/noditron/esp32-devkit.bin', address: 0x10000 },
 ];
 export const FIRMWARE_PRESETS = [
-  {
-    id: 'logic-esp32s3-8io',
-    label: 'Logic — esp32-S3 CAN (8 DI / 8 DO)',
-    chip: 'ESP32-S3',
-    board: 'esp32s3-8io',
-    boardName: 'Waveshare ESP32-S3-POE-ETH-8DI-8DO',
-    build: BUILD,
-    parts: [...S3_LOGIC, { path: 'firmware-assets/logic/esp32s3-8io.bin', address: 0x10000 }],
-  },
-  {
-    id: 'logic-esp32s3-2io',
-    label: 'Logic — esp32-S3 CAN (2 IO)',
-    chip: 'ESP32-S3',
-    board: 'esp32s3-2io',
-    boardName: 'Waveshare ESP32-S3 RS485/CAN',
-    build: BUILD,
-    parts: [...S3_LOGIC, { path: 'firmware-assets/logic/esp32s3-2io.bin', address: 0x10000 }],
-  },
-  {
-    id: 'logic-esp32-devkit',
-    label: 'Logic — ESP32 DevKit (classic)',
-    chip: 'ESP32',
-    board: 'esp32-devkit',
-    boardName: 'ESP32 DevKit V1',
-    build: BUILD,
-    parts: [...CLASSIC_LOGIC, { path: 'firmware-assets/logic/esp32-devkit.bin', address: 0x10000 }],
-  },
-  {
-    id: 'cnc-esp32s3-2io',
-    label: 'CNC — esp32-S3 CAN (2 IO)',
-    chip: 'ESP32-S3',
-    board: 'esp32s3-2io',
-    boardName: 'Waveshare ESP32-S3 RS485/CAN',
-    build: CNC_BUILD,
-    parts: [...S3_CNC, { path: 'firmware-assets/cnc/esp32s3-2io.bin', address: 0x10000 }],
-  },
-  {
-    id: 'cnc-esp32s3-8io',
-    label: 'CNC — esp32-S3 CAN (8 DI / 8 DO)',
-    chip: 'ESP32-S3',
-    board: 'esp32s3-8io',
-    boardName: 'Waveshare ESP32-S3-POE-ETH-8DI-8DO',
-    build: CNC_BUILD,
-    parts: [...S3_CNC, { path: 'firmware-assets/cnc/esp32s3-8io.bin', address: 0x10000 }],
-  },
-  {
-    id: 'cnc-esp32-devkit',
-    label: 'CNC — ESP32 DevKit (classic)',
-    chip: 'ESP32',
-    board: 'esp32-devkit',
-    boardName: 'ESP32 DevKit V1',
-    build: CNC_BUILD,
-    parts: [...CLASSIC_CNC, { path: 'firmware-assets/cnc/esp32-devkit.bin', address: 0x10000 }],
-  },
+  { id: 'noditron-esp32s3-2io', label: 'noditron', chip: 'ESP32-S3', board: 'esp32s3-2io', boardName: 'Waveshare ESP32-S3 RS485/CAN', build: BUILD, parts: S3_PARTS },
+  { id: 'noditron-esp32s3-8io', label: 'noditron', chip: 'ESP32-S3', board: 'esp32s3-8io', boardName: 'Waveshare ESP32-S3-POE-ETH-8DI-8DO', build: BUILD, parts: S3_PARTS },
+  { id: 'noditron-esp32-devkit', label: 'noditron', chip: 'ESP32', board: 'esp32-devkit', boardName: 'ESP32 DevKit V1', build: BUILD, parts: DEVKIT_PARTS },
 ];
 
-// The Contents API caps a readable file at 1MB (base64 included) — every
-// part of every preset here (~830-905KB at the largest) fits; a future
-// firmware big enough to blow past that would need the Git Blobs API
-// instead, not handled here yet.
+// The firmware comes from this app's own server (firmware-assets/). The
+// GitHub fallback goes through the Contents API, which caps a readable file
+// at 1MB — the S3 image (~1.16MB, CNC driver included) is past it, so a host
+// without firmware-assets/ cannot install it; the Git Blobs API would be the
+// way, not handled here yet.
 async function fetchAssetBytes(path, label, token) {
   // Use the firmware shipped with this app; development builds may not yet
   // exist on GitHub. Older hosts fall back to the authenticated repository.

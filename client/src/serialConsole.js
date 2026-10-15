@@ -74,6 +74,26 @@ export function subscribeIoChanges(blockId, listener) {
   };
 }
 
+// A wired circuit's trace (firmware `trace on`, see buildWiredDesign): one
+// `{"type":"blk","id":N,"o":port,"v":value}` per block output as it fires,
+// `{"type":"blk","id":N,"sel":i}` per route selection — the firmware's ids,
+// which the design maps to drawn blocks (`ref`). Taken out of the stream
+// like io-change, so no command reply is ever mistaken for one.
+const traceListeners = new Map(); // blockId -> Set<(message) => void>
+
+export function subscribeTrace(blockId, listener) {
+  let listeners = traceListeners.get(blockId);
+  if (!listeners) {
+    listeners = new Set();
+    traceListeners.set(blockId, listeners);
+  }
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+    if (!listeners.size) traceListeners.delete(blockId);
+  };
+}
+
 // HIGH/LOW (a Timer's two edges) read as booleans, numbers as numbers,
 // anything else as the text it is — the same kinds a wire carries in the
 // simulation.
@@ -111,6 +131,9 @@ function takeAsyncLines(state, bytes) {
         const message = JSON.parse(text);
         if (message.type === 'io-change' && Array.isArray(message.pins)) {
           for (const listener of ioListeners.get(state.blockId) || []) listener(message.pins);
+          consumed = true;
+        } else if (message.type === 'blk' && Number.isInteger(message.id)) {
+          for (const listener of traceListeners.get(state.blockId) || []) listener(message);
           consumed = true;
         }
       } catch { /* Ordinary console line. */ }
@@ -856,6 +879,18 @@ function collapsePassThroughs(childBlocks, connections) {
   return out;
 }
 
+// One line for the person who drew it, about one drawn block: kept in
+// `notes`, and — when the caller keeps `notes.byBlock` (a Map) — by the
+// block's id too, so the block itself can be marked (see leftOutMarks.js).
+export function noteBlock(notes, blockId, text) {
+  if (!notes) return;
+  notes.push(text);
+  if (!blockId || !(notes.byBlock instanceof Map)) return;
+  const list = notes.byBlock.get(blockId) || [];
+  if (!list.includes(text)) list.push(text);
+  notes.byBlock.set(blockId, list);
+}
+
 // `notes`, when an array is given, collects one line per drawn block the
 // board's design leaves out — a wiring shape the layouts below have no
 // row for. The design itself stays as it is: what the board runs is what
@@ -1071,7 +1106,7 @@ export function buildMinimalDesign(childBlocks, connections = [], notes = null) 
     const selConn = feedOf(route, 'sel');
     const sel = selConn && childById(selConn.sourceBlockId);
     if (!isInputPin(sel) || idByChildId.has(sel.id)) {
-      notes?.push(`${name} is left out: its sel needs an Input pin of its own (one the board has not already used elsewhere).`);
+      noteBlock(notes, route.id, `${name} is left out: its sel needs an Input pin of its own (one the board has not already used elsewhere).`);
       continue;
     }
     let conn = feedOf(route, 'in');
@@ -1536,14 +1571,180 @@ export function buildMinimalDesign(childBlocks, connections = [], notes = null) 
         const writers = drawn
           .filter((c) => c.targetBlockId === child.id && portName(child, c.targetPortId) === 'write')
           .map((c) => { const src = childBlocks.find((b) => b.id === c.sourceBlockId); return src ? `${src.name || kindOfChild(src)}.${portName(src, c.sourcePortId) || 'out'}` : 'a wire'; });
-        notes.push(`${label(child)} is written by ${writers.join(' and ')} in a shape the board has no layout for and was left out (a Data is written at the end of a Match chain, or by an Input pin, a Timer, or a Data one of those triggers).`);
+        noteBlock(notes, child.id, `${label(child)} is written by ${writers.join(' and ')} in a shape the board has no layout for and was left out (a Data is written at the end of a Match chain, or by an Input pin, a Timer, or a Data one of those triggers).`);
       } else {
-        notes.push(`${label(child)} (${kind}) is wired in a shape the board has no layout for and was left out.`);
+        noteBlock(notes, child.id, `${label(child)} (${kind}) is wired in a shape the board has no layout for and was left out.`);
       }
     }
   }
 
   return { blocks, nextId: nextBlockId };
+}
+
+// The circuit as drawn, for a board whose firmware runs wires (build
+// WIRED_BUILD and later, see conucon's CWire): one firmware block per
+// drawn block, one wire per drawn wire, [from id, output, to id, input].
+// No layouts to fit, so every shape the blocks below can make runs —
+// fan-out, fan-in, a Gate's sel from an OR, a pin used twice. Each block
+// carries `ref` (the drawn block's id, for the board's trace to be shown
+// on it) and `at` (where it was drawn, for a load from the device); the
+// firmware ignores both. `notes` collects what has no firmware block.
+//
+// Ports count the way the firmware counts them: outputs in the block's
+// own order (a Match's or Gate's out1 is 0); inputs: a Data's write is 1,
+// a Gate's sel 0 and its in 1, an AND's or OR's b 1, anything else 0.
+export function buildWiredDesign(childBlocks, connections = [], notes = null) {
+  const drawn = connections;
+  connections = collapsePassThroughs(childBlocks, connections);
+  const kindOfChild = (c) => propOf(c, 'noditronKind');
+  const byId = new Map(childBlocks.map((c) => [c.id, c]));
+  const portOf = (block, portId) => {
+    const pin = (block.ports || []).find((p) => p.id === portId);
+    return (pin && (block.logicalPorts || []).find((l) => l.id === pin.logicalId)) || null;
+  };
+  const outputsOf = (block) => (block.logicalPorts || []).filter((l) => l.direction === 'out');
+  const hasPin = (c) => { const pin = propOf(c, 'pin'); return pin !== null && pin !== undefined && pin !== ''; };
+  const outIndex = (block, lp) => (['croute', 'route'].includes(kindOfChild(block)) ? Math.max(0, outputsOf(block).indexOf(lp)) : 0);
+  const inIndex = (block, lp) => {
+    const kind = kindOfChild(block);
+    if (kind === 'data') return lp.name === 'write' ? 1 : 0;
+    if (kind === 'route') return lp.name === 'sel' ? 0 : 1;
+    if (kind === 'and' || kind === 'or') return lp.name === 'b' ? 1 : 0;
+    return 0;
+  };
+
+  const blocks = [];
+  const wires = [];
+  const seenWire = new Set();
+  let nextId = 1;
+  const idOf = new Map(); // drawn block id -> firmware id
+
+  function firmwareBlockFor(child) {
+    const kind = kindOfChild(child);
+    if (kind === 'digital-io') {
+      if (!hasPin(child)) return null;
+      const pin = Number(propOf(child, 'pin'));
+      if (propOf(child, 'direction') === 'output') {
+        const exio = Number(propOf(child, 'exio'));
+        return { type: 'dout', data: exio >= 1 && exio <= 8 ? { exio } : { gpio: pin } };
+      }
+      return { type: 'din', data: { gpio: pin, emitOnChange: true } };
+    }
+    if (kind === 'data') return { type: 'data', data: { value: String(propOf(child, 'value') ?? '') } };
+    if (kind === 'timer') {
+      // T_ON / T_OFF exactly as placeTimer reads them.
+      const kids = child.children ? Array.from(child.children.blocks.values()) : [];
+      const onTime = Number(kids.find((k) => k.name === 'T_ON')?.props?.find((p) => p.name === 'value')?.value) || 500;
+      const offTime = Number(kids.find((k) => k.name === 'T_OFF')?.props?.find((p) => p.name === 'value')?.value) || 500;
+      return { type: 'timer', data: { onTime, offTime, mode: 'periodic' } };
+    }
+    if (kind === 'delay') return { type: 'timer', data: { onTime: Math.max(1, Math.round(Number(propOf(child, 'ms')) || 100)), offTime: 0, mode: 'delay' } };
+    if (kind === 'croute') {
+      let routes = [];
+      try { routes = JSON.parse(propOf(child, 'routes') || '[]'); } catch { routes = []; }
+      if (!Array.isArray(routes)) routes = [];
+      routes = routes.map((m) => (m === null || m === undefined ? '' : String(m)));
+      return { type: 'croute', h: Math.max(1, routes.length), data: { routes } };
+    }
+    // A Gate's rows: its sel, then one per output (the firmware's bh - 1).
+    if (kind === 'route') return { type: 'route', w: 1, h: 1 + Math.max(1, outputsOf(child).length), data: {} };
+    if (kind === 'and' || kind === 'or' || kind === 'not') return { type: kind, data: {} };
+    if (kind === 'usb-serial') return { type: 'serial', data: { uart: 0, baud: 115200, prefix: USB_SERIAL_PREFIX } };
+    return null;
+  }
+
+  function place(child) {
+    if (idOf.has(child.id)) return idOf.get(child.id);
+    const fw = firmwareBlockFor(child);
+    if (!fw) { idOf.set(child.id, null); return null; }
+    const id = nextId++;
+    const block = { id, type: fw.type, ...(fw.w ? { w: fw.w } : {}), ...(fw.h ? { h: fw.h } : {}), data: fw.data };
+    // A drawn block (not a board pin the compiler stands in for) says
+    // which one it is and where it sits.
+    if (child.geometry) {
+      block.ref = child.id;
+      block.at = [Math.round(Number(child.geometry.x) || 0), Math.round(Number(child.geometry.y) || 0)];
+    }
+    blocks.push(block);
+    idOf.set(child.id, id);
+    return id;
+  }
+  function wire(s, sp, d, dp) {
+    const k = `${s}:${sp}>${d}:${dp}`;
+    if (seenWire.has(k)) return;
+    seenWire.add(k);
+    wires.push([s, sp, d, dp]);
+  }
+
+  for (const conn of connections) {
+    const src = byId.get(conn.sourceBlockId);
+    const dst = byId.get(conn.targetBlockId);
+    if (!src || !dst) continue;
+    const sp = portOf(src, conn.sourcePortId);
+    const dp = portOf(dst, conn.targetPortId);
+    if (!sp || !dp) continue;
+    const s = place(src);
+    const d = place(dst);
+    if (s === null || d === null) continue;
+    wire(s, outIndex(src, sp), d, inIndex(dst, dp));
+  }
+  // Every pin declared, wired or not, so the board reports it (see
+  // buildMinimalDesign's unconnected-pins pass).
+  for (const child of childBlocks) if (kindOfChild(child) === 'digital-io' && hasPin(child)) place(child);
+
+  // A Data nothing triggers or writes sends only when something asks, and
+  // nothing will: the board wakes it once at boot, or — feeding USB — every
+  // USB_RESEND_MS so a browser that connects later still hears it. The
+  // helpers carry the same marks the grid layouts give them (see
+  // designImport's `dropped`), so a load from the device leaves them out.
+  const USB_RESEND_MS = 500;
+  for (const child of childBlocks) {
+    if (kindOfChild(child) !== 'data' || !idOf.get(child.id)) continue;
+    const dataId = idOf.get(child.id);
+    if (wires.some((w) => w[2] === dataId)) continue;
+    const feeds = wires.filter((w) => w[0] === dataId);
+    if (!feeds.length) continue;
+    const toUsb = feeds.some((w) => blocks.find((b) => b.id === w[2])?.type === 'serial');
+    const trigger = toUsb
+      ? { id: nextId++, type: 'timer', data: { onTime: USB_RESEND_MS, offTime: USB_RESEND_MS, mode: 'periodic', role: 'usb-resend' } }
+      : { id: nextId++, type: 'boot', data: { delay: 100 } };
+    blocks.push(trigger);
+    wire(trigger.id, 0, dataId, 0);
+  }
+
+  if (notes) {
+    const label = (c) => (kindOfChild(c) === 'data' ? `Data ${JSON.stringify(String(propOf(c, 'value') ?? ''))}` : `${c.name || kindOfChild(c)}`);
+    for (const child of childBlocks) {
+      if (idOf.get(child.id)) continue;
+      const kind = kindOfChild(child);
+      if (kind === 'led') continue; // shown by the page from the board's own values
+      const out = drawn.some((c) => c.sourceBlockId === child.id);
+      const into = drawn.some((c) => c.targetBlockId === child.id);
+      if (!out && !into) continue;
+      if (kind === 'digital-io' && !hasPin(child)) {
+        if (!into) noteBlock(notes, child.id, `${label(child)} has no pin: a value set on screen, which the board cannot hold. Its wires are left out.`);
+        continue;
+      }
+      noteBlock(notes, child.id, `${label(child)} (${kind}) has no block on the board and was left out.`);
+    }
+    // Not left out, but almost never meant: one output into a Data's `in`
+    // and its `write` both. The trigger sends the text, then the write
+    // stores what arrived ("1") and sends that — and every later trigger
+    // sends "1" too.
+    for (const child of childBlocks) {
+      if (kindOfChild(child) !== 'data') continue;
+      const feedsOf = (name) => drawn.filter((c) => c.targetBlockId === child.id && portOf(child, c.targetPortId)?.name === name).map((c) => `${c.sourceBlockId}:${c.sourcePortId}`);
+      const writes = new Set(feedsOf('write'));
+      const both = feedsOf('in').find((k) => writes.has(k));
+      if (!both) continue;
+      const [srcId, srcPort] = both.split(':');
+      const src = byId.get(srcId);
+      const name = src ? `${src.name || kindOfChild(src)}.${portOf(src, srcPort)?.name || 'out'}` : 'one output';
+      noteBlock(notes, child.id, `${label(child)} has a second wire from ${name}, into its write port. Each press then overwrites the text with "1" — so it sends ${JSON.stringify(String(propOf(child, 'value') ?? ''))} once and "1" after that. Only the wire into in is needed.`);
+    }
+  }
+
+  return { format: 'wires', blocks, wires, nextId };
 }
 
 // Direct hardware override of one output pin — serial mirror of the
@@ -1740,8 +1941,45 @@ export function shell(blockId, line, opts = {}) {
 
 export function identify(blockId, ...args) {
   const bridge = bridgeFor(blockId);
-  if (bridge) return queueCommand(blockId, () => bridgedIdentify(bridge, blockId), { quiet: true });
-  return queueCommand(blockId, () => identifyCommand(blockId, ...args), { quiet: true });
+  const asked = bridge
+    ? queueCommand(blockId, () => bridgedIdentify(bridge, blockId), { quiet: true })
+    : queueCommand(blockId, () => identifyCommand(blockId, ...args), { quiet: true });
+  return asked.then((info) => {
+    if (info?.verified && info.build) noteFirmwareBuild(blockId, info.build);
+    return info;
+  });
+}
+
+// The firmware build each board last said it runs (its `ping`), which
+// decides the design format it is sent (see devkitCircuit's
+// buildPinMappedDesign): wires from WIRED_BUILD on, belts before. A host
+// can keep it on the block too (setBuildRecorder) so a board compiles the
+// same way after a reload, before it has been asked again.
+export const WIRED_BUILD = '20261011a';
+const firmwareBuilds = new Map(); // blockId -> build
+let buildRecorder = null;
+export function setBuildRecorder(fn) {
+  buildRecorder = fn;
+}
+function noteFirmwareBuild(blockId, build) {
+  if (firmwareBuilds.get(blockId) === build) return;
+  firmwareBuilds.set(blockId, build);
+  buildRecorder?.(blockId, build);
+}
+export function firmwareBuildOf(blockId) {
+  return firmwareBuilds.get(blockId) || null;
+}
+export function runsWires(build) {
+  return Boolean(build) && String(build) >= WIRED_BUILD;
+}
+
+// Asks a board for its trace (see subscribeTrace) for the next few seconds;
+// called again while its circuit is on screen, never otherwise.
+export function traceOn(blockId) {
+  return queueCommand(blockId, () => shellCommand(blockId, 'trace on', { timeoutMs: 1500, quiet: true }), { quiet: true });
+}
+export function traceOff(blockId) {
+  return queueCommand(blockId, () => shellCommand(blockId, 'trace off', { timeoutMs: 1500, quiet: true }), { quiet: true });
 }
 
 // A board behind another on the bus is read through that one: the bridge's

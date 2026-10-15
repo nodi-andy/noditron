@@ -13,7 +13,7 @@
 // reconnect card takes (serialReconnect.js's connectTo): open the WiFi
 // link to the page's own host, identify, settle the block against what
 // the device holds (deviceSync.js — an empty block takes the device's
-// circuit). Then the block is entered. The project, board block included,
+// circuit). The project, board block included,
 // is kept by the board itself (/api/project, see nodigraph's store.js), so
 // the next visit finds the block and only reconnects.
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
@@ -222,7 +222,10 @@ export async function installBoardPage(nodigraph, { host = window.location.hostn
     }
   }
   const info = await connectBoard(nodigraph, board, host, deps);
-  enterBoard(nodigraph, board);
+  // The view stays the one the project was kept with — the same diagram
+  // as in noditron, boards side by side; a board placed just now is seen
+  // from its level, beside its neighbours. (The page used to open inside
+  // the board; enterBoard is still there for a host that wants it.)
   nodigraph.selection.clear?.();
   nodigraph.persist();
   nodigraph.renderLoop.requestRender();

@@ -21,7 +21,7 @@ const BOARDS = {
     id: 'esp32s3-8io',
     displayName: 'esp32-S3 8IO \u00b7 Logic',
     boardVariant: 'ESP32-S3-POE-ETH-8DI-8DO',
-    preset: 'logic-esp32s3-8io',
+    preset: 'noditron-esp32s3-8io',
     can: { tx: 2, rx: 3 },
     left: Array.from({ length: 8 }, (_, i) => ['DI' + (i + 1), i + 4, 'digital-input']),
     right: [
@@ -40,7 +40,7 @@ const BOARDS = {
     id: 'esp32s3-2io',
     displayName: 'esp32-S3 2IO \u00b7 Logic',
     boardVariant: 'ESP32-S3-RS485-CAN (2 IO)',
-    preset: 'logic-esp32s3-2io',
+    preset: 'noditron-esp32s3-2io',
     can: { tx: 15, rx: 16 },
     // IO1 and IO2 too: on a CNC they are its X step and dir.
     left: [['IO1', 1, 'gpio'], ['IO2', 2, 'gpio'], ...Array.from({ length: 6 }, (_, i) => ['IO' + (i + 4), i + 4, 'gpio'])],

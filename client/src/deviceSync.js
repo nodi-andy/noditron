@@ -13,7 +13,7 @@ import { createConnection } from '/nodigraph/src/model/Connection.js';
 import * as serialConsole from './serialConsole.js';
 import * as devkitCircuit from './devkitCircuit.js';
 import { importDesign } from './designImport.js';
-import { createStandaloneDataBlock, createContentRouteBlock, createAndBlock, createTimerBlock, createDigitalIOBlock, createCncBlock, createRouteBlock, createDelayBlock } from './palette.js';
+import { createStandaloneDataBlock, createContentRouteBlock, createAndBlock, createOrBlock, createNotBlock, createTimerBlock, createDigitalIOBlock, createCncBlock, createRouteBlock, createDelayBlock } from './palette.js';
 
 const portIdByName = (block, name) => {
   const logical = (block.logicalPorts || []).find((lp) => lp.name === name);
@@ -121,6 +121,8 @@ export function factoriesFor(nodigraph) {
       return block;
     },
     and: () => make(createAndBlock),
+    or: () => make(createOrBlock),
+    not: () => make(createNotBlock),
     timer: (onTime, offTime) => {
       const block = make(createTimerBlock);
       for (const kid of block.children?.blocks?.values() || []) {
@@ -169,6 +171,9 @@ function describeImport(result) {
 // device could not be read at all.
 export async function reconcileWithDevice(nodigraph, block) {
   const level = levelOf(nodigraph, block);
+  // Which design format the board runs decides what this compiles to (see
+  // devkitCircuit.boardBuildOf): asked once, when nothing has said yet.
+  if (!devkitCircuit.boardBuildOf(block)) await serialConsole.identify(block.id).catch(() => null);
   const onDevice = await serialConsole.readDesign(block.id);
   const deviceBlocks = Array.isArray(onDevice?.blocks) ? onDevice.blocks : [];
   let compiled = null;

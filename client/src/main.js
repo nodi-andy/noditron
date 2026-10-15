@@ -6,12 +6,12 @@
 // file needing to know anything about nodigraph's internal timing.
 import { canonicalModuleName } from './moduleDiscovery.js';
 import { serializeBlockDescription } from '/nodigraph/src/model/BlockDescription.js';
-import { rehydrateKindLogic, migrateLegacyDataBlock, migrateDelayBlock } from './palette.js';
+import { rehydrateKindLogic, migrateLegacyDataBlock, migrateDelayBlock, migrateLogicReadout, migrateCncDialog } from './palette.js';
 import { installAddBlockDialog } from './addBlockDialog.js';
 import { installCanBridge } from './canBridge.js';
 import { startRuntime, kindOf, getLastResult, getBoundaryOutput, getPortValue, setBoundaryInput, setBoundaryOutput, clearBoundaryOutput, setChildOutput, clearChildOutputs } from './runtime.js';
 import { installCanvasIndicators } from './canvasIndicators.js';
-import { installHtmlOverlay } from './htmlOverlay.js';
+import { installHtmlOverlay, hasCncDriver } from './htmlOverlay.js';
 import { installDialogSystem } from './dialogSystem.js';
 import * as serialFlash from './serialFlash.js';
 import * as serialConsole from './serialConsole.js';
@@ -21,8 +21,12 @@ import { createDeviceSaver } from './deviceSave.js';
 import { installSerialReconnect } from './serialReconnect.js';
 import { createSocketLinks } from './socketLink.js';
 import { installBoardPage, installProjectStore } from './boardPage.js';
+import { pushProjectToBoards } from './boardProjectSync.js';
 import { placeNeighbours } from './canNeighbours.js';
 import { reconcileWithDevice } from './deviceSync.js';
+import { createBoardTrace } from './boardTrace.js';
+import { installLeftOutMarks } from './leftOutMarks.js';
+import { uniquifyNames, revealWiredPorts } from './uniqueNames.js';
 import * as BlockDescription from '/nodigraph/src/model/BlockDescription.js';
 
 // Block code lives in strings (palette.js, the module manifests) and runs
@@ -95,8 +99,22 @@ async function boot() {
   // its own click handling too (separate capture-phase listeners are fine
   // — each just hit-tests its own thing and only acts+stops on a match).
   const dialogSystem = installDialogSystem(nodigraph);
+  const boardTrace = createBoardTrace(nodigraph);
+  const leftOutMarks = installLeftOutMarks(nodigraph, { openDialog: dialogSystem.openDialog });
+  // The firmware build a board says it runs, kept on its block: it decides
+  // the design format the board is sent (devkitCircuit.boardBuildOf), and
+  // a reload compiles the same way before the board has been asked again.
+  serialConsole.setBuildRecorder((blockId, build) => {
+    const found = devkitCircuit.collectBoardBlocks(nodigraph.project.rootBlock.children).find(({ block }) => block.id === blockId);
+    if (!found) return;
+    const prop = found.block.props.find((p) => p.name === 'firmwareBuild');
+    if (prop?.value === build) return;
+    if (prop) prop.value = build;
+    else found.block.props.push({ id: `${blockId}:firmwareBuild`, name: 'firmwareBuild', kind: 'value', value: build });
+    nodigraph.persist();
+  });
   const canvasIndicators = installCanvasIndicators(nodigraph);
-  const htmlOverlay = installHtmlOverlay(nodigraph, dialogSystem.openDialog);
+  const htmlOverlay = installHtmlOverlay(nodigraph, dialogSystem.openDialog, dialogSystem.openCncControl);
 
   window.nodigraphDrawBlock = (ctx, block, { contentAlpha = 1, transform = null } = {}) => {
     // `ctx` arrives already faded by the level this block sits in (see
@@ -115,6 +133,7 @@ async function boot() {
     if (contentAlpha > 0) {
       canvasIndicators.drawBlock(ctx, block);
       dialogSystem.drawBlock(ctx, block);
+      leftOutMarks.drawBlock(ctx, block);
     }
     ctx.restore();
     htmlOverlay.drawBlock(ctx, block, { contentAlpha: contentAlpha * levelAlpha, transform });
@@ -294,6 +313,8 @@ async function boot() {
     for (const block of level.blocks.values()) {
       if (migrateLegacyDataBlock(block)) changed = true;
       if (migrateDelayBlock(block)) changed = true;
+      if (migrateLogicReadout(block)) changed = true;
+      if (migrateCncDialog(block)) changed = true;
       if (block.children && migrateDataBlocks(block.children)) changed = true;
     }
     return changed;
@@ -302,6 +323,18 @@ async function boot() {
     nodigraph.persist();
     nodigraph.renderLoop.requestRender();
   }
+
+  // One name per block on a level (see uniqueNames.js): at load, and then
+  // every couple of seconds for blocks added, pasted or loaded since.
+  const keepNamesUnique = () => {
+    const renamed = uniquifyNames(nodigraph.project.rootBlock.children);
+    const revealed = revealWiredPorts(nodigraph.project.rootBlock.children);
+    if (!renamed && !revealed) return;
+    nodigraph.persist();
+    nodigraph.renderLoop.requestRender();
+  };
+  keepNamesUnique();
+  setInterval(keepNamesUnique, 2000);
 
   // `connectionState` is a persisted prop, but the serial session it
   // describes is not — a Web Serial port only lives as long as the page
@@ -339,7 +372,14 @@ async function boot() {
   // cards below, which then have nothing to offer for it.
   if (window.nodigraphEmbedded) {
     try {
-      await installBoardPage(nodigraph, { store: projectStore, log: (message) => console.info(`[noditron] ${message}`) });
+      const opened = await installBoardPage(nodigraph, { store: projectStore, log: (message) => console.info(`[noditron] ${message}`) });
+      // http://<board>/#cnc: straight into the CNC control — of this board
+      // when it is the machine, else of the first board holding a CNC.
+      if (opened && /^#cnc$/i.test(window.location.hash)) {
+        const machine = hasCncDriver(opened.board) ? opened.board
+          : devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children).map(({ block }) => block).find(hasCncDriver) || opened.board;
+        dialogSystem.openCncControl(machine);
+      }
     } catch (err) {
       console.warn('[noditron] this board\'s page could not open as the board:', err.message);
     }
@@ -539,6 +579,19 @@ async function boot() {
     persist: nodigraph.persist,
     openDialog: dialogSystem.openDialog,
   });
+  // The board's own page holds the same diagram (boardProjectSync.js):
+  // after an explicit Save here — not on a board's page, which is the copy.
+  if (!window.nodigraphEmbedded) {
+    window.nodigraphAfterSave = () => {
+      pushProjectToBoards({
+        boards: devkitCircuit.collectBoardBlocks(nodigraph.project.rootBlock.children).map(({ block }) => block),
+        data: nodigraph.project.toJSON(),
+        sessionOf: (blockId) => serialFlash.getSession(blockId),
+        identify: (blockId) => serialConsole.identify(blockId),
+        log: (message) => console.info(`[noditron] ${message}`),
+      }).catch((err) => console.warn('[noditron] the boards\' pages were not updated:', err.message));
+    };
+  }
   window.nodigraphHasUnsavedChanges = () => devkitCircuit.collectEsp32DevkitBlocks(nodigraph.project.rootBlock.children)
     .some(({ block, level }) => devkitCircuit.isDevkitDirty(block, level));
 
@@ -592,6 +645,9 @@ async function boot() {
     if (!live) return false;
     const inputs = pinMapFor(container).filter(p => !p.reserved && !p.outputOnly && p.gpio !== null && p.gpio !== undefined && p.gpio < 1000).map(p => Number(p.gpio));
     livePins.ensurePolling(container.id, inputs);
+    // What the board's own blocks put out, on the blocks drawn for them —
+    // asked for only while its circuit is on screen (see boardTrace.js).
+    boardTrace.apply(container, devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, container.id), setChildOutput);
     const cached = livePins.getCachedPins(container.id);
     if (!cached) return;
     // The board's own pins carry their live state into the level, so a

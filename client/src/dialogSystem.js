@@ -26,6 +26,8 @@ import * as devkitCircuit from './devkitCircuit.js';
 import { socketPortsOf } from './socketLink.js';
 import { reconcileWithDevice, loadFromDevice } from './deviceSync.js';
 import { rememberedWifi } from './serialMemory.js';
+import { mountCncPanel, readStatusReply } from './cncPanel.js';
+import { mountCncControl } from './cncControl.js';
 
 const HOST_ID = 'noditron-dialog-host';
 const GEAR_RADIUS = 8;
@@ -82,18 +84,8 @@ export function installDialogSystem(nodigraph) {
     host.innerHTML = '';
   }
 
-  function openDialog(block) {
-    const source = block.props?.find((p) => p.name === 'dialog')?.value;
-    if (!source || !String(source).trim()) return;
-    const executableSource = kindOf(block) === 'esp32-devkit'
-      ? String(source)
-        .replace(
-          /if \(!design\.blocks\.length\)\s*\{\s*log\('Nothing to send -- connect a supported circuit signal directly to DI, DO, or CAN\.'\);\s*\}\s*else\s*\{\s*/,
-          '',
-        )
-        .replace(/(updateProgramSection\(\);)\s*}\s*}\s*catch \(err\)/, '$1\n    } catch (err)')
-      : source;
-
+  // The modal itself: backdrop, panel, close button, an empty body.
+  function openModal({ wide = false } = {}) {
     host.innerHTML = '';
     host.hidden = false;
 
@@ -102,7 +94,7 @@ export function installDialogSystem(nodigraph) {
     backdrop.addEventListener('click', close);
 
     const panel = document.createElement('div');
-    panel.className = 'noditron-dialog-panel';
+    panel.className = wide ? 'noditron-dialog-panel noditron-cnc-panel' : 'noditron-dialog-panel';
     panel.addEventListener('click', (event) => event.stopPropagation());
 
     const closeBtn = document.createElement('button');
@@ -124,6 +116,62 @@ export function installDialogSystem(nodigraph) {
     panel.append(closeBtn, body);
     backdrop.appendChild(panel);
     host.appendChild(backdrop);
+    return { body, panel };
+  }
+
+  // What the CNC control needs of the board a block belongs to (see
+  // cncPanel.js / cncControl.js): its shell, whether it has a link, and
+  // the editor's program, kept on the board block.
+  function cncLinkFor(block) {
+    const board = devkitCircuit.findOwningBoard(nodigraph.project.rootBlock.children, block.id);
+    if (!board) return null;
+    const programProp = () => board.props.find((p) => p.name === 'cncProgram');
+    return {
+      board,
+      shell: (line, shellOpts) => serialConsole.shell(board.id, line, shellOpts),
+      isLinked: () => Boolean(serialFlash.getSession(board.id) || serialConsole.bridgeFor(board.id)),
+      isBusy: () => serialFlash.isFlashing(board.id),
+      program: String(programProp()?.value || ''),
+      saveProgram: (text) => {
+        const prop = programProp();
+        if (prop && prop.value === text) return;
+        if (prop) prop.value = text;
+        else board.props.push({ id: `${board.id}:cncProgram`, name: 'cncProgram', kind: 'value', value: text });
+        board.description = serializeBlockDescription(board);
+        nodigraph.persist();
+      },
+    };
+  }
+
+  function mountControlFor(block, target) {
+    const link = cncLinkFor(block);
+    if (!link) {
+      target.textContent = 'Place this block inside a board to drive its CNC.';
+      return () => {};
+    }
+    return mountCncControl(target, { ...link, title: `${link.board.name || 'CNC'} · CNC` });
+  }
+
+  // The CNC control in a modal of its own, wide: the board's (or the
+  // block's board's) machine, its gcode and its files.
+  function openCncControl(block) {
+    const { body } = openModal({ wide: true });
+    mountControlFor(block, body);
+  }
+
+  function openDialog(block) {
+    const source = block.props?.find((p) => p.name === 'dialog')?.value;
+    if (!source || !String(source).trim()) return;
+    const executableSource = kindOf(block) === 'esp32-devkit'
+      ? String(source)
+        .replace(
+          /if \(!design\.blocks\.length\)\s*\{\s*log\('Nothing to send -- connect a supported circuit signal directly to DI, DO, or CAN\.'\);\s*\}\s*else\s*\{\s*/,
+          '',
+        )
+        .replace(/(updateProgramSection\(\);)\s*}\s*}\s*catch \(err\)/, '$1\n    } catch (err)')
+      : source;
+
+    const { body } = openModal();
 
     const helpers = {
       close,
@@ -235,6 +283,30 @@ export function installDialogSystem(nodigraph) {
         readPins: (opts) => serialConsole.readPins(block.id, opts),
         close: () => serialConsole.closeConsole(block.id),
       },
+      // The machine panel (see cncPanel.js) on the board this block
+      // belongs to — the board's own dialog, or a CNC block inside it —
+      // driven through that board's shell, whatever its link.
+      cnc: {
+        mountPanel: (target, opts = {}) => {
+          const link = cncLinkFor(block);
+          if (!link) {
+            target.textContent = 'Place this block inside a board to drive its CNC.';
+            return () => {};
+          }
+          return mountCncPanel(target, { ...opts, ...link });
+        },
+        // The whole control (editor, files, machine) in place, or in a
+        // modal of its own — closing the dialog this was asked from.
+        mountControl: (target) => mountControlFor(block, target),
+        openControl: () => openCncControl(block),
+        // Whether the board answers as having grbl (`cnc ?` reports).
+        probe: async () => {
+          const link = cncLinkFor(block);
+          if (!link || !link.isLinked()) return false;
+          const reply = await link.shell('cnc ?', { quiet: true, timeoutMs: 1500 }).catch(() => null);
+          return readStatusReply(reply).kind === 'report';
+        },
+      },
     };
 
     const outputs = getLastResult().outputsByBlock.get(block.id) || {};
@@ -292,7 +364,7 @@ export function installDialogSystem(nodigraph) {
     { capture: true },
   );
 
-  const api = { drawBlock, openDialog };
+  const api = { drawBlock, openDialog, openCncControl };
   installed = api;
   return api;
 }

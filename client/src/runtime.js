@@ -584,7 +584,57 @@ function evaluateSubtree(container, currentLevelBlock, results, beforeLevel) {
       if (!outputsByBlock.has(blockId)) outputsByBlock.set(blockId, {});
       outputsByBlock.get(blockId)[name] = value;
     }
-    if (container === currentLevelBlock) results.current = { blocks, inputsByBlock: new Map(), outputsByBlock, errors: new Map() };
+    // An AND / OR / NOT has nothing to remember: what it puts out follows
+    // from what its inputs carry. One the board has not reported (a board
+    // without a trace, or before its first line) is worked out here from
+    // the values above, for showing — a few passes, so a chain of them
+    // settles. A value the board reported is never overwritten.
+    const LOGIC = { and: (a, b) => a && b, or: (a, b) => a || b, not: (a) => !a };
+    for (let pass = 0; pass < 4; pass += 1) {
+      let settled = true;
+      for (const block of blocks) {
+        const op = LOGIC[kindOf(block)];
+        if (!op) continue;
+        const ins = {};
+        for (const conn of container.children.connections?.values?.() || []) {
+          if (conn.targetBlockId !== block.id) continue;
+          const pin = (block.ports || []).find((p) => p.id === conn.targetPortId);
+          const name = pin && logicalName(block, pin);
+          const value = portValues.get(`${conn.sourceBlockId}:${conn.sourcePortId}`);
+          if (name && value !== undefined) ins[name] = Boolean(value);
+        }
+        const out = kindOf(block) === 'not'
+          ? (ins.in === undefined ? undefined : op(ins.in))
+          : (ins.a === undefined && ins.b === undefined ? undefined : op(Boolean(ins.a), Boolean(ins.b)));
+        if (out === undefined) continue;
+        for (const pin of block.ports || []) {
+          if (logicalName(block, pin) !== 'out') continue;
+          const key = `${block.id}:${pin.id}`;
+          if (childOutputOverrides.get(container.id)?.has(key) || portValues.get(key) === out) continue;
+          portValues.set(key, out);
+          if (!outputsByBlock.has(block.id)) outputsByBlock.set(block.id, {});
+          outputsByBlock.get(block.id).out = out;
+          settled = false;
+        }
+      }
+      if (settled) break;
+    }
+    // And what each child's inputs carry, read off its wires from those
+    // same values: a Gate shows the selection its sel wire brings (from an
+    // OR the board reports, or straight from a pin), a Data what last
+    // arrived — the readouts that otherwise said "no sel" forever.
+    const inputsByBlock = new Map();
+    for (const conn of container.children.connections?.values?.() || []) {
+      const value = portValues.get(`${conn.sourceBlockId}:${conn.sourcePortId}`);
+      if (value === undefined) continue;
+      const target = container.children.blocks.get(conn.targetBlockId);
+      const pin = target && (target.ports || []).find((p) => p.id === conn.targetPortId);
+      const name = pin && logicalName(target, pin);
+      if (!name) continue;
+      if (!inputsByBlock.has(target.id)) inputsByBlock.set(target.id, {});
+      inputsByBlock.get(target.id)[name] = value;
+    }
+    if (container === currentLevelBlock) results.current = { blocks, inputsByBlock, outputsByBlock, errors: new Map() };
     return;
   }
 

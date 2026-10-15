@@ -13,6 +13,7 @@ export function createDeviceSaver({ project, getSession, sendDesign, persist, op
     const result = pending.then(async () => {
       const sent = [];
       const notes = [];
+      notes.byBlock = new Map(); // see serialConsole.noteBlock
       for (const { block, level } of collectEsp32DevkitBlocks(project.rootBlock.children)) {
         if (!getSession(block.id) || !isDevkitRunning(block)) {
           openDialog(block);
@@ -33,7 +34,8 @@ export function createDeviceSaver({ project, getSession, sendDesign, persist, op
       // (the compiler repeats itself per chain).
       const unique = [...new Set(notes)];
       if (unique.length) console.info(`Not on the board:\n${unique.join('\n')}`);
-      return `Circuit sent to ${sent.join(', ')}.${unique.length ? ` ${unique.length} wire(s) left out — details in the browser console.` : ''}`;
+      const marked = notes.byBlock.size;
+      return `Circuit sent to ${sent.join(', ')}.${marked ? ` ${marked} block(s) not on the board as drawn — marked ⚠, click one for why.` : unique.length ? ` ${unique.length} note(s) on what the board left out — in the browser console.` : ''}`;
     });
     pending = result.catch(() => {});
     return result;

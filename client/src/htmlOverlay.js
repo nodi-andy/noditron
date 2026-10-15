@@ -51,7 +51,39 @@ function compiledHtmlFn(blockId, source) {
 // window.nodigraphDrawBlock (see main.js); prune is called separately, off
 // runtime.js's own tick, to remove containers for blocks that no longer
 // exist or no longer opt into `html`.
-export function installHtmlOverlay(nodigraph, openDialogFor) {
+// A board holding a CNC driver block (palette.js's createCncBlock — what
+// starts grbl in its firmware) is a machine: its card gets a CNC button
+// that opens the CNC control (dialogSystem's openCncControl).
+export function hasCncDriver(block) {
+  if (kindOf(block) !== 'esp32-devkit') return false;
+  for (const child of block.children?.blocks?.values?.() || []) {
+    if (kindOf(child) === 'cnc') return true;
+  }
+  return false;
+}
+
+function syncCncButton(el, block, scale, open) {
+  let button = el.querySelector(':scope > .esp-cnc-open');
+  if (!open || !hasCncDriver(block)) {
+    button?.remove();
+    return;
+  }
+  if (!button) {
+    button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'esp-cnc-open';
+    button.textContent = 'CNC';
+    button.title = 'CNC control: gcode, jog, macros';
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      open(block);
+    });
+    el.appendChild(button);
+  }
+  button.style.setProperty('--esp-scale', String(scale || 1));
+}
+
+export function installHtmlOverlay(nodigraph, openDialogFor, openCncFor = null) {
   const layer = ensureLayer();
   const containers = new Map(); // blockId -> HTMLElement
 
@@ -164,6 +196,7 @@ export function installHtmlOverlay(nodigraph, openDialogFor) {
     } catch (err) {
       el.textContent = `HTML error: ${err.message}`;
     }
+    syncCncButton(el, block, place.scale, openCncFor);
   }
 
   function prune(liveBlockIds) {

@@ -5,7 +5,7 @@ import test from 'node:test';
 // The page a board serves of itself opens as that board (client/src/
 // boardPage.js): the block for the board at /api/version is found or
 // placed (the example diagram cleared), connected to the page's own host,
-// settled against the device's circuit, and entered.
+// settled against the device's circuit, the view left where it was kept.
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
 const strip = (s) => s.replace(/^import .*;$/gm, '').replace(/export /g, '');
 const kindOf = (b) => b.props.find((p) => p.name === 'noditronKind')?.value;
@@ -117,7 +117,7 @@ test('a page nobody serves as a board is left alone', async () => {
   assert.equal(nodigraph.events.persisted, 0);
 });
 
-test('the example diagram gives way to the board, connected to the page\'s host, holding its circuit, and entered', async () => {
+test('the example diagram gives way to the board, connected to the page\'s host, holding its circuit, seen from its level', async () => {
   const { api, calls } = load();
   const nodigraph = fakeNodigraph(fakeProject(example()));
   const result = await api.installBoardPage(nodigraph, { host: '192.168.0.1', fetchImpl: answering() });
@@ -131,13 +131,13 @@ test('the example diagram gives way to the board, connected to the page\'s host,
   assert.deepEqual(calls.connectWifi, [[result.board.id, '192.168.0.1']], 'the link goes to the page\'s own host');
   assert.deepEqual(calls.reconcile, [result.board.id], 'the device\'s circuit is read into the block');
   assert.equal(result.info.reconcile.status, 'loaded');
-  assert.deepEqual(calls.neighbours, [result.board.id], 'the board is asked for its CAN neighbours before it is entered');
-  assert.deepEqual(nodigraph.project.path, [result.board.id], 'the page opens inside the board');
-  assert.deepEqual(nodigraph.events.entered, [result.board.id], 'entered through nodigraph, so camera and breadcrumb follow');
+  assert.deepEqual(calls.neighbours, [result.board.id], 'the board is asked for its CAN neighbours');
+  assert.deepEqual(nodigraph.project.path, [], 'the page opens where noditron does: the boards side by side');
+  assert.deepEqual(nodigraph.events.entered, []);
   assert.ok(nodigraph.events.persisted >= 1);
 });
 
-test('a board already in the project is found by its node id, reconnected and entered; the user\'s blocks stay', async () => {
+test('a board already in the project is found by its node id and reconnected; the view and the user\'s blocks stay', async () => {
   const { api, calls } = load();
   const board = {
     id: 'kept', name: 'my S3', children: { blocks: new Map(), connections: new Map() }, geometry: {},
@@ -150,7 +150,7 @@ test('a board already in the project is found by its node id, reconnected and en
   assert.equal(calls.placed.length, 0, 'not placed twice');
   assert.equal(nodigraph.project.rootBlock.children.blocks.size, 2, 'nothing removed');
   assert.deepEqual(calls.connectWifi, [['kept', '192.168.0.1']]);
-  assert.deepEqual(nodigraph.project.path, ['kept']);
+  assert.deepEqual(nodigraph.project.path, [], 'the level the project was kept at');
 });
 
 test('a reload inside the board stays where it was', async () => {
@@ -167,7 +167,7 @@ test('a reload inside the board stays where it was', async () => {
   assert.deepEqual(nodigraph.events.entered, []);
 });
 
-test('a board that does not answer leaves its block placed, entered and honestly not connected', async () => {
+test('a board that does not answer leaves its block placed and honestly not connected', async () => {
   const { api, calls } = load({ connectFails: true });
   const nodigraph = fakeNodigraph(fakeProject(example()));
   const messages = [];
@@ -177,10 +177,7 @@ test('a board that does not answer leaves its block placed, entered and honestly
   assert.equal(result.board.props.find((p) => p.name === 'connectionState').value, 'disconnected');
   assert.deepEqual(calls.reconcile, []);
   assert.deepEqual(calls.disconnect, [result.board.id]);
-  // Asked to enter all the same; nodigraph's own rule (noditron's
-  // window.nodigraphCanEnter: a board is entered only while it runs) is
-  // what then keeps the view outside and opens the board's dialog.
-  assert.deepEqual(nodigraph.events.entered, [result.board.id]);
+  assert.deepEqual(nodigraph.events.entered, []);
   assert.match(messages.join('\n'), /could not connect to 192\.168\.0\.1: no socket/);
 });
 

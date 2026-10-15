@@ -67,8 +67,13 @@ export function siteIndex(html, { full = false } = {}) {
   if (!full) out = out.replace(/\s*<link[^>]*fonts\.g(?:oogleapis|static)\.com[^>]*>/gs, '');
   out = replace(out, '<link rel="stylesheet" href="/nodigraph/styles.css" />', '<link rel="stylesheet" href="app.css" />');
   out = replace(out, '\n  <link rel="stylesheet" href="styles.css" />', '');
+  // Either way the project is the board's own (/api/project): the copy
+  // nodigraph keeps in this browser is per address, and every board's
+  // access point is 192.168.0.1 — a board with no project yet would open
+  // another board's diagram from it.
+  const boot = `${full ? '' : 'window.nodigraphEmbedded = true; '}try { localStorage.removeItem('nodigraph:project'); } catch (e) {}`;
   out = replace(out, '<script type="module" src="src/registerExtraTabs.js"></script>',
-    `${full ? '' : '<script>window.nodigraphEmbedded = true;</script>\n  '}<script type="module" src="app.js"></script>`);
+    `<script>${boot}</script>\n  <script type="module" src="app.js"></script>`);
   out = replace(out, '\n  <script type="module" src="/nodigraph/src/main.js"></script>', '');
   out = replace(out, '\n  <script type="module" src="src/main.js"></script>', '');
   return out;
@@ -183,13 +188,24 @@ export async function buildSite(outDir, options = {}) {
   return { siteDir, files: written, raw, packed };
 }
 
+// The multipart body whole, so it goes with a Content-Length: Node's fetch
+// streams a FormData chunked, and the firmware's WebServer (on core 0 in
+// the builds with grbl, under the idle-task watchdog) then waits for more
+// of it until the watchdog resets the board — after the file is written,
+// before it answers. curl and browsers send a length and never hit it.
+export function multipartFile(name, bytes) {
+  const boundary = `----noditron${Date.now().toString(16)}${Math.random().toString(16).slice(2)}`;
+  const head = Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${name}"\r\nContent-Type: application/octet-stream\r\n\r\n`);
+  const tail = Buffer.from(`\r\n--${boundary}--\r\n`);
+  return { body: Buffer.concat([head, bytes, tail]), type: `multipart/form-data; boundary=${boundary}` };
+}
+
 async function upload(host, siteDir, files) {
   const base = `http://${host.replace(/^https?:\/\//, '').replace(/\/.*$/, '')}`;
   let n = 0;
   for (const { fsPath } of files) {
-    const body = new FormData();
-    body.append('file', new Blob([fs.readFileSync(path.join(siteDir, '..', fsPath))]), fsPath.slice(1));
-    const res = await fetch(`${base}/files`, { method: 'POST', body });
+    const { body, type } = multipartFile(fsPath.slice(1), fs.readFileSync(path.join(siteDir, '..', fsPath)));
+    const res = await fetch(`${base}/files`, { method: 'POST', body, headers: { 'Content-Type': type, 'Content-Length': String(body.length) } });
     if (!res.ok) throw new Error(`${fsPath}: the board answered ${res.status}`);
     n += 1;
     process.stdout.write(`\r${n}/${files.length} ${fsPath}`.padEnd(80));

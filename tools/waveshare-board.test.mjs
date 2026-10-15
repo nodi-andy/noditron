@@ -155,12 +155,12 @@ test('Waveshare preset is selected after S3 detection', () => {
   const start = source.indexOf('      const family = detected.chipName');
   const finish = '      installBtn.disabled = !matchingPreset;';
   const end = source.indexOf(finish, start) + finish.length;
-  const presets = [{ id: 'generic', chip: 'ESP32-S3' }, { id: 'logic-esp32s3-8io', chip: 'ESP32-S3' }];
+  const presets = [{ id: 'generic', chip: 'ESP32-S3' }, { id: 'noditron-esp32s3-8io', chip: 'ESP32-S3' }];
   const select = { options: presets.map(p => ({ value: p.id })) };
   new Function('detected', 'presets', 'firmwareSelect', 'installBtn', 'props', source.slice(start, end))(
-    { chipName: 'ESP32-S3 (QFN56)' }, presets, select, {}, { firmwarePreset: 'logic-esp32s3-8io' },
+    { chipName: 'ESP32-S3 (QFN56)' }, presets, select, {}, { firmwarePreset: 'noditron-esp32s3-8io' },
   );
-  assert.equal(select.value, 'logic-esp32s3-8io');
+  assert.equal(select.value, 'noditron-esp32s3-8io');
 });
 
 test('an older running build exposes the firmware update action', () => {
@@ -169,7 +169,7 @@ test('an older running build exposes the firmware update action', () => {
   assert.match(source, /info\.build < preferredPreset\.build/);
   assert.match(source, /showRunning\(info\)/);
   const flashSource = read('../client/src/serialFlash.js');
-  assert.match(flashSource, /const BUILD = '20260930r'/);
+  assert.match(flashSource, /const BUILD = '20261011b'/);
 });
 
 test('existing DevKit input wires retain their IDs and obsolete wired pins survive', () => {

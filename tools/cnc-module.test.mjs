@@ -30,7 +30,7 @@ test('the CNC dialog installs the bundled CNC firmware', () => {
   const dialog = prop('dialog');
   for (const piece of [
     'FIRMWARE',
-    "/^cnc-/.test(p.id)",
+    "/^noditron-/.test(p.id)",
     'p.board === props.boardId',
     'Install firmware',
     'helpers.serial.fetchPresetParts(preset)',
@@ -47,7 +47,7 @@ test('the CNC dialog installs the bundled CNC firmware', () => {
   for (const gone of ["type = 'file'", 'Install file', 'guessAddress', 'Erase the whole flash']) {
     assert.ok(!dialog.includes(gone), `no longer: ${gone}`);
   }
-  assert.equal(prop('firmwarePreset'), 'cnc-esp32s3-2io');
+  assert.equal(prop('firmwarePreset'), 'noditron-esp32s3-2io');
   assert.match(prop('html'), /Install the CNC firmware/);
   assert.doesNotMatch(prop('html'), /Logic Module firmware/);
 });

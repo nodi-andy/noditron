@@ -23,6 +23,7 @@ const key = (x, y) => `${x},${y}`;
 // another. `output` is the row a Match (croute) fired from; `input` is
 // which of an AND's two inputs a belt landed on, or a Route's channel.
 export function traceDesign(design) {
+  if (Array.isArray(design?.wires)) return traceWiredDesign(design);
   const raw = Array.isArray(design?.blocks) ? design.blocks : [];
   const belts = new Map();
   const juncs = new Map();
@@ -137,6 +138,45 @@ export function traceDesign(design) {
   return { blocks, edges };
 }
 
+// Blocks whose outputs are told apart (out i) — everything else has one.
+const MULTI_OUTPUT = new Set(['croute', 'route', 'slice', 'pwmin']);
+
+// A wired design (firmware build 20261011a and later, see
+// serialConsole.buildWiredDesign): the wires are the edges, already —
+// [from id, output, to id, input] — read into the same shape the belts
+// give, so loading and comparing do not care which kind a board holds.
+function traceWiredDesign(design) {
+  const blocks = (Array.isArray(design.blocks) ? design.blocks : []).map((b) => ({
+    id: b.id,
+    type: String(b.type || ''),
+    w: b.w == null ? 2 : Number(b.w),
+    h: b.h == null ? 2 : Number(b.h),
+    data: b.data && typeof b.data === 'object' ? b.data : {},
+    ...(Array.isArray(b.at) ? { at: b.at } : {}),
+  }));
+  const byId = new Map(blocks.map((b) => [b.id, b]));
+  const edges = [];
+  const seen = new Set();
+  for (const w of design.wires) {
+    if (!Array.isArray(w)) continue;
+    const from = byId.get(w[0]);
+    const to = byId.get(w[2]);
+    if (!from || !to) continue;
+    const sport = Number(w[1]) || 0;
+    const dport = Number(w[3]) || 0;
+    const output = MULTI_OUTPUT.has(from.type) ? sport : null;
+    let input = null;
+    if (to.type === 'route') input = dport;
+    else if (to.type === 'and' || to.type === 'or') input = dport === 1 ? 'b' : 'a';
+    else if (to.type === 'data' && dport === 1) input = 'write';
+    const k = `${w[0]}>${w[2]}:${output}:${input}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    edges.push({ from, to, output, input });
+  }
+  return { blocks, edges };
+}
+
 function portIdOf(block, name) {
   const logical = (block?.logicalPorts || []).find((lp) => lp.name === name);
   const pin = logical && (block.ports || []).find((p) => p.logicalId === logical.id);
@@ -238,6 +278,10 @@ export function importDesign({ design, esp, pinMap = [], factories, replace = fa
       r = childFor(b, () => factories.match(routes, Math.max(routes.length, b.h, 1)));
     } else if (b.type === 'and') {
       r = childFor(b, () => factories.and());
+    } else if (b.type === 'or' && factories.or) {
+      r = childFor(b, () => factories.or());
+    } else if (b.type === 'not' && factories.not) {
+      r = childFor(b, () => factories.not());
     } else if (b.type === 'timer' && d.mode === 'delay' && factories.delay) {
       r = childFor(b, () => factories.delay(Number(d.onTime) || 100));
     } else if (b.type === 'timer') {
@@ -290,7 +334,7 @@ export function importDesign({ design, esp, pinMap = [], factories, replace = fa
     if (!r) return null;
     if (r.board) return { blockId: esp.id, portId: r.board };
     const child = r.child;
-    if (b.type === 'and') return { blockId: child.id, portId: portIdOf(child, edge.input === 'b' ? 'b' : 'a') };
+    if (b.type === 'and' || b.type === 'or') return { blockId: child.id, portId: portIdOf(child, edge.input === 'b' ? 'b' : 'a') };
     if (b.type === 'timer' && b.data?.mode === 'delay') return { blockId: child.id, portId: portIdOf(child, 'in') };
     if (b.type === 'timer') return null; // nothing feeds a timer
     if (b.type === 'route') return { blockId: child.id, portId: portIdOf(child, edge.input === 0 ? 'sel' : 'in') };
@@ -361,12 +405,19 @@ export function importDesign({ design, esp, pinMap = [], factories, replace = fa
   const columnY = new Map();
   let maxX = 0;
   let maxY = 0;
-  for (const { child } of created) {
-    const col = depthOf(child.id);
-    const y = columnY.get(col) ?? MARGIN;
-    child.geometry.x = MARGIN + col * COLUMN;
-    child.geometry.y = y;
-    columnY.set(col, y + child.geometry.height + GAP);
+  for (const { child, source } of created) {
+    // A wired design keeps where each block was drawn (`at`); a belt
+    // design, or a block without one, is laid out by depth.
+    if (Array.isArray(source.at) && source.at.length === 2) {
+      child.geometry.x = Number(source.at[0]) || 0;
+      child.geometry.y = Number(source.at[1]) || 0;
+    } else {
+      const col = depthOf(child.id);
+      const y = columnY.get(col) ?? MARGIN;
+      child.geometry.x = MARGIN + col * COLUMN;
+      child.geometry.y = y;
+      columnY.set(col, y + child.geometry.height + GAP);
+    }
     maxX = Math.max(maxX, child.geometry.x + child.geometry.width);
     maxY = Math.max(maxY, child.geometry.y + child.geometry.height);
     esp.children.blocks.set(child.id, child);

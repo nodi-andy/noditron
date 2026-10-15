@@ -143,7 +143,7 @@ container.appendChild(heading);
   firmwareHint.style.cssText = 'margin:0 0 10px;font-size:11px;color:var(--text-muted);';
   firmwareSection.appendChild(firmwareHint);
   const inputStyle = 'padding:5px 6px;background:none;border:1px solid var(--border);border-radius:6px;color:var(--text-primary);font-size:12px;';
-  const presets = (helpers.serial.firmwarePresets || []).filter((p) => /^cnc-/.test(p.id) && (p.board === props.boardId || (!p.board && p.chip === props.chipFamily)));
+  const presets = (helpers.serial.firmwarePresets || []).filter((p) => /^noditron-/.test(p.id) && (p.board === props.boardId || (!p.board && p.chip === props.chipFamily)));
   const preferredPreset = presets.find((p) => p.id === props.firmwarePreset) || presets[0] || null;
   const presetRow = document.createElement('div');
   presetRow.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px;';
@@ -475,7 +475,7 @@ for (const board of BOARDS) {
       { id: 'prp_esp32cnc_chip', name: 'chipFamily', kind: 'value', value: board.chipFamily },
       { id: 'prp_esp32cnc_board', name: 'boardId', kind: 'value', value: board.id },
       { id: 'prp_esp32cnc_variant', name: 'boardVariant', kind: 'value', value: board.boardVariant },
-      { id: 'prp_esp32cnc_preset', name: 'firmwarePreset', kind: 'value', value: `cnc-${board.id}` },
+      { id: 'prp_esp32cnc_preset', name: 'firmwarePreset', kind: 'value', value: `noditron-${board.id}` },
       { id: 'prp_esp32cnc_state', name: 'connectionState', kind: 'value', value: 'disconnected' },
       { id: 'prp_esp32cnc_html', name: 'html', kind: 'value', value: STATUS_HTML },
       { id: 'prp_esp32cnc_dialog', name: 'dialog', kind: 'value', value: DIALOG },

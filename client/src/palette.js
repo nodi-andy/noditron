@@ -404,6 +404,7 @@ export function createAndBlock(nodigraph) {
     'return { out: Boolean(inputs.a) && Boolean(inputs.b) };',
     '// No indicator by default -- uncomment for one:\n// helpers.dot(Boolean(outputs.out));',
   );
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: logicReadoutHtml() });
   return finish(nodigraph, block);
 }
 
@@ -419,7 +420,26 @@ export function createOrBlock(nodigraph) {
     'return { out: Boolean(inputs.a) || Boolean(inputs.b) };',
     '// No indicator by default -- uncomment for one:\n// helpers.dot(Boolean(outputs.out));',
   );
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: logicReadoutHtml() });
   return finish(nodigraph, block);
+}
+
+// What an AND / OR / NOT puts out, on its face: 1 or 0, or a dash before
+// anything has arrived — inside a board, what the board's own block put
+// out (see boardTrace.js).
+function logicReadoutHtml() {
+  return readoutHtml('return outputs.out === undefined ? "—" : (outputs.out ? "1" : "0");');
+}
+
+// An AND / OR / NOT drawn before they had a readout gets one; one whose
+// html was customised keeps it.
+export function migrateLogicReadout(block) {
+  const kind = (block.props || []).find((p) => p.name === KIND_PROP)?.value;
+  if (kind !== 'and' && kind !== 'or' && kind !== 'not') return false;
+  if ((block.props || []).some((p) => p.name === 'html')) return false;
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: logicReadoutHtml() });
+  block.description = serializeBlockDescription(block);
+  return true;
 }
 
 // Sums every input that currently carries a value. Deliberately not a
@@ -536,6 +556,7 @@ export function createNotBlock(nodigraph) {
   addNamedPort(block, 'out', 'out');
   addKindProp(block, 'not');
   addLogicProps(block, 'return { out: !Boolean(inputs.in) };', 'helpers.dot(Boolean(outputs.out));');
+  block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: logicReadoutHtml() });
   return finish(nodigraph, block);
 }
 
@@ -1491,6 +1512,34 @@ function createCncHomingGroup(x, y) {
   return group;
 }
 
+// The CNC block's dialog is the CNC control (cncControl.js) of the board
+// it sits in — gcode, files and the machine — in its own wide modal.
+const CNC_DIALOG = 'helpers.cnc.openControl();';
+
+// The first CNC dialog: the machine panel alone. Replaced like a missing
+// one; a dialog written by hand is kept.
+const CNC_DIALOG_PANEL_ONLY = [
+  "container.style.fontFamily = 'Inter, sans-serif';",
+  "container.style.minWidth = '360px';",
+  "const heading = document.createElement('h3');",
+  "heading.textContent = String(block.name || 'CNC').toUpperCase();",
+  "heading.style.cssText = 'margin:0 0 14px;color:#e06c2f;font-size:15px;letter-spacing:.03em;';",
+  'container.appendChild(heading);',
+  "const body = document.createElement('div');",
+  'container.appendChild(body);',
+  'helpers.cnc.mountPanel(body);',
+].join('\n');
+
+export function migrateCncDialog(block) {
+  if ((block.props || []).find((p) => p.name === KIND_PROP)?.value !== 'cnc') return false;
+  const dialog = (block.props || []).find((p) => p.name === 'dialog');
+  if (dialog && dialog.value !== CNC_DIALOG_PANEL_ONLY) return false;
+  if (dialog) dialog.value = CNC_DIALOG;
+  else block.props.push({ id: generateId('prp'), name: 'dialog', kind: 'value', value: CNC_DIALOG });
+  block.description = serializeBlockDescription(block);
+  return true;
+}
+
 export function createCncBlock(nodigraph) {
   const { x, y } = nextPosition(nodigraph);
   const block = createBlock({ x, y, name: 'CNC' });
@@ -1505,6 +1554,7 @@ export function createCncBlock(nodigraph) {
   addKindProp(block, 'cnc');
   block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
   block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: LAST_SEEN_HTML });
+  block.props.push({ id: generateId('prp'), name: 'dialog', kind: 'value', value: CNC_DIALOG });
 
   block.hasChildren = true;
   block.boundaryGeometry = { x: 0, y: 0, width: 800, height: 560 };

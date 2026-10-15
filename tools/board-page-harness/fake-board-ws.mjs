@@ -21,6 +21,10 @@ wss.on('connection', (ws) => {
     if (line === 'ping') output = `${INFO.join('\n')}\nok\n`;
     // The bus as the S3 hears it: itself, and a CNC module over CAN.
     if (line === 'nodes') output = 'logic a1d148c4 esp32-s3 v1.2 self\ncnc 0dd04644 CNC v1.4 seen 1s ago via can\nok\n';
+    // grbl inside the firmware (the machine panel, see cncPanel.js).
+    if (line === 'cnc ?' || line === 'cnc') output = '<Idle|MPos:12.500,-3.000|FS:0,0|WCO:2.500,0.000>\r\nok cnc ?\n';
+    if (line === 'cnc macro') output = '1 G91; G0 X5; G90\r\n2 \r\n3 \r\n4 \r\nok cnc macro\n';
+    if (line === 'cnc macro read 1') output = 'G91; G0 X5; G90\r\nok cnc macro read 1\n';
     ws.send(JSON.stringify({ type: 'shell', output }));
   });
 });

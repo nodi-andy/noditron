@@ -19,6 +19,12 @@ function pinMapFor(block) {
   }
 }
 
+// The firmware build a board runs: what it said this session, else what it
+// said last time (the `firmwareBuild` prop main.js keeps).
+export function boardBuildOf(esp) {
+  return serialConsole.firmwareBuildOf?.(esp.id) || propValue(esp, 'firmwareBuild', '') || null;
+}
+
 function propValue(block, name, fallback = '') {
   return (block.props || []).find((p) => p.name === name)?.value ?? fallback;
 }
@@ -100,6 +106,20 @@ export function relayoutBoard(block, template, level) {
   if (prop) prop.value = want;
   else block.props.push({ id: `prp_pinlayout_${block.id}`, name: 'pinLayout', kind: 'value', value: want });
   return true;
+}
+
+// The board a block belongs to: the block itself when it is one, else the
+// innermost board holding it — a CNC block inside an S3 board reaches
+// grbl through that board's link. Null when no board holds it.
+export function findOwningBoard(level, blockId, owner = null) {
+  if (!level) return null;
+  for (const block of level.blocks?.values?.() || []) {
+    const board = BOARD_KINDS.includes(kindOf(block)) ? block : owner;
+    if (block.id === blockId) return board;
+    const found = findOwningBoard(block.children, blockId, board);
+    if (found) return found;
+  }
+  return null;
 }
 
 export function findContainingLevel(level, blockId) {
@@ -353,7 +373,30 @@ function buildPinMappedDesign(esp, blocks, connections, { socketLinks = new Map(
     const declared = JSON.parse(propValue(esp, 'canPins', '') || 'null');
     if (Number.isInteger(declared?.tx) && Number.isInteger(declared?.rx)) canPins = { tx: declared.tx, rx: declared.rx };
   } catch { /* no canPins on this board: the 8IO's own */ }
-  const design = serialConsole.buildMinimalDesign([...blocks.filter((block) => block !== cnc), ...syntheticPins.values(), ...(usesUsb ? [usbTarget] : [])], mapped, notes);
+  // Wires for a board whose firmware runs them (see
+  // serialConsole.buildWiredDesign), the grid layouts for an older one —
+  // which says so beside whatever those layouts had to leave out.
+  const runtimeBlocks = [...blocks.filter((block) => block !== cnc), ...syntheticPins.values(), ...(usesUsb ? [usbTarget] : [])];
+  const build = boardBuildOf(esp);
+  const wired = Boolean(serialConsole.buildWiredDesign) && serialConsole.runsWires?.(build);
+  const notesBefore = notes ? notes.length : 0;
+  const markedBefore = notes?.byBlock instanceof Map ? new Set(notes.byBlock.keys()) : null;
+  const design = wired
+    ? serialConsole.buildWiredDesign(runtimeBlocks, mapped, notes)
+    : serialConsole.buildMinimalDesign(runtimeBlocks, mapped, notes);
+  // On a block, the grid's own reasons ("needs an Input pin of its own",
+  // "no layout for this shape") explain nothing anyone can act on: the
+  // block is fine, the firmware is old. Said that way instead.
+  if (!wired && markedBefore && serialConsole.WIRED_BUILD) {
+    for (const id of notes.byBlock.keys()) {
+      if (markedBefore.has(id)) continue;
+      const name = blocks.find((b) => b.id === id)?.name || 'This block';
+      notes.byBlock.set(id, [`${name} cannot run on this board's firmware${build ? ` (build ${build})` : ''}, which only knows a few fixed circuit shapes. Install firmware ${serialConsole.WIRED_BUILD} from the board's dialog and it runs as drawn.`]);
+    }
+  }
+  if (!wired && notes && notes.length > notesBefore && serialConsole.WIRED_BUILD) {
+    notes.push(`This board's firmware${build ? ` (build ${build})` : ''} lays a circuit out on its grid, which has room for a few shapes only. Install build ${serialConsole.WIRED_BUILD} or later and every block above runs as drawn.`);
+  }
   // The board's socket port for a socket pin block, whichever way it faces.
   const socketPortFor = () => [...socketPinPorts.values()][0] || null;
   for (const block of design.blocks) {
@@ -498,7 +541,7 @@ export function buildDevkitDesign(esp, level, { notes = null } = {}) {
 export function devkitSnapshot(esp, level) {
   const snapshotBlock = (block) => ({
     id: block.id, name: block.name, ports: block.ports, logicalPorts: block.logicalPorts,
-    props: (block.props || []).filter(p => !['connectionState', 'lastSentSnapshot', 'lastSentDesign', 'deviceDesign'].includes(p.name)
+    props: (block.props || []).filter(p => !['connectionState', 'lastSentSnapshot', 'lastSentDesign', 'deviceDesign', 'firmwareBuild'].includes(p.name)
       && !(kindOf(block) === 'digital-io' && propValue(block, 'direction') !== 'output' && p.name === 'value')),
     children: Array.from(block.children?.blocks?.values?.() || []).map(snapshotBlock),
     connections: Array.from(block.children?.connections?.values?.() || []),

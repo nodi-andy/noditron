@@ -31,6 +31,7 @@ import * as serialConsole from './serialConsole.js';
 import { moduleNameFor, MODULE_NAMES } from './moduleDiscovery.js';
 import { findContainingLevel } from './devkitCircuit.js';
 import { setBlockProp, findBoardByNodeId, scanAndPlaceNeighbours, describeNeighbours } from './canNeighbours.js';
+import { reconcileWithDevice } from './deviceSync.js';
 
 // The bus-drawing helpers moved to canNeighbours.js (the board page and
 // the bridge poll place neighbours too); kept exported from here for
@@ -125,6 +126,16 @@ export function installAddBlockDialog(nodigraph) {
     nodigraph.selection.select(board.id);
     nodigraph.persist();
     nodigraph.renderLoop.requestRender();
+
+    // Its own circuit, read like a CAN neighbour's (main.js's onOnline):
+    // loaded into an empty block, or compared with the one drawn.
+    status(`${moduleLabel(info)} connected. Reading its circuit...`);
+    try {
+      const result = await reconcileWithDevice(nodigraph, board);
+      console.info(`[noditron] ${board.name}: ${result.message}`);
+    } catch (err) {
+      console.info(`[noditron] ${board.name}: could not read the circuit on the device: ${err.message}`);
+    }
 
     status(`${moduleLabel(info)} connected. Scanning its bus (nodes)...`);
     // Its CAN neighbours placed beside it and wired, into the level being
