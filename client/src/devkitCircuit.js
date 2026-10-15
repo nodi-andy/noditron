@@ -438,7 +438,8 @@ function buildPinMappedDesign(esp, blocks, connections, { socketLinks = new Map(
 // buildPinMappedDesign's CNC section and palette.js's createCncBlock).
 const CNC_PIN_PATHS = {
   'X step': 'x/step/pin', 'X dir': 'x/dir/pin', 'Y step': 'y/step/pin', 'Y dir': 'y/dir/pin',
-  enable: 'stepper/disable/pin', 'X limit': 'x/limit/pin', 'Y limit': 'y/limit/pin',
+  enable: 'stepper/disable/pin', 'X en': 'x/disable/pin', 'Y en': 'y/disable/pin',
+  'X limit': 'x/limit/pin', 'Y limit': 'y/limit/pin',
 };
 
 // The named values in a CNC block's subgraph, as grbl's settings-tree

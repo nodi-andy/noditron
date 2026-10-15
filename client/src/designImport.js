@@ -203,7 +203,8 @@ const isUsbSerial = (b) => b.type === 'serial' && Number(b.data?.uart ?? 0) === 
 // naming a GPIO is a wire from that port to the board pin on it.
 const CNC_PIN_PORTS = {
   'x/step/pin': 'X step', 'x/dir/pin': 'X dir', 'y/step/pin': 'Y step', 'y/dir/pin': 'Y dir',
-  'stepper/disable/pin': 'enable', 'x/limit/pin': 'X limit', 'y/limit/pin': 'Y limit',
+  'stepper/disable/pin': 'enable', 'x/disable/pin': 'X en', 'y/disable/pin': 'Y en',
+  'x/limit/pin': 'X limit', 'y/limit/pin': 'Y limit',
 };
 const CNC_INPUT_PORTS = new Set(['X limit', 'Y limit']);
 

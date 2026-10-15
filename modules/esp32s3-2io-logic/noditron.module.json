@@ -18,7 +18,7 @@
           "x": 0,
           "y": 0,
           "width": 300,
-          "height": 460
+          "height": 500
         },
         "style": {
           "color": "#3b6fa0"
@@ -35,6 +35,12 @@
             "name": "IO2",
             "direction": null,
             "description": "GPIO2"
+          },
+          {
+            "id": "io_esp32s3_left_rxd_1",
+            "name": "RXD",
+            "direction": null,
+            "description": "GPIO44"
           },
           {
             "id": "io_esp32s3_left_io3_1",
@@ -149,52 +155,59 @@
             "manualOffset": true
           },
           {
+            "id": "prt_esp32s3_left_rxd_1",
+            "logicalId": "io_esp32s3_left_rxd_1",
+            "side": "left",
+            "offset": 110,
+            "manualOffset": true
+          },
+          {
             "id": "prt_esp32s3_left_io3_1",
             "logicalId": "io_esp32s3_left_io3_1",
             "side": "left",
-            "offset": 110,
+            "offset": 150,
             "manualOffset": true
           },
           {
             "id": "prt_esp32s3_left_io4_1",
             "logicalId": "io_esp32s3_left_io4_1",
             "side": "left",
-            "offset": 150,
+            "offset": 190,
             "manualOffset": true
           },
           {
             "id": "prt_esp32s3_left_io5_1",
             "logicalId": "io_esp32s3_left_io5_1",
             "side": "left",
-            "offset": 190,
+            "offset": 230,
             "manualOffset": true
           },
           {
             "id": "prt_esp32s3_left_io6_1",
             "logicalId": "io_esp32s3_left_io6_1",
             "side": "left",
-            "offset": 230,
+            "offset": 270,
             "manualOffset": true
           },
           {
             "id": "prt_esp32s3_left_io7_1",
             "logicalId": "io_esp32s3_left_io7_1",
             "side": "left",
-            "offset": 270,
+            "offset": 310,
             "manualOffset": true
           },
           {
             "id": "prt_esp32s3_left_io8_1",
             "logicalId": "io_esp32s3_left_io8_1",
             "side": "left",
-            "offset": 310,
+            "offset": 350,
             "manualOffset": true
           },
           {
             "id": "prt_esp32s3_left_io9_1",
             "logicalId": "io_esp32s3_left_io9_1",
             "side": "left",
-            "offset": 350,
+            "offset": 390,
             "manualOffset": true
           },
           {
@@ -257,7 +270,7 @@
             "id": "prt_esp32s3_left_socket_1",
             "logicalId": "io_esp32s3_left_socket_1",
             "side": "left",
-            "offset": 390,
+            "offset": 430,
             "manualOffset": true
           }
         ],
@@ -308,7 +321,7 @@
             "id": "prp_esp32s3_pinmap",
             "name": "pinMap",
             "kind": "value",
-            "value": "[{\"label\":\"IO1\",\"gpio\":1,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"IO2\",\"gpio\":2,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"IO3\",\"gpio\":3,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"IO4\",\"gpio\":4,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"IO5\",\"gpio\":5,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"IO6\",\"gpio\":6,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"IO7\",\"gpio\":7,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"IO8\",\"gpio\":8,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"IO9\",\"gpio\":9,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":8,\"orientation\":\"usb-top\"},{\"label\":\"IO10\",\"gpio\":10,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"IO11\",\"gpio\":11,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"IO12\",\"gpio\":12,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"IO13\",\"gpio\":13,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"IO14\",\"gpio\":14,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"CAN\",\"gpio\":null,\"role\":\"can\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"CAN speed\",\"gpio\":null,\"role\":\"can-speed\",\"inputOnly\":false,\"outputOnly\":true,\"side\":\"right\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"USB\",\"gpio\":null,\"role\":\"usb-serial\",\"inputOnly\":null,\"side\":\"right\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"socket\",\"gpio\":null,\"role\":\"socket\",\"inputOnly\":null,\"outputOnly\":null,\"direction\":\"out\",\"side\":\"left\",\"row\":9,\"orientation\":\"usb-top\"}]"
+            "value": "[{\"label\":\"IO1\",\"gpio\":1,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"IO2\",\"gpio\":2,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"RXD\",\"gpio\":44,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"IO3\",\"gpio\":3,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"IO4\",\"gpio\":4,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"IO5\",\"gpio\":5,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"IO6\",\"gpio\":6,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"IO7\",\"gpio\":7,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"IO8\",\"gpio\":8,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":8,\"orientation\":\"usb-top\"},{\"label\":\"IO9\",\"gpio\":9,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"left\",\"row\":9,\"orientation\":\"usb-top\"},{\"label\":\"IO10\",\"gpio\":10,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":0,\"orientation\":\"usb-top\"},{\"label\":\"IO11\",\"gpio\":11,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":1,\"orientation\":\"usb-top\"},{\"label\":\"IO12\",\"gpio\":12,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":2,\"orientation\":\"usb-top\"},{\"label\":\"IO13\",\"gpio\":13,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":3,\"orientation\":\"usb-top\"},{\"label\":\"IO14\",\"gpio\":14,\"role\":\"gpio\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":4,\"orientation\":\"usb-top\"},{\"label\":\"CAN\",\"gpio\":null,\"role\":\"can\",\"inputOnly\":false,\"outputOnly\":false,\"side\":\"right\",\"row\":5,\"orientation\":\"usb-top\"},{\"label\":\"CAN speed\",\"gpio\":null,\"role\":\"can-speed\",\"inputOnly\":false,\"outputOnly\":true,\"side\":\"right\",\"row\":6,\"orientation\":\"usb-top\"},{\"label\":\"USB\",\"gpio\":null,\"role\":\"usb-serial\",\"inputOnly\":null,\"side\":\"right\",\"row\":7,\"orientation\":\"usb-top\"},{\"label\":\"socket\",\"gpio\":null,\"role\":\"socket\",\"inputOnly\":null,\"outputOnly\":null,\"direction\":\"out\",\"side\":\"left\",\"row\":10,\"orientation\":\"usb-top\"}]"
           },
           {
             "id": "prp_esp32s3_render",

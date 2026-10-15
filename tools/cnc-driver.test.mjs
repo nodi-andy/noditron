@@ -71,6 +71,7 @@ test('pin wires are grbl\'s pin settings, the subgraph the rest, and Data → in
     'x/steps_per_mm': 80, 'x/maxrate': 5000, 'homing/enable': 1, 'homing/squared': 0,
     'x/step/pin': 4, 'x/dir/pin': 5, 'x/limit/pin': 6,
     'y/step/pin': -1, 'y/dir/pin': -1, 'y/limit/pin': -1, 'stepper/disable/pin': -1,
+    'x/disable/pin': -1, 'y/disable/pin': -1,
   });
   assert.equal(design.blocks.find(b => b.type === 'data').data.value, '$J=G91 X10 F500');
   assert.ok(!design.blocks.some(b => b.type === 'dout' || b.type === 'din'), 'a CNC pin wire compiles to nothing at run time');

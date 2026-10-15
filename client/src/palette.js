@@ -1550,7 +1550,10 @@ export function createCncBlock(nodigraph) {
   addNamedPort(block, 'in', 'X limit');
   addNamedPort(block, 'in', 'Y limit');
   addNamedPort(block, 'out', 'out');
-  for (const name of ['X step', 'X dir', 'Y step', 'Y dir', 'enable']) addNamedPort(block, 'out', name);
+  // `enable` is the shared driver-enable line (grbl's stepper/disable/pin);
+  // `X en` / `Y en` give an axis its own driver enable (x/disable/pin,
+  // y/disable/pin) — wire either the shared one or the pair, not both.
+  for (const name of ['X step', 'X dir', 'Y step', 'Y dir', 'enable', 'X en', 'Y en']) addNamedPort(block, 'out', name);
   addKindProp(block, 'cnc');
   block.props.push({ id: generateId('prp'), name: 'fn', kind: 'value', value: 'return {};' });
   block.props.push({ id: generateId('prp'), name: 'html', kind: 'value', value: LAST_SEEN_HTML });

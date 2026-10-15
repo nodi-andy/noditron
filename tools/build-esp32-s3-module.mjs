@@ -44,8 +44,11 @@ const BOARDS = {
     boardVariant: 'ESP32-S3-RS485-CAN (2 IO)',
     preset: 'noditron-esp32s3-2io',
     can: { tx: 15, rx: 16 },
-    // IO1 and IO2 too: on a CNC they are its X step and dir.
-    left: [['IO1', 1, 'gpio'], ['IO2', 2, 'gpio'], ...Array.from({ length: 7 }, (_, i) => ['IO' + (i + 3), i + 3, 'gpio'])],
+    // IO1 and IO2 too: on a CNC they are its X step and dir. RXD (GPIO44)
+    // is a plain GPIO here — the console is native USB and nothing opens
+    // UART0 — and it sits inside the header rows a bench plug covers, so
+    // a wire (a driver enable, say) can land on it.
+    left: [['IO1', 1, 'gpio'], ['IO2', 2, 'gpio'], ['RXD', 44, 'gpio'], ...Array.from({ length: 7 }, (_, i) => ['IO' + (i + 3), i + 3, 'gpio'])],
     right: [
       ...Array.from({ length: 5 }, (_, i) => ['IO' + (i + 10), i + 10, 'gpio']),
       ['CAN', null, 'can'], ['CAN speed', null, 'can-speed'],
