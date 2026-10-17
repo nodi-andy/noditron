@@ -19,14 +19,14 @@ const BOARDS = {
   // EXIO virtual GPIOs 1000..1007 match conucon's live IO protocol.
   '8io': {
     id: 'esp32s3-8io',
-    displayName: 'esp32-S3 8IO \u00b7 Logic',
+    displayName: 'esp32-S3 8IO \u00b7 noditron',
     boardVariant: 'ESP32-S3-POE-ETH-8DI-8DO',
     preset: 'noditron-esp32s3-8io',
     can: { tx: 2, rx: 3 },
     left: Array.from({ length: 8 }, (_, i) => ['DI' + (i + 1), i + 4, 'digital-input']),
     right: [
       ...Array.from({ length: 8 }, (_, i) => ['DO' + (i + 1), 1000 + i, 'digital-output']),
-      ['CAN', null, 'can'], ['CAN speed', null, 'can-speed'],
+      ['CAN speed', null, 'can-speed'],
       ['RS485 TX', 17, 'rs485'], ['RS485 RX', 18, 'rs485'],
     ],
     reserved: new Map([[17, 'RS485 TX'], [18, 'RS485 RX']]),
@@ -38,7 +38,7 @@ const BOARDS = {
   // on TX15/RX16.
   '2io': {
     id: 'esp32s3-2io',
-    displayName: 'esp32-S3 2IO \u00b7 Logic',
+    displayName: 'esp32-S3 2IO \u00b7 noditron',
     boardVariant: 'ESP32-S3-RS485-CAN (2 IO)',
     preset: 'noditron-esp32s3-2io',
     can: { tx: 15, rx: 16 },
@@ -46,7 +46,7 @@ const BOARDS = {
     left: [['IO1', 1, 'gpio'], ['IO2', 2, 'gpio'], ...Array.from({ length: 6 }, (_, i) => ['IO' + (i + 4), i + 4, 'gpio'])],
     right: [
       ...Array.from({ length: 5 }, (_, i) => ['IO' + (i + 10), i + 10, 'gpio']),
-      ['CAN', null, 'can'], ['CAN speed', null, 'can-speed'],
+      ['CAN speed', null, 'can-speed'],
     ],
     // The CNC driver: conucon's logic-cnc-esp32s3-2io build has grbl
     // inside the Logic Module firmware, so a CNC block (palette.js's
@@ -105,6 +105,9 @@ function build() {
     // Inspector to feed lines into its shell instead. Below CAN In, no
     // GPIO behind it; the circuit on the board never sees it.
     { label: 'socket', gpio: null, role: 'socket', inputOnly: null, outputOnly: null, direction: 'out', side: 'left', row: LEFT.length, orientation: 'usb-top' },
+    // The bus leaves the board at its bottom-left corner, where a wire to
+    // the next board below or beside it is shortest.
+    pinEntry(['CAN', null, 'can'], 'bottom', 0),
   ];
 
   // One port per pin, each pinned to its own slot down the edge. Ports on
@@ -122,7 +125,7 @@ function build() {
     const base = `esp32s3_${pin.side}_${slug}_${n}`;
     const offset = pin.side === 'top'
       ? Math.round(300 / 2 / PIN_SPACING) * PIN_SPACING - 10
-      : FIRST_PIN_OFFSET + pin.row * PIN_SPACING;
+      : FIRST_PIN_OFFSET + pin.row * PIN_SPACING;  // down the side, or along the bottom from the left corner
     logicalPorts.push({
       id: `io_${base}`,
       name: pin.label,
@@ -218,12 +221,12 @@ if (state === 'connecting') {
   // devkitCircuit.isDevkitDirty) -- read from the device on connect.
   const dirty = helpers.devkit.dirty ? helpers.devkit.dirty() : false;
   tone = dirty ? 'warn' : 'on';
-  text = dirty ? 'Running \\u00b7 circuit not saved' : 'Logic Module running';
+  text = dirty ? 'Running \\u00b7 circuit not saved' : 'noditron running';
   hint = dirty ? 'Save the circuit to the device' : 'Connected';
 } else if (state.startsWith('connected:needs-firmware:')) {
   tone = 'warn';
   text = state.slice('connected:needs-firmware:'.length) + ' \\u00b7 needs firmware';
-  hint = 'Install the Logic Module firmware';
+  hint = 'Install noditron';
 } else if (state.startsWith('connected')) {
   tone = 'warn';
   text = 'Connected \\u00b7 no firmware answer';

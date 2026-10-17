@@ -21,6 +21,11 @@
 //   mountCncControl(target, { shell, isLinked, isBusy, program, saveProgram })
 //
 // `program` is the editor's text at open; `saveProgram(text)` keeps it.
+//
+// Shell: grbl's own command line, straight through. Every line typed there
+// goes out as `cnc <line>` (on a board behind the bus, through the board
+// that carries the link), and grbl's answer comes back under it: `help`,
+// `ls`, `$$`, `?`, gcode, the settings tree. Up and down walk what was typed.
 
 import { mountCncPanel } from './cncPanel.js';
 
@@ -72,7 +77,7 @@ function button(text, className, title) {
   return b;
 }
 
-const TABS = [['control', 'Control'], ['program', 'Program'], ['files', 'Files']];
+const TABS = [['control', 'Control'], ['program', 'Program'], ['files', 'Files'], ['shell', 'Shell']];
 
 // Laid out as a small app (classes cnc-app-*, styled in styles.css): the
 // machine's state and position in a header that stays put, then Control
@@ -99,7 +104,7 @@ export function mountCncControl(target, { shell, isLinked = () => true, isBusy =
   }
   // Desktop order: the program and its files beside the machine.
   const side = el('div', 'cnc-app-side');
-  side.append(sections.program, sections.files);
+  side.append(sections.program, sections.files, sections.shell);
   main.append(sections.control, side);
 
   const statusEl = el('div', 'cnc-app-status');
@@ -285,6 +290,43 @@ export function mountCncControl(target, { shell, isLinked = () => true, isBusy =
     }
   }
   refreshMacros();
+
+  // ── The CNC's shell ──
+  const shellOut = el('pre', 'cnc-shell-out', "grbl's shell: help, ls, $$, ?, or gcode");
+  const shellIn = el('input', 'cnc-shell-in');
+  shellIn.type = 'text';
+  shellIn.placeholder = 'cnc> ';
+  shellIn.spellcheck = false;
+  shellIn.autocapitalize = 'off';
+  sections.shell.append(shellOut, shellIn);
+  const typed = [];
+  let typedAt = 0;
+  const shellPrint = (text) => {
+    shellOut.textContent += `\n${text}`;
+    const lines = shellOut.textContent.split('\n');
+    if (lines.length > 400) shellOut.textContent = lines.slice(-400).join('\n');
+    shellOut.scrollTop = shellOut.scrollHeight;
+  };
+  shellIn.addEventListener('keydown', async (event) => {
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+      if (!typed.length) return;
+      typedAt = Math.max(0, Math.min(typed.length, typedAt + (event.key === 'ArrowUp' ? -1 : 1)));
+      shellIn.value = typed[typedAt] || '';
+      event.preventDefault();
+      return;
+    }
+    if (event.key !== 'Enter') return;
+    const line = shellIn.value.trim();
+    if (!line) return;
+    shellIn.value = '';
+    if (typed[typed.length - 1] !== line) typed.push(line);
+    typedAt = typed.length;
+    shellPrint(`cnc> ${line}`);
+    if (!isLinked()) { shellPrint('not connected to the board'); return; }
+    const reply = await shell(`cnc ${line}`, { timeoutMs: 5000 }).catch((err) => ({ ok: false, lines: [], error: err.message }));
+    for (const text of reply.lines || []) shellPrint(text);
+    if (!reply.ok && reply.error && !(reply.lines || []).some((l) => /^error/.test(l))) shellPrint(`error: ${reply.error}`);
+  });
 
   return () => {
     if (run) run.stopped = true;

@@ -181,18 +181,19 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
     clearTimeout(jogging.timer);
     button?.classList.remove('cnc-pressed');
     jogging = null;
-    if (isLinked()) shell(`cnc ${axis} jog stop`, { quiet: true, timeoutMs: 1500 }).catch(() => {});
+    if (isLinked()) shell(`cnc ${axis} jog stop`, { quiet: true, urgent: true, timeoutMs: 1500 }).catch(() => {});
   }
 
   // Held: start, then a `continue` every PULSE_MS for as long as the
   // pointer stays down — each one sent only after the last was answered,
-  // so a slow link sends fewer, never a backlog.
+  // so a slow link sends fewer, never a backlog. All three go ahead of
+  // the state poll in the board's queue (`urgent`, see serialConsole).
   async function startJog(axis, dir, button) {
     stopJog();
     const job = { axis, button, timer: null };
     jogging = job;
     button?.classList.add('cnc-pressed');
-    const reply = await shell(jogLine(axis, dir, { feed: feedSel.value }), { quiet: true, timeoutMs: 1500 }).catch((err) => ({ ok: false, error: err.message }));
+    const reply = await shell(jogLine(axis, dir, { feed: feedSel.value }), { quiet: true, urgent: true, timeoutMs: 1500 }).catch((err) => ({ ok: false, error: err.message }));
     if (!reply.ok) {
       showReply(jogLine(axis, dir, { feed: feedSel.value }), reply);
       if (jogging === job) {
@@ -204,7 +205,7 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
     const pulse = async () => {
       if (jogging !== job) return;
       const at = Date.now();
-      await shell(`cnc ${axis} jog continue`, { quiet: true, timeoutMs: 1000 }).catch(() => {});
+      await shell(`cnc ${axis} jog continue`, { quiet: true, urgent: true, timeoutMs: 1000 }).catch(() => {});
       if (jogging !== job) return;
       job.timer = setTimeout(pulse, Math.max(0, PULSE_MS - (Date.now() - at)));
     };

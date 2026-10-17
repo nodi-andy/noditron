@@ -185,7 +185,7 @@ export function installHtmlOverlay(nodigraph, openDialogFor, openCncFor = null) 
       },
       setProp(name, value) {
         const prop = block.props.find((p) => p.name === name);
-        if (prop) {
+        if (prop && prop.value !== value) {
           prop.value = value;
           nodigraph.persist();
         }

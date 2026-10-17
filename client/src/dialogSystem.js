@@ -178,6 +178,9 @@ export function installDialogSystem(nodigraph) {
       setProp(name, value) {
         const prop = block.props.find((p) => p.name === name);
         if (!prop) return;
+        // The same value again is no edit: on a board's own page every
+        // persist is a write of the whole project to the board's flash.
+        if (prop.value === value) return;
         prop.value = value;
         block.description = serializeBlockDescription(block);
         nodigraph.renderLoop.requestRender();

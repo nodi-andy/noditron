@@ -167,41 +167,69 @@ async function connectBoard(nodigraph, board, host, deps) {
 // the newest wins; an explicit Save (flush) writes at once and reports
 // whether the board took it. What is still pending when the page goes
 // away is sent as a beacon.
+//
+// An autosave goes out only when the project changed: the write is the
+// whole project (some 330 KB with an S3 and a CNC in it, mostly their
+// dialogs and descriptions), and the board serves nothing else while it
+// lands — measured, 2.8 s in which a CNC command waited. Persists that
+// change nothing, or only how this page is connected, came every few
+// seconds and kept the board in that write. What counts is the project
+// without its derived descriptions and the boards' connection state
+// (projectKey); `baseline` is the project as the page loaded it.
+const SESSION_PROPS = new Set(['connectionState']);
+export function projectKey(data) {
+  return JSON.stringify(data, (key, value) => {
+    if (key === 'description') return undefined;
+    if (value && typeof value === 'object' && SESSION_PROPS.has(value.name) && 'value' in value) return { ...value, value: null };
+    return value;
+  });
+}
 export function installProjectStore({ fetchImpl = fetch, delayMs = 1500, target = typeof window !== 'undefined' ? window : globalThis } = {}) {
   let timer = null;
   let latest = null;
   let chain = Promise.resolve(true);
+  let storedKey = null;  // what the board holds, as projectKey sees it
   const asForm = (data) => {
     const body = new FormData();
     body.append('file', new Blob([JSON.stringify(data)], { type: 'application/json' }), 'project.json');
     return body;
   };
-  const upload = async (data) => {
+  const upload = async (data, key) => {
     const res = await fetchImpl('/files', { method: 'POST', body: asForm(data) });
+    if (res.ok) storedKey = key;
     return Boolean(res.ok);
   };
-  const flush = () => {
+  const flush = ({ always = false } = {}) => {
     if (timer) clearTimeout(timer);
     timer = null;
     const data = latest;
     latest = null;
-    if (data) chain = chain.then(() => upload(data), () => upload(data)).catch(() => false);
+    if (!data) return chain;
+    const key = projectKey(data);
+    if (!always && key === storedKey) return chain;  // nothing the board does not already hold
+    chain = chain.then(() => upload(data, key), () => upload(data, key)).catch(() => false);
     return chain;
   };
+  // An explicit Save always writes (the user asked; it reports whether the
+  // board took it), an autosave only a change.
   const save = (data, { flush: now = false } = {}) => {
     latest = data;
-    if (now) return flush();
+    if (now) return flush({ always: true });
     if (!timer) timer = setTimeout(flush, delayMs);
     return Promise.resolve(true);
   };
+  // The project as loaded from the board: persists at boot that only
+  // reconnect or re-derive it are then not written back.
+  const baseline = (data) => { if (data) storedKey = projectKey(data); };
   target.nodigraphSaveProject = save;
   target.addEventListener?.('pagehide', () => {
     if (!latest) return;
     const data = latest;
     latest = null;
+    if (projectKey(data) === storedKey) return;
     if (typeof navigator !== 'undefined' && navigator.sendBeacon) navigator.sendBeacon('/files', asForm(data));
   });
-  return { save, flush, pending: () => latest !== null };
+  return { save, flush, baseline, pending: () => latest !== null };
 }
 
 // Everything above, at boot. Resolves to null when this is not a board's

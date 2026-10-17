@@ -310,6 +310,30 @@
 }
 .cnc-dro-axis b { margin-right: 6px; color: var(--text-muted); font-weight: 700; }
 .cnc-feed { font: 12px ui-monospace, Consolas, monospace; color: var(--text-muted); }
+.cnc-shell-out {
+  margin: 0;
+  padding: 8px;
+  min-height: 120px;
+  max-height: 260px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-well);
+  color: var(--text-secondary);
+  font: 11px ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.cnc-shell-in {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-primary);
+  font: 12px ui-monospace, Consolas, monospace;
+}
 
 .cnc-hint {
   font-size: 12px;
@@ -506,7 +530,8 @@
   .cnc-app-label { display: none; }
   .cnc-app[data-tab="control"] .cnc-app-section:not([data-tab="control"]),
   .cnc-app[data-tab="program"] .cnc-app-section:not([data-tab="program"]),
-  .cnc-app[data-tab="files"] .cnc-app-section:not([data-tab="files"]) { display: none; }
+  .cnc-app[data-tab="files"] .cnc-app-section:not([data-tab="files"]),
+  .cnc-app[data-tab="shell"] .cnc-app-section:not([data-tab="shell"]) { display: none; }
   .cnc-app-section { gap: 14px; }
 
   .cnc-app-status { padding: 6px 16px; border-top: 1px solid var(--border); }

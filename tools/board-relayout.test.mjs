@@ -27,10 +27,11 @@ const slot = (block, name) => {
   return p ? `${p.side}${p.offset}` : null;
 };
 
-test('the 2IO module has IO1 and IO2 and USB as a pin under the right-hand ones', () => {
+test('the 2IO module has IO1 and IO2, USB as a pin under the right-hand ones, CAN at the bottom-left', () => {
   assert.equal(slot(template, 'IO1'), 'left30');
   assert.equal(slot(template, 'IO2'), 'left70');
-  assert.equal(slot(template, 'USB'), 'right310');
+  assert.equal(slot(template, 'USB'), 'right270');
+  assert.equal(slot(template, 'CAN'), 'bottom30');
   assert.ok(!template.logicalPorts.some(p => p.name === 'CNC'));
 });
 
@@ -38,7 +39,7 @@ test('an older board takes the new slots once: wires kept, the unwired CNC pin g
   const board = oldBoard();
   assert.equal(relayoutBoard(board, template, null), true);
   assert.equal(slot(board, 'IO4'), slot(template, 'IO4'));
-  assert.equal(slot(board, 'USB'), 'right310');
+  assert.equal(slot(board, 'USB'), 'right270');
   assert.equal(slot(board, 'CNC'), null);
   assert.equal(board.ports.find(p => p.id === 'p-IO4').id, 'p-IO4', 'the wired pin keeps its id, so its wire stays');
   assert.equal(board.geometry.height, template.geometry.height);

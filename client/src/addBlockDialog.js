@@ -64,7 +64,7 @@ function propOf(block, name) {
 }
 
 function moduleLabel(info) {
-  const what = info.kind === 'cnc' ? 'CNC module' : 'Logic Module';
+  const what = info.kind === 'cnc' ? 'CNC module' : 'noditron';
   return `${what}${info.nodeName ? ` ${info.nodeName}` : ''}${info.node ? ` (node ${info.node})` : ''}`;
 }
 
@@ -311,7 +311,7 @@ export function installAddBlockDialog(nodigraph) {
           if (host.hidden) return;
           found.innerHTML = '';
           for (const b of boards) {
-            const what = b.type === 'cnc' ? 'CNC module' : b.type === 'logic' ? 'Logic Module' : b.type;
+            const what = b.type === 'cnc' ? 'CNC module' : b.type === 'logic' ? 'noditron' : b.type;
             found.appendChild(tile({
               swatchColor: b.type === 'cnc' ? '#7c3aed' : '#2f6fed',
               text: `${what}${b.name ? ` ${b.name}` : ''}`,

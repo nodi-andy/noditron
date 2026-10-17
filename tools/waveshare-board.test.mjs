@@ -21,7 +21,7 @@ function wired(from, to) {
 
 test('Waveshare name, eight isolated inputs, eight driver outputs and CAN pins', () => {
   assert.equal(module.version, '1.11.0');
-  assert.equal(module.displayName, 'esp32-S3 8IO · Logic');
+  assert.equal(module.displayName, 'esp32-S3 8IO · noditron');
   assert.equal(board.name, 'esp32-S3');
   assert.deepEqual(pins.filter(p => p.role === 'digital-input').map(p => p.gpio), [4,5,6,7,8,9,10,11]);
   assert.deepEqual(pins.filter(p => p.role === 'digital-output').map(p => p.exio), [1,2,3,4,5,6,7,8]);
@@ -46,7 +46,7 @@ test('the board face keeps the USB pin, drops the USB box, and shows its connect
   assert.doesNotMatch(render, /roundRect\(usbX/);
   assert.doesNotMatch(render, /fillText\(pin\.label/, 'the board does not letter its pins: nodigraph labels every port');
   assert.match(html, /className = 'esp-status'/);
-  for (const state of ['Not connected', 'Connecting', 'Logic Module running', 'needs firmware', 'circuit not saved']) {
+  for (const state of ['Not connected', 'Connecting', 'noditron running', 'needs firmware', 'circuit not saved']) {
     assert.match(html, new RegExp(state));
   }
   assert.match(html, /helpers\.openDialog/);
