@@ -94,6 +94,31 @@ export function subscribeTrace(blockId, listener) {
   };
 }
 
+// A CNC's status report pushed to this board because a panel here watches
+// that CNC over the bus (firmware 20261018m on: `node <cnc> cnc ...` makes
+// the asker a watcher, see conucon's cncWatch): `<from>@push><report>`, at
+// every change of grbl's state and four times a second while it moves.
+// Taken out of the stream like io-change, so no command reply ever holds
+// one, and handed to every subscribePushes listener with the CNC's name or
+// id, whichever board it came through.
+export const PUSH_RE = /^([\w?*-]+)@push>(.*)$/;
+const pushListeners = new Set(); // ({ from, line, via }) => void
+
+export function subscribePushes(listener) {
+  pushListeners.add(listener);
+  return () => pushListeners.delete(listener);
+}
+
+function notifyPush(from, line, via) {
+  for (const listener of pushListeners) {
+    try {
+      listener({ from, line, via });
+    } catch {
+      // A listener's own error is not the link's problem.
+    }
+  }
+}
+
 // HIGH/LOW (a Timer's two edges) read as booleans, numbers as numbers,
 // anything else as the text it is — the same kinds a wire carries in the
 // simulation.
@@ -127,7 +152,12 @@ function takeAsyncLines(state, bytes) {
       consumed = true;
     } else {
       const text = new TextDecoder().decode(bytes.slice(lineStart, i)).replace(/\r$/, '');
-      try {
+      const push = text.match(PUSH_RE);
+      if (push) {
+        notifyPush(push[1], push[2], state.blockId);
+        consumed = true;
+      }
+      if (!consumed) try {
         const message = JSON.parse(text);
         if (message.type === 'io-change' && Array.isArray(message.pins)) {
           for (const listener of ioListeners.get(state.blockId) || []) listener(message.pins);
@@ -280,6 +310,12 @@ function dispatchLines(state, chunk) {
     // still the board's own announcement: unsolicited, and never quiet,
     // or the socket traffic would vanish from the box whenever a poll
     // happened to be in flight.
+    // A pushed report is the CNC panel's (subscribePushes), four a second
+    // while the machine moves: never a line for the shell's terminal.
+    if (PUSH_RE.test(line)) {
+      notifyLineListeners(state.blockId, { line, unsolicited: true, quiet: true });
+      continue;
+    }
     const announcement = ANNOUNCEMENT_RE.test(line);
     if (!announcement && isLateQuietOk(state.blockId, line)) {
       notifyLineListeners(state.blockId, { line, unsolicited: false, quiet: true });
@@ -527,7 +563,7 @@ async function writeBytes(blockId, bytes) {
 // and the CNC module (`state=…` tail, see esp32_cnc's Module.cpp) — the
 // same first line otherwise, so one identify() covers both and reports
 // which it found as `kind`.
-const INFO_RE = /\[INFO] (LogicMod|CncMod) v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \| heap=(\d+) \| (.*)$/;
+const INFO_RE = /\[INFO] (noditron|LogicMod|CncMod) v(\S+) build (\S+) \| AP=(\S+) \| IP=(\S+) \| heap=(\d+) \| (.*)$/;
 
 // The second [INFO] line names the node: `node=<id> type=<logic|cnc>` and
 // then key=value words — `board=<hardware>` (builds 20260930a and later,
@@ -549,7 +585,7 @@ export function parseNodeLine(line) {
 // The firmware prints this banner once, out of setup(), a second or more
 // before it can answer anything — it is proof the app image is there and
 // running, and the only thing that justifies waiting out a slow boot.
-const BOOTING_RE = /^Logic Module v(\S+) \(build (\S+)\) booting/;
+const BOOTING_RE = /^(?:noditron|Logic Module) v(\S+) \(build (\S+)\) booting/;
 // The CNC module's core says it is starting differently: grbl's banner, and
 // then its WiFi join chatter for up to twenty seconds while the port that
 // was just opened (which reset the board) is still being brought up. Any
@@ -735,10 +771,10 @@ async function identifyCommand(blockId, { timeoutMs = 3000, pingEveryMs = 500, b
           : '';
       throw new Error(
         version
-          ? `Logic Module v${version} is installed but the board keeps resetting${cause}. `
+          ? `noditron v${version} is installed but the board keeps resetting${cause}. `
             + 'Check the USB cable and port, or power the board externally.'
           : `The board is resetting in a loop${cause} and cannot answer. `
-            + 'Check power first; if it holds up, re-install the firmware — what is on it may not be the Logic Module.',
+            + 'Check power first; if it holds up, re-install the firmware — what is on it may not be noditron.',
       );
     }
     if (NO_APP_RE.test(line)) break;
@@ -776,10 +812,10 @@ async function sendDesignOverHttp(session, design) {
 // starts or the board says why it cannot.
 async function readDesignCommand(blockId, { timeoutMs = 4000, line = 'design' } = {}) {
   const session = getSession(blockId);
-  if (session?.kind === 'wifi') {
-    if (line !== 'design') throw new Error('a node behind the bus is read through a board on USB');
-    return readDesignOverHttp(session);
-  }
+  // The board's own circuit over WiFi is its design.json; a node behind it
+  // (`design <node>`) is read like over USB — the board's WebSocket shell
+  // answers with the same [DESIGN] BEGIN ... END lines.
+  if (session?.kind === 'wifi' && line === 'design') return readDesignOverHttp(session);
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
@@ -1808,7 +1844,7 @@ async function readReply(state, pattern, failure, timeoutMs) {
 async function sendDesignCommand(blockId, design, { timeoutMs = 5000, target = null } = {}) {
   const session = getSession(blockId);
   if (session?.kind === 'wifi') {
-    if (target) throw new Error('a node behind the bus is saved through a board on USB');
+    if (target) return sendDesignInParts(blockId, target, design);
     return sendDesignOverHttp(session, design);
   }
   await ensurePlain(blockId);
@@ -1829,28 +1865,77 @@ async function sendDesignCommand(blockId, design, { timeoutMs = 5000, target = n
   }
 }
 
+// A node behind a board on WiFi: the raw byte phase of `save-design <node>
+// <n>` is a serial thing, so the circuit goes the way that board would
+// send it on over CAN itself — `save-design part <i> <n> <size> <base64>`
+// lines (conucon's saveDesignPart), each run on the node through the
+// board's shell (`node <target> ...`) and answered before the next. The
+// node writes the last part and reloads its circuit. Runs inside the
+// bridge's command queue, so it calls shellCommand, not shell().
+export const DESIGN_PART_BYTES = 120;
+export function designParts(design) {
+  const bytes = new TextEncoder().encode(JSON.stringify(design));
+  const parts = [];
+  const count = Math.ceil(bytes.length / DESIGN_PART_BYTES);
+  for (let i = 0; i < count; i += 1) {
+    let binary = '';
+    for (const b of bytes.subarray(i * DESIGN_PART_BYTES, (i + 1) * DESIGN_PART_BYTES)) binary += String.fromCharCode(b);
+    parts.push(`save-design part ${i} ${count} ${bytes.length} ${btoa(binary)}`);
+  }
+  return { parts, size: bytes.length };
+}
+async function sendDesignInParts(blockId, target, design) {
+  const { parts, size } = designParts(design);
+  for (const [i, part] of parts.entries()) {
+    const reply = await shellCommand(blockId, `node ${target} ${part}`, { timeoutMs: 6000, quiet: true });
+    if (!reply.ok) throw new Error(`${target} did not take part ${i + 1}/${parts.length} of its circuit: ${reply.error || 'no reply'}`);
+  }
+  return `[DESIGN] Saved ${size} bytes OK`;
+}
+
 // Every command shares one byte stream. In particular, polling must never
 // consume the READY/Saved reply belonging to a circuit upload.
-const commandQueues = new Map();
+const commandQueues = new Map(); // blockId -> { running, jobs }
 // `quiet`: the command is the app's own housekeeping, not something the
 // user or a wire said — see lineListeners.
-function queueCommand(blockId, run, { quiet = false } = {}) {
-  const previous = commandQueues.get(blockId) || Promise.resolve();
-  const counted = async () => {
+// `urgent` (by default: whatever is not quiet) goes ahead of every waiting
+// command that is not, behind the one running and any urgent one before
+// it. A jog, a stop or a typed line used to wait out the app's polls (the
+// machine's state every 500 ms, pins, trace renewals), and through a
+// board relaying over CAN each of those is a round trip on the bus: the
+// jog came seconds late.
+export function queueCommand(blockId, run, { quiet = false, urgent = !quiet } = {}) {
+  let q = commandQueues.get(blockId);
+  if (!q) {
+    q = { running: false, jobs: [] };
+    commandQueues.set(blockId, q);
+  }
+  return new Promise((resolve, reject) => {
+    const job = { run, quiet, urgent, resolve, reject };
+    const firstPlain = urgent ? q.jobs.findIndex((j) => !j.urgent) : -1;
+    if (firstPlain < 0) q.jobs.push(job);
+    else q.jobs.splice(firstPlain, 0, job);
+    pumpCommands(blockId, q);
+  });
+}
+async function pumpCommands(blockId, q) {
+  if (q.running) return;
+  q.running = true;
+  while (q.jobs.length) {
+    const job = q.jobs.shift();
     activeCommands.set(blockId, (activeCommands.get(blockId) || 0) + 1);
-    if (quiet) quietCommands.set(blockId, (quietCommands.get(blockId) || 0) + 1);
+    if (job.quiet) quietCommands.set(blockId, (quietCommands.get(blockId) || 0) + 1);
     try {
-      return await run();
+      job.resolve(await job.run());
+    } catch (err) {
+      job.reject(err);
     } finally {
       activeCommands.set(blockId, Math.max(0, (activeCommands.get(blockId) || 1) - 1));
-      if (quiet) quietCommands.set(blockId, Math.max(0, (quietCommands.get(blockId) || 1) - 1));
+      if (job.quiet) quietCommands.set(blockId, Math.max(0, (quietCommands.get(blockId) || 1) - 1));
     }
-  };
-  const result = previous.catch(() => {}).then(counted);
-  commandQueues.set(blockId, result);
-  const clear = () => { if (commandQueues.get(blockId) === result) commandQueues.delete(blockId); };
-  result.then(clear, clear);
-  return result;
+  }
+  q.running = false;
+  if (commandQueues.get(blockId) === q) commandQueues.delete(blockId);
 }
 
 // One line to the board's shell, its reply back: every shell command ends
@@ -1859,6 +1944,17 @@ function queueCommand(blockId, run, { quiet = false } = {}) {
 // meantime (a pin change, a CAN frame) come back too, as they would on a
 // terminal. A firmware without the terminator answers by timing out with
 // whatever it printed.
+// Whether `ok <named>` ends `line`: the line itself, or what a node ran of
+// `node <to> <line>` (relayed, the far node names its own part). The
+// firmware shortens a long one to 45 characters and `...`.
+export function okNames(line, named) {
+  if (!named) return true;
+  const cut = named.endsWith('...') ? named.slice(0, -3) : null;
+  const ran = [String(line).trim()];
+  for (let m; (m = /^node\s+\S+\s+(.*)$/s.exec(ran[ran.length - 1]));) ran.push(m[1].trim());
+  return ran.some((l) => l === named || (cut !== null && l.startsWith(cut)));
+}
+
 async function shellCommand(blockId, line, { timeoutMs = 4000, quiet = false, via = null } = {}) {
   void quiet; // read by shell() for the queue; the reply is the same either way
   await ensurePlain(blockId);
@@ -1875,7 +1971,15 @@ async function shellCommand(blockId, line, { timeoutMs = 4000, quiet = false, vi
       break;
     }
     // `ok`, or `ok <the command>` from a board that names what it ended.
-    if (reply === 'ok' || reply.startsWith('ok ')) return { ok: true, lines, end: reply };
+    // An ok naming another command is a late answer to an earlier one (it
+    // timed out, and its reply came in now): its lines are not this
+    // command's, and this one's answer is still to come. Taken as ours, it
+    // put every reply after it one command behind.
+    if (reply === 'ok' || reply.startsWith('ok ')) {
+      if (okNames(line, reply.slice(3))) return { ok: true, lines, end: reply };
+      lines.length = 0;
+      continue;
+    }
     if (reply.startsWith('error:')) return { ok: false, error: reply.slice(6).trim(), lines, end: reply };
     lines.push(reply);
   }
@@ -1889,9 +1993,11 @@ async function shellCommand(blockId, line, { timeoutMs = 4000, quiet = false, vi
 // as `node <target> <line>`, quietly on the bridge, and what comes back is
 // the far board's reply — shown to whoever listens to the far block, as
 // its own console would show it, terminator included.
-async function bridgedShellCommand(bridge, blockId, line, { timeoutMs = 4500, quiet = false, via = null } = {}) {
+async function bridgedShellCommand(bridge, blockId, line, { timeoutMs = 4500, quiet = false, urgent = !quiet, via = null } = {}) {
   notifyLineListeners(blockId, { line: String(line), outgoing: true, unsolicited: false, quiet, via });
-  const reply = await shell(bridge.bridgeId, `node ${bridge.target} ${line}`, { timeoutMs, quiet: true });
+  // Quiet on the bridge (its own console does not show it), but as urgent
+  // there as it was asked: a jog relayed waits for no poll of the bridge.
+  const reply = await shell(bridge.bridgeId, `node ${bridge.target} ${line}`, { timeoutMs, quiet: true, urgent });
   for (const text of reply.lines || []) notifyLineListeners(blockId, { line: text, unsolicited: false, quiet });
   const tail = reply.end || (reply.ok ? 'ok' : reply.error ? `error: ${reply.error}` : null);
   if (tail) notifyLineListeners(blockId, { line: tail, unsolicited: false, quiet });
@@ -1935,8 +2041,9 @@ async function bridgedIdentify(bridge, blockId) {
 
 export function shell(blockId, line, opts = {}) {
   const bridge = bridgeFor(blockId);
-  if (bridge) return queueCommand(blockId, () => bridgedShellCommand(bridge, blockId, line, opts), { quiet: Boolean(opts.quiet) });
-  return queueCommand(blockId, () => shellCommand(blockId, line, opts), { quiet: Boolean(opts.quiet) });
+  const order = { quiet: Boolean(opts.quiet), urgent: opts.urgent ?? !opts.quiet };
+  if (bridge) return queueCommand(blockId, () => bridgedShellCommand(bridge, blockId, line, { ...opts, urgent: order.urgent }), order);
+  return queueCommand(blockId, () => shellCommand(blockId, line, opts), order);
 }
 
 export function identify(blockId, ...args) {

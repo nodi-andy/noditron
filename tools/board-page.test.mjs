@@ -262,3 +262,29 @@ test('the board page flushes the store once the block is in place', async () => 
   assert.equal(uploads.length, 1, 'written once, at the end');
   assert.deepEqual(JSON.parse(uploads[0].text), { blocks: ['board-esp32s3-8io-logic'] }, 'and it is the project with the board in it');
 });
+
+// Each autosave is the whole project written to the board's flash, and the
+// board serves nothing while it lands (2.8 s measured for 330 KB, a CNC
+// command waiting behind it). So only a change is written: not the same
+// project again, not a board's connection state, not the derived
+// descriptions, not what the page loaded. An explicit Save still writes.
+test('an autosave writes only a change: not the same project, not a connection state, not what was loaded', async () => {
+  const { api } = load();
+  const { uploads, fetchImpl } = fakeUploads();
+  const target = {};
+  const store = api.installProjectStore({ fetchImpl, delayMs: 5, target });
+  const project = (state, x, description = 'd') => ({ rootBlock: { description, props: [{ name: 'connectionState', value: state }, { name: 'x', value: x }] } });
+  store.baseline(project('disconnected', 1));
+  const settle = () => new Promise((r) => setTimeout(r, 30));
+  target.nodigraphSaveProject(project('connected:running', 1, 'other text'));
+  await settle();
+  assert.equal(uploads.length, 0, 'connecting and re-deriving the descriptions is no change');
+  target.nodigraphSaveProject(project('connected:running', 2));
+  await settle();
+  assert.equal(uploads.length, 1, 'an edit is written');
+  target.nodigraphSaveProject(project('connected:running', 2));
+  await settle();
+  assert.equal(uploads.length, 1, 'the same project again is not');
+  assert.equal(await target.nodigraphSaveProject(project('connected:running', 2), { flush: true }), true);
+  assert.equal(uploads.length, 2, 'an explicit Save always writes');
+});

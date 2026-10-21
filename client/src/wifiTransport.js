@@ -32,6 +32,7 @@ export function consoleTextFor(message) {
   if (message.type === 'shell') return String(message.output ?? '');
   if (message.type === 'io' && Array.isArray(message.pins)) return JSON.stringify({ type: 'io-change', pins: message.pins });
   if (message.type === 'console' && typeof message.line === 'string') return message.line;
+  if (message.type === 'push' && message.value !== undefined && message.from) return `${message.from}@push>${message.value}`;
   if (message.type === 'can_in' && message.value !== undefined) {
     return message.from ? `${message.from}@can>${message.value}` : `[CAN] rx ${message.value}`;
   }

@@ -70,6 +70,7 @@ async function boot() {
   // file upload rather than /api/project (see boardPage.js): in place
   // before the first persist below.
   const projectStore = window.nodigraphEmbedded ? installProjectStore() : null;
+  projectStore?.baseline(nodigraph.project.toJSON());
 
   // nodigraph's + button opens the Add Block window (see addBlockDialog.js):
   // the primitives in groups, and boards added by connecting to them.
