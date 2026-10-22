@@ -248,36 +248,58 @@
 }
 
 /* The CNC control (see src/cncControl.js, src/cncPanel.js): a small app.
-   On a desktop a wide window, the program and its files beside the
-   machine; on a phone the whole screen, the machine's state and position
-   in a header that stays put, Control / Program / Files behind a tab bar
-   at the bottom, buttons a thumb can hit. */
+   One header — title, Files and Settings, the machine's state, position
+   and what went wrong. On a desktop the pad beside the program and the
+   terminal; on a phone the whole screen, the header fixed on top and
+   Control / Program / Terminal behind a tab bar at the bottom, buttons a
+   thumb can hit. Files and Settings open as a sheet over the app. */
 .noditron-dialog-panel.noditron-cnc-panel {
   max-width: min(1100px, calc(100vw - 32px));
   width: 100%;
 }
+.noditron-cnc-panel > .noditron-dialog-close { z-index: 4; } /* above an open sheet */
 
 .cnc-app {
-  --cnc-hit: 36px;
+  --cnc-hit: 40px;
+  --cnc-pad: 72px;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
+  min-height: 0;
   color: var(--text-primary);
 }
 
 .cnc-app-head {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-right: 36px; /* the window's close button */
+  gap: 8px;
+  padding-right: 40px; /* the window's close button */
 }
-
+.cnc-app-title-row { display: flex; align-items: center; gap: 8px; }
 .cnc-app-title {
+  margin: 0;
   color: #e06c2f;
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0.03em;
+  font: 700 18px Inter, ui-sans-serif, sans-serif;
+  letter-spacing: 0.02em;
 }
+.cnc-spacer { flex: 1; }
+.cnc-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-surface, transparent);
+  color: var(--text-primary);
+  font: 500 13px Inter, ui-sans-serif, sans-serif;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+.cnc-icon-btn:hover { background: var(--bg-hover, rgba(0, 0, 0, 0.04)); }
+.cnc-icon-btn svg { width: 16px; height: 16px; flex: none; }
 
 .cnc-head {
   display: flex;
@@ -285,7 +307,6 @@
   gap: 12px;
   flex-wrap: wrap;
 }
-
 .cnc-state {
   font: 700 12px ui-monospace, Consolas, monospace;
   padding: 3px 10px;
@@ -293,66 +314,40 @@
   border-radius: 999px;
   color: var(--text-muted);
 }
-.cnc-state[data-state="Idle"] { color: var(--success, #22c55e); }
+.cnc-state[data-state="Idle"] { color: var(--success, #16a34a); }
 .cnc-state[data-state="Run"],
 .cnc-state[data-state="Jog"],
-.cnc-state[data-state="Home"] { color: #3b82f6; }
+.cnc-state[data-state="Home"] { color: #2563eb; }
 .cnc-state[data-state="Hold"],
 .cnc-state[data-state="Door"] { color: #d97706; }
-.cnc-state[data-state="Alarm"] { color: #ef4444; background: rgba(239, 68, 68, 0.08); }
-
+.cnc-state[data-state="Alarm"] { color: #dc2626; background: rgba(239, 68, 68, 0.08); }
 .cnc-dro {
   display: flex;
-  gap: 14px;
+  gap: 16px;
   flex-wrap: wrap;
-  font: 600 15px ui-monospace, Consolas, monospace;
+  font: 600 16px ui-monospace, Consolas, monospace;
   font-variant-numeric: tabular-nums;
 }
 .cnc-dro-axis b { margin-right: 6px; color: var(--text-muted); font-weight: 700; }
 .cnc-feed { font: 12px ui-monospace, Consolas, monospace; color: var(--text-muted); }
-.cnc-shell-out {
-  margin: 0;
-  padding: 8px;
-  min-height: 120px;
-  max-height: 260px;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg-well);
-  color: var(--text-secondary);
-  font: 11px ui-monospace, Consolas, monospace;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.cnc-shell-in {
-  width: 100%;
-  box-sizing: border-box;
-  padding: 6px 8px;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text-primary);
-  font: 12px ui-monospace, Consolas, monospace;
-}
-
-.cnc-hint {
-  font-size: 12px;
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.12);
-  border-radius: 6px;
-  padding: 6px 10px;
+.cnc-error-line {
+  padding: 8px 10px;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.08);
+  color: #b91c1c;
+  font-size: 13px;
+  line-height: 1.35;
 }
 
 .cnc-app-main {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr);
-  gap: 20px;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
-.cnc-app-main > .cnc-app-section[data-tab="control"] { order: 2; }
-.cnc-app-side { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.cnc-app-side { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .cnc-app-section { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
-
 .cnc-app-label {
   margin: 0;
   font-size: 11px;
@@ -361,16 +356,6 @@
   text-transform: uppercase;
   color: var(--text-muted);
 }
-
-.cnc-app-status {
-  min-height: 1em;
-  font: 11px ui-monospace, Consolas, monospace;
-  color: var(--text-muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
 .cnc-app-tabs { display: none; }
 
 .cnc-btn {
@@ -391,16 +376,36 @@
 .cnc-primary:hover { background: var(--success, #22c55e); filter: brightness(1.05); }
 .cnc-warn { border-color: #d97706; color: #b45309; }
 .cnc-danger { border-color: #ef4444; color: #dc2626; }
+.cnc-stop { background: #dc2626; border-color: #dc2626; color: #fff; font-weight: 700; }
+.cnc-stop:hover { background: #b91c1c; }
 
-.cnc-actions {
+/* The pad: Home Y+ Unlock / X- Stop X+ / Hold Y- Run. */
+.cnc-panel { display: flex; flex-direction: column; gap: 12px; }
+.cnc-jog { display: flex; gap: 10px; justify-content: center; }
+.cnc-jog-cross {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(3, var(--cnc-pad));
+  grid-template-rows: repeat(3, var(--cnc-pad));
+  grid-template-areas: "home yp unlock" "xm stop xp" "hold ym run";
   gap: 8px;
 }
-
-.cnc-jog-head { display: flex; gap: 8px; }
+.cnc-jog-column { display: grid; grid-template-rows: repeat(2, var(--cnc-pad)); gap: 8px; align-content: center; }
+.cnc-jog-column .cnc-jog-btn { width: var(--cnc-pad); }
+.cnc-jog-btn {
+  padding: 0;
+  font: 700 16px ui-monospace, Consolas, monospace;
+  background: var(--bg-well);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+.cnc-jog-btn.cnc-pressed { background: #2563eb; border-color: #2563eb; color: #fff; }
+.cnc-pad-action { padding: 0 4px; font-weight: 600; }
+.cnc-jog-head,
+.cnc-more { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 .cnc-select {
-  flex: 1;
+  min-width: 0;
   min-height: var(--cnc-hit);
   padding: 0 8px;
   border: 1px solid var(--border);
@@ -409,28 +414,15 @@
   color: var(--text-primary);
   font-size: 13px;
 }
-
-.cnc-jog { display: flex; gap: 12px; justify-content: center; }
-.cnc-jog-cross {
-  display: grid;
-  grid-template-columns: repeat(3, 64px);
-  grid-template-rows: repeat(3, 64px);
-  grid-template-areas: ". yp ." "xm st xp" ". ym .";
-  gap: 8px;
+.cnc-reply {
+  min-height: 1em;
+  font: 11px ui-monospace, Consolas, monospace;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
-.cnc-jog-column { display: grid; grid-template-rows: 64px 64px; gap: 8px; align-content: center; }
-.cnc-jog-column .cnc-jog-btn { width: 64px; }
-.cnc-jog-btn {
-  font: 700 15px ui-monospace, Consolas, monospace;
-  touch-action: none;
-  user-select: none;
-  -webkit-user-select: none;
-  -webkit-touch-callout: none;
-}
-.cnc-jog-btn.cnc-pressed { background: #3b82f6; border-color: #3b82f6; color: #fff; }
-.cnc-jog-stop { grid-area: st; font-weight: 700; padding: 0; }
+.cnc-reply.cnc-error { color: #dc2626; }
 
-.cnc-mdi { display: flex; gap: 8px; }
 .cnc-input {
   flex: 1;
   min-width: 0;
@@ -442,20 +434,18 @@
   color: var(--text-primary);
   font: 13px ui-monospace, Consolas, monospace;
 }
-.cnc-reply {
-  min-height: 1em;
-  font: 11px ui-monospace, Consolas, monospace;
-  color: var(--text-muted);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.cnc-reply.cnc-error { color: #dc2626; }
 
-.cnc-toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.cnc-spacer { flex: 1; }
+/* Program */
+.cnc-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cnc-run-status {
+  margin-left: auto;
+  font: 12px ui-monospace, Consolas, monospace;
+  color: var(--text-muted);
+}
+.cnc-is-running .cnc-run-status { color: #2563eb; }
 .cnc-editor {
   width: 100%;
-  min-height: 300px;
+  min-height: 200px;
   box-sizing: border-box;
   resize: vertical;
   padding: 10px;
@@ -467,17 +457,58 @@
   white-space: pre;
   tab-size: 4;
 }
-.cnc-run-status {
-  min-height: 1em;
-  font: 11px ui-monospace, Consolas, monospace;
-  color: var(--text-muted);
-  white-space: pre-wrap;
-}
+.cnc-note { margin: 0; font-size: 12px; color: var(--text-muted); line-height: 1.4; }
 
+/* Terminal */
+.cnc-term-out {
+  margin: 0;
+  padding: 8px 10px;
+  height: 220px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-well);
+  color: var(--text-secondary);
+  font: 12px/1.45 ui-monospace, Consolas, monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.cnc-term-cmd { color: var(--text-primary); font-weight: 600; }
+.cnc-term-err { color: #dc2626; }
+.cnc-term-note { color: var(--text-muted); font-style: italic; }
+.cnc-term-row { display: flex; gap: 8px; }
+
+/* Sheets: Files, Settings */
+.cnc-sheet {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-surface-2, #fff);
+}
+.cnc-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 40px 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+.cnc-sheet-title { margin: 0; font: 600 16px Inter, ui-sans-serif, sans-serif; }
+.cnc-sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-width: 560px;
+}
 .cnc-macros { display: flex; flex-direction: column; gap: 8px; }
 .cnc-macro {
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 36px minmax(0, 1fr) auto auto auto;
   gap: 8px;
   align-items: center;
 }
@@ -489,7 +520,25 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cnc-note { font-size: 11px; color: var(--text-muted); }
+.cnc-settings { display: flex; flex-direction: column; gap: 12px; }
+.cnc-settings-group {
+  margin: 6px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.cnc-field {
+  display: grid;
+  grid-template-columns: 150px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 12px;
+  font-size: 13px;
+}
+.cnc-field-hint { grid-column: 2; font-size: 11px; color: var(--text-muted); }
+.cnc-settings-actions { display: flex; justify-content: flex-end; }
+.cnc-settings-actions .cnc-btn { min-width: 120px; }
 
 /* A phone: the CNC control is the screen. */
 @media (max-width: 760px) {
@@ -508,33 +557,36 @@
     display: flex;
     flex-direction: column;
   }
-  .noditron-cnc-panel > .noditron-dialog-close { top: max(10px, env(safe-area-inset-top)); right: 8px; width: 44px; height: 44px; font-size: 24px; z-index: 2; }
+  .noditron-cnc-panel > .noditron-dialog-close { top: max(8px, env(safe-area-inset-top)); right: 6px; width: 44px; height: 44px; font-size: 24px; z-index: 4; }
   .noditron-cnc-panel > .noditron-dialog-body { flex: 1; min-height: 0; display: flex; }
 
-  .cnc-app { --cnc-hit: 48px; flex: 1; min-width: 0; min-height: 0; gap: 0; }
+  .cnc-app { --cnc-hit: 48px; --cnc-pad: min(84px, calc((100vw - 48px) / 3)); flex: 1; min-width: 0; gap: 0; }
   .cnc-app-head {
-    padding: max(12px, env(safe-area-inset-top)) 56px 10px 16px;
+    padding: max(10px, env(safe-area-inset-top)) 56px 10px 16px;
     border-bottom: 1px solid var(--border);
     background: var(--bg-surface-2);
   }
-  .cnc-dro { font-size: 17px; gap: 16px; }
+  .cnc-icon-btn { min-height: 40px; padding: 0 10px; }
+  .cnc-icon-btn span { display: none; }
+  .cnc-icon-btn svg { width: 20px; height: 20px; }
+  .cnc-dro { font-size: 18px; gap: 18px; }
   .cnc-app-main {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     display: block;
-    padding: 14px 16px 20px;
+    padding: 16px;
   }
   .cnc-app-side { display: contents; }
   .cnc-app-label { display: none; }
   .cnc-app[data-tab="control"] .cnc-app-section:not([data-tab="control"]),
   .cnc-app[data-tab="program"] .cnc-app-section:not([data-tab="program"]),
-  .cnc-app[data-tab="files"] .cnc-app-section:not([data-tab="files"]),
-  .cnc-app[data-tab="shell"] .cnc-app-section:not([data-tab="shell"]) { display: none; }
+  .cnc-app[data-tab="terminal"] .cnc-app-section:not([data-tab="terminal"]) { display: none; }
   .cnc-app-section { gap: 14px; }
+  .cnc-app-section[data-tab="terminal"] { height: 100%; }
+  .cnc-term-out { flex: 1; height: auto; min-height: 200px; }
 
-  .cnc-app-status { padding: 6px 16px; border-top: 1px solid var(--border); }
   .cnc-app-tabs {
     display: flex;
     border-top: 1px solid var(--border);
@@ -560,20 +612,20 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: #3b82f6;
+    background: #2563eb;
   }
 
-  .cnc-jog-cross { grid-template-columns: repeat(3, 76px); grid-template-rows: repeat(3, 76px); }
-  .cnc-jog-column { grid-template-rows: 76px 76px; }
-  .cnc-jog-column .cnc-jog-btn { width: 76px; }
-  .cnc-jog-btn { font-size: 17px; }
+  .cnc-jog-btn { font-size: 18px; }
+  .cnc-pad-action { font-size: 14px; }
 
   /* 16px keeps iOS from zooming the page on focus. */
   .cnc-input, .cnc-select, .cnc-editor { font-size: 16px; }
-  .cnc-editor { min-height: 0; height: 52dvh; resize: none; }
+  .cnc-editor { min-height: 0; height: 55dvh; resize: none; }
   .cnc-toolbar .cnc-btn { flex: 1 1 auto; }
-  .cnc-spacer { display: none; }
 
+  .cnc-sheet { padding: max(10px, env(safe-area-inset-top)) 16px env(safe-area-inset-bottom); }
+  .cnc-sheet-head { padding: 0 48px 10px 0; }
+  .cnc-sheet-body { max-width: none; }
   .cnc-macro {
     grid-template-columns: 1fr 1fr 1fr;
     grid-template-areas: "name text text" "edit save run";
@@ -586,15 +638,48 @@
   .cnc-macro > button:nth-of-type(1) { grid-area: edit; }
   .cnc-macro > button:nth-of-type(2) { grid-area: save; }
   .cnc-macro > button:nth-of-type(3) { grid-area: run; }
+  .cnc-field { grid-template-columns: 1fr; }
+  .cnc-field-hint { grid-column: 1; }
+  .cnc-settings-actions .cnc-btn { flex: 1; }
 }
 
 /* A board with a CNC driver inside gets this above its status pill (see
    src/htmlOverlay.js): the CNC control, one click from the canvas. */
+/* How this page reaches the board (htmlOverlay.js's linkOf): a chip over
+   the status pill, and a frame round the board the page is linked to. */
+.noditron-html-block[data-link='here'] {
+  box-shadow: inset 0 0 0 3px #3b82f6;
+}
+
+.noditron-html-block .esp-link {
+  --esp-scale: 1;
+  position: absolute;
+  left: 50%;
+  bottom: calc(46px * var(--esp-scale));
+  transform: translateX(-50%);
+  height: calc(20px * var(--esp-scale));
+  padding: 0 calc(9px * var(--esp-scale));
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  font: 600 calc(10px * var(--esp-scale)) / 1 Inter, ui-sans-serif, sans-serif;
+  white-space: nowrap;
+  color: #475569;
+  background: #f1f5f9;
+  border: calc(1px * var(--esp-scale)) dashed #cbd5e1;
+}
+
+.noditron-html-block[data-link='here'] .esp-link {
+  color: #fff;
+  background: #3b82f6;
+  border: calc(1px * var(--esp-scale)) solid #2563eb;
+}
+
 .noditron-html-block .esp-cnc-open {
   --esp-scale: 1;
   position: absolute;
   left: 50%;
-  bottom: calc(48px * var(--esp-scale));
+  bottom: calc(76px * var(--esp-scale));
   transform: translateX(-50%);
   height: calc(24px * var(--esp-scale));
   padding: 0 calc(12px * var(--esp-scale));

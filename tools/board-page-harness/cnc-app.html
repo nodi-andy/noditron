@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CNC control harness</title>
+<!-- The CNC control alone, against a simulated board, for looking at its
+     layout without a board or a live page. Serve the parent of the
+     noditron and nodigraph checkouts and open
+     /noditron/tools/board-page-harness/cnc-app.html (?state=Alarm|Idle). -->
+<link rel="stylesheet" href="/nodigraph/client/styles.css">
+<link rel="stylesheet" href="/noditron/client/styles.css">
+<style>
+  body { margin: 0; background: #e5e7eb; font-family: Inter, ui-sans-serif, sans-serif; }
+  #host { display: grid; place-items: center; min-height: 100vh; padding: 24px; box-sizing: border-box; }
+</style>
+</head>
+<body>
+<div id="host">
+  <div class="noditron-dialog-panel noditron-cnc-panel">
+    <button type="button" class="noditron-dialog-close" aria-label="Close">×</button>
+    <div class="noditron-dialog-body" id="body"></div>
+  </div>
+</div>
+<script type="module">
+import { mountCncControl } from '/noditron/client/src/cncControl.js';
+
+const params = new URLSearchParams(location.search);
+let state = params.get('state') || 'Alarm';
+const pos = [55.12, 0];
+const grbl = { 23: 3, 24: 200, 25: 600, 27: 1 };
+const reply = (lines, ok = true, error) => Promise.resolve({ ok, lines, error });
+window.sent = [];
+async function shell(line) {
+  window.sent.push(line);
+  await new Promise((r) => setTimeout(r, 20));
+  if (line === 'cnc ?') return reply([`<${state}|MPos:${pos.map((v) => v.toFixed(3)).join(',')}|FS:0,0${state === 'Alarm' ? '' : '|Pn:X'}>`]);
+  if (line === 'log') return reply(['  12.0s ago  [MSG:x min limit: no frame for 300 ms - switch not watched, motion alarms until it is heard again]', '   3.1s ago  [MSG:x min limit not watched - stopping, alarm (reset, then unlock or home)]']);
+  let m = line.match(/^cnc \$(\d+)$/);
+  if (m) return reply([`$${m[1]}=${grbl[m[1]]}`]);
+  m = line.match(/^cnc \$(\d+)=(.+)$/);
+  if (m) { grbl[m[1]] = Number(m[2]); return reply([]); }
+  if (line === 'cnc unlock') { state = 'Idle'; return reply(['[MSG:Caution: Unlocked]']); }
+  if (line === 'cnc macro') return reply(['1 G0 X0; G0 Y0', '2', '3 G1 X10 F500', '4']);
+  if (line === 'cnc G0 X10') return reply([], false, '8: Only while idle (or in alarm)');
+  return reply([]);
+}
+const settings = {
+  read: async (axes) => ({ jogFeed: 1000, seek: grbl[25], feed: grbl[24], pulloff: grbl[27], homeToMin: Object.fromEntries(axes.map((a, i) => [a, Boolean(grbl[23] & (1 << i))])) }),
+  save: async (v) => { window.saved = v; },
+  jogFeed: () => 1000,
+};
+mountCncControl(document.getElementById('body'), { shell, settings, program: 'G21 G90\nG0 X0 Y0\nG1 X20 F800\n' });
+</script>
+</body>
+</html>

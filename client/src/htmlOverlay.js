@@ -16,6 +16,8 @@
 // cleared) is cheap enough to leave on that slower timer — see prune().
 import { getLastResult, getBlockOutputs, kindOf } from './runtime.js';
 import * as devkitCircuit from './devkitCircuit.js';
+import * as serialFlash from './serialFlash.js';
+import * as serialConsole from './serialConsole.js';
 import { SOCKET_HALF_OUTER } from '/nodigraph/src/render/BlockRenderer.js';
 
 const LAYER_ID = 'noditron-html-layer';
@@ -62,9 +64,56 @@ export function hasCncDriver(block) {
   return false;
 }
 
+// A board whose firmware carries the CNC driver (allowedChildKinds lists
+// `cnc`, see tools/build-esp32-s3-module.mjs's cncDriver) gets the button
+// too, CNC block drawn or not: the control talks to the board itself, and
+// a board heard on CAN has no drawing until its circuit is read.
+export function canRunCnc(block) {
+  if (hasCncDriver(block)) return true;
+  if (kindOf(block) !== 'esp32-devkit') return false;
+  try {
+    return JSON.parse(block.props?.find((p) => p.name === 'allowedChildKinds')?.value || '[]').includes('cnc');
+  } catch {
+    return false;
+  }
+}
+
+// How this page reaches the board, said on its face: its own link (USB, or
+// WiFi and the address — the board the page talks to), through another
+// board on the bus, or not at all. The board with a link of its own is
+// also framed, so which one this page is connected to shows at a glance.
+export function linkOf(block, boardName = () => null) {
+  const session = serialFlash.getSession(block.id);
+  if (session) return session.kind === 'wifi'
+    ? { here: true, text: `This page · WiFi ${session.host}` }
+    : { here: true, text: 'This page · USB' };
+  const bridge = serialConsole.bridgeFor(block.id);
+  if (bridge) return { here: false, text: `via ${boardName(bridge.bridgeId) || 'another board'} · CAN` };
+  return null;
+}
+
+function syncLinkBadge(el, block, scale, nodigraph) {
+  const boardName = (id) => devkitCircuit.collectBoardBlocks(nodigraph.project.rootBlock.children).find(({ block: b }) => b.id === id)?.block.name;
+  const link = kindOf(block) === 'esp32-devkit' ? linkOf(block, boardName) : null;
+  let badge = el.querySelector(':scope > .esp-link');
+  if (!link) {
+    badge?.remove();
+    delete el.dataset.link;
+    return;
+  }
+  if (!badge) {
+    badge = document.createElement('div');
+    badge.className = 'esp-link';
+    el.appendChild(badge);
+  }
+  el.dataset.link = link.here ? 'here' : 'bridged';
+  if (badge.textContent !== link.text) badge.textContent = link.text;
+  badge.style.setProperty('--esp-scale', String(scale || 1));
+}
+
 function syncCncButton(el, block, scale, open) {
   let button = el.querySelector(':scope > .esp-cnc-open');
-  if (!open || !hasCncDriver(block)) {
+  if (!open || !canRunCnc(block)) {
     button?.remove();
     return;
   }
@@ -196,6 +245,7 @@ export function installHtmlOverlay(nodigraph, openDialogFor, openCncFor = null) 
     } catch (err) {
       el.textContent = `HTML error: ${err.message}`;
     }
+    syncLinkBadge(el, block, place.scale, nodigraph);
     syncCncButton(el, block, place.scale, openCncFor);
   }
 

@@ -125,21 +125,109 @@ export function installDialogSystem(nodigraph) {
   function cncLinkFor(block) {
     const board = devkitCircuit.findOwningBoard(nodigraph.project.rootBlock.children, block.id);
     if (!board) return null;
-    const programProp = () => board.props.find((p) => p.name === 'cncProgram');
+    const boardProp = (name) => board.props.find((p) => p.name === name);
+    const keepOnBoard = (name, value) => {
+      const prop = boardProp(name);
+      if (prop && prop.value === value) return;
+      if (prop) prop.value = value;
+      else board.props.push({ id: `${board.id}:${name}`, name, kind: 'value', value });
+      board.description = serializeBlockDescription(board);
+      nodigraph.persist();
+    };
+    const shell = (line, shellOpts) => serialConsole.shell(board.id, line, shellOpts);
+    // The reports this board's CNC pushes over the bus, through whichever
+    // board bridges it (see serialConsole.subscribePushes): they name it by
+    // its node name, or its id when the bridge knows no name.
+    const subscribeReports = (listener) => serialConsole.subscribePushes(({ from, line }) => {
+      const names = [boardProp('nodeId')?.value, boardProp('nodeName')?.value].filter(Boolean).map(String);
+      if (names.includes(from)) listener(line);
+    });
     return {
       board,
-      shell: (line, shellOpts) => serialConsole.shell(board.id, line, shellOpts),
+      shell,
+      subscribeReports,
       isLinked: () => Boolean(serialFlash.getSession(board.id) || serialConsole.bridgeFor(board.id)),
       isBusy: () => serialFlash.isFlashing(board.id),
-      program: String(programProp()?.value || ''),
-      saveProgram: (text) => {
-        const prop = programProp();
-        if (prop && prop.value === text) return;
-        if (prop) prop.value = text;
-        else board.props.push({ id: `${board.id}:cncProgram`, name: 'cncProgram', kind: 'value', value: text });
-        board.description = serializeBlockDescription(board);
+      program: String(boardProp('cncProgram')?.value || ''),
+      saveProgram: (text) => keepOnBoard('cncProgram', text),
+      settings: cncSettingsFor(board, shell, keepOnBoard),
+    };
+  }
+
+  // The CNC control's Settings: what an operator sets, nothing grbl-deep.
+  //   jogFeed   mm/min a held jog runs at; kept on the board block
+  //   seek/feed homing's fast approach and slow touch-off, mm/min ($25/$24)
+  //   pulloff   how far homing backs off the switch, mm ($27); grbl backs
+  //             off up to five times that to clear it, and a fast seek
+  //             runs further onto the switch before it stops
+  //   homeToMin per axis: homes toward its min end (Homing/DirInvert, $23)
+  // The homing speeds are also the circuit's (its CNC block's Homing group
+  // sets them in grbl at every load), so they are written there too — in
+  // the drawn CNC block and saved to the board, or, with no CNC block
+  // drawn, into the circuit the board holds. Direction is grbl's alone.
+  function cncSettingsFor(board, shell, keepOnBoard) {
+    const grblNumber = async (n) => {
+      const reply = await shell(`cnc $${n}`, { timeoutMs: 4000 });
+      const m = (reply.lines || []).map((l) => String(l).match(new RegExp(`^\\$${n}=(-?[\\d.]+)`))).find(Boolean);
+      return m ? Number(m[1]) : null;
+    };
+    const grblSet = async (n, value) => {
+      const reply = await shell(`cnc $${n}=${value}`, { timeoutMs: 4000 });
+      if (!reply.ok) throw new Error(`$${n}: ${reply.error || 'no answer'}`);
+    };
+    const drawnHoming = () => {
+      for (const child of board.children?.blocks?.values?.() || []) {
+        if (kindOf(child) !== 'cnc') continue;
+        for (const group of child.children?.blocks?.values?.() || []) {
+          if (String(group.name).toLowerCase() === 'homing' && group.children) return group;
+        }
+      }
+      return null;
+    };
+    async function saveHomingToCircuit(speeds) {
+      const homing = drawnHoming();
+      if (homing) {
+        for (const leaf of homing.children.blocks.values()) {
+          const key = String(leaf.name).toLowerCase();
+          if (!(key in speeds)) continue;
+          const prop = leaf.props.find((p) => p.name === 'value');
+          if (prop) prop.value = speeds[key];
+          leaf.description = serializeBlockDescription(leaf);
+        }
+        const level = devkitCircuit.findContainingLevel(nodigraph.project.rootBlock.children, board.id);
+        const design = devkitCircuit.buildDevkitDesign(board, level);
+        await serialConsole.sendDesign(board.id, design);
+        devkitCircuit.markDevkitSent(board, design);
         nodigraph.persist();
+        nodigraph.renderLoop.requestRender();
+        return;
+      }
+      const design = await serialConsole.readDesign(board.id);
+      const cnc = (design?.blocks || []).find((b) => b.type === 'cnc');
+      if (!cnc) return;  // no CNC in the circuit: grbl's own values stand
+      cnc.data = cnc.data || {};
+      cnc.data.settings = { ...(cnc.data.settings || {}), ...Object.fromEntries(Object.entries(speeds).map(([k, v]) => [`homing/${k}`, v])) };
+      await serialConsole.sendDesign(board.id, design);
+    }
+    return {
+      async read(axes) {
+        const [seek, feed, pulloff, mask, idleLock] = [await grblNumber(25), await grblNumber(24), await grblNumber(27), await grblNumber(23), await grblNumber(1)];
+        const homeToMin = Object.fromEntries(axes.map((a, i) => [a, mask === null ? true : Boolean(mask & (1 << i))]));
+        // $1: how long the motors stay powered after a move, ms; 255 = always.
+        const idlePowered = idleLock === null ? true : idleLock >= 255;
+        return { jogFeed: Number(board.props.find((p) => p.name === 'cncJogFeed')?.value) || 1000, seek, feed, pulloff, homeToMin, idlePowered };
       },
+      async save({ jogFeed, seek, feed, pulloff, homeToMin, idlePowered }, axes) {
+        if (jogFeed) keepOnBoard('cncJogFeed', Number(jogFeed));
+        const mask = axes.reduce((m, a, i) => (homeToMin[a] ? m | (1 << i) : m), 0);
+        await grblSet(1, idlePowered ? 255 : 250);
+        await grblSet(23, mask);
+        await grblSet(25, seek);
+        await grblSet(24, feed);
+        await grblSet(27, pulloff);
+        await saveHomingToCircuit({ seek, feed, pulloff });
+      },
+      jogFeed: () => Number(board.props.find((p) => p.name === 'cncJogFeed')?.value) || 1000,
     };
   }
 
@@ -149,7 +237,7 @@ export function installDialogSystem(nodigraph) {
       target.textContent = 'Place this block inside a board to drive its CNC.';
       return () => {};
     }
-    return mountCncControl(target, { ...link, title: `${link.board.name || 'CNC'} · CNC` });
+    return mountCncControl(target, link);
   }
 
   // The CNC control in a modal of its own, wide: the board's (or the

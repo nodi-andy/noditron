@@ -7,28 +7,47 @@
 // The noditron firmware has grbl inside (conucon's esp32_logic, built with
 // LOGIC_WITH_CNC) and reaches it as `cnc <line>`: `cnc ?` is grbl's status
 // report, and the CNC's own shell words go the same way — `home`, `unlock`,
-// `stop` (cancels a jog, holds a running program), `start` (resumes it),
-// `reset`, `zero`, and the pulsed jog `x jog start plus|minus [feed]` /
-// `x jog continue` / `x jog stop`. A jog pulse has to come every 200 ms or
-// the CNC stops the axis by itself (JOG_PULSE_MS in grbl's Module.cpp), so
-// a dropped link, a closed tab or a lost pointer can never leave an axis
-// running. Anything else typed in the line goes to grbl as gcode.
+// `stop` (cancels a jog, holds a running program), `start` (cycle start:
+// resumes a held program), `reset`, `zero`, and the pulsed jog `x jog
+// start plus|minus [feed]` / `x jog continue` / `x jog stop`. A jog pulse
+// has to come every 200 ms or the CNC stops the axis by itself (JOG_PULSE_MS
+// in grbl's Module.cpp), so a dropped link, a closed tab or a lost pointer
+// can never leave an axis running.
 //
-//   mountCncPanel(target, { shell, isLinked, isBusy, hideWhenAbsent })
+//   mountCncPanel(target, { shell, isLinked, isBusy, hideWhenAbsent,
+//                           headTarget, print, onRun, onHold, onStop,
+//                           onState, jogFeed, subscribeReports })
 //
 // `shell(line, opts)` is the board's (serialConsole.shell bound to it),
 // resolving to { ok, lines, error }. `isLinked()` says whether the board
 // has a link at all; `isBusy()` is true while a firmware install holds it.
 // With `hideWhenAbsent` the target stays hidden until the board answers
 // `cnc ?` with a status report (a board without grbl never shows it).
+// `headTarget`: where the state, position and error line go (the CNC
+// control's header); alone they lead the panel. `print(line, reply)`: a
+// terminal that shows every command and its answer; without one the panel
+// shows the last answer under itself. `onRun/onHold/onStop(state)` let the
+// control put its program run behind the pad's buttons — returning true
+// means handled. `onState(report)` hears every status report. `jogFeed()`
+// is the jog speed from the control's settings. `subscribeReports(fn)`
+// hears the status reports the CNC pushes on its own (a CNC across the
+// bus, firmware 20261018m on): once one came, `cnc ?` is only a heartbeat
+// every HEARTBEAT_MS — what keeps this panel a watcher of that CNC, and
+// tells a CNC gone quiet — instead of a poll every POLL_MS.
 // Returns a stop function; the panel also stops itself once `target`
 // leaves the document.
 
 const POLL_MS = 500;
+const HEARTBEAT_MS = 5000;
+// A moving machine pushes four reports a second: a poll that finds it
+// moving with none for this long is a CNC that stopped pushing (an older
+// firmware flashed meanwhile), and the panel polls again.
+const PUSH_STALE_MS = 2000;
+const MOVING_RE = /^(Run|Jog|Home|Hold)/;
 const PULSE_MS = 100;
 const AXES = ['X', 'Y', 'Z', 'A', 'B', 'C'];
-const FEEDS = [['', 'default feed'], ['100', '100 mm/min'], ['500', '500 mm/min'], ['1000', '1000 mm/min'], ['3000', '3000 mm/min']];
-const STEPS = [['hold', 'hold to jog'], ['0.1', 'step 0.1 mm'], ['1', 'step 1 mm'], ['10', 'step 10 mm']];
+const FEEDS = ['100', '500', '1000', '3000', '6000'];
+const STEPS = [['hold', 'Hold to jog'], ['0.1', 'Step 0.1 mm'], ['1', 'Step 1 mm'], ['10', 'Step 10 mm']];
 
 // grbl's status report: <State|MPos:x,y|FS:f,s|WCO:x,y|...>. WCO only
 // comes every so often, so the caller keeps the last one.
@@ -69,6 +88,17 @@ export function jogLine(axis, dir, { step = 'hold', feed = '' } = {}) {
   return `cnc $J=G91 G21 ${letter}${distance} F${feed || 1000}`;
 }
 
+// Why the machine is in alarm, from the board's `log` (grbl's recent
+// messages, newest last): the last line that says alarm, a limit or a
+// stop, without its "[MSG:" wrapping. Null when it says nothing of it.
+export function alarmReason(lines) {
+  const said = (lines || []).map((l) => String(l).replace(/^\s*[\d.]+s ago\s+/, '').trim());
+  for (let i = said.length - 1; i >= 0; i -= 1) {
+    if (/alarm|limit|not watched|stopping/i.test(said[i])) return said[i].replace(/^\[MSG:\s*/, '').replace(/\]$/, '');
+  }
+  return null;
+}
+
 function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
@@ -76,76 +106,91 @@ function el(tag, className, text) {
   return node;
 }
 
-function select(options, className) {
-  const node = el('select', className);
-  for (const [value, label] of options) node.appendChild(Object.assign(document.createElement('option'), { value, textContent: label }));
-  return node;
+function button(text, className, title) {
+  const b = el('button', className, text);
+  b.type = 'button';
+  if (title) b.title = title;
+  return b;
 }
 
 // The panel's markup is classes (cnc-*, styled in styles.css), so the CNC
 // control can lay it out as an app on a phone and as a column beside the
-// editor on a desktop. `headTarget`: where the state and position go —
-// the control puts them in its sticky header; alone they lead the panel.
-export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = () => false, hideWhenAbsent = false, headTarget = null } = {}) {
+// editor on a desktop.
+export function mountCncPanel(target, {
+  shell, isLinked = () => true, isBusy = () => false, hideWhenAbsent = false, headTarget = null,
+  print = null, onRun = null, onHold = null, onStop = null, onState = null, jogFeed = () => 1000, note = () => {},
+  subscribeReports = null,
+} = {}) {
   if (hideWhenAbsent) target.style.display = 'none';
   const root = el('div', 'cnc-panel');
   target.appendChild(root);
 
+  // ── Head: state, position, feed; the error line under them ──
   const head = el('div', 'cnc-head');
   const badge = el('span', 'cnc-state', '...');
   const dro = el('div', 'cnc-dro');
   const feedEl = el('span', 'cnc-feed');
   head.append(badge, dro, feedEl);
-  const hintEl = el('div', 'cnc-hint');
-  hintEl.hidden = true;
-  (headTarget || root).append(head, hintEl);
+  const errorEl = el('div', 'cnc-error-line');
+  errorEl.hidden = true;
+  (headTarget || root).append(head, errorEl);
 
-  const actions = el('div', 'cnc-actions');
-  [
-    ['Home', 'cnc home', 'Run the homing cycle ($H)', ''],
-    ['Unlock', 'cnc unlock', 'Back to Idle: clears an alarm, ends a hold or a jog', ''],
-    ['Zero', 'cnc zero', 'Make the current position the work zero (no motion)', ''],
-    ['Hold', 'cnc stop', 'Cancel a jog, pause a running program', 'cnc-warn'],
-    ['Resume', 'cnc start', 'Resume a paused program', ''],
-    ['Reset', 'cnc reset', 'Soft reset (ctrl-x)', 'cnc-danger'],
-  ].forEach(([label, line, title, tone]) => {
-    const b = el('button', `cnc-btn ${tone}`.trim(), label);
-    b.type = 'button';
-    b.title = title;
-    b.addEventListener('click', () => send(line));
-    actions.appendChild(b);
-  });
-  root.appendChild(actions);
-
-  const jogHead = el('div', 'cnc-jog-head');
-  const stepSel = select(STEPS, 'cnc-select');
-  const feedSel = select(FEEDS, 'cnc-select');
-  jogHead.append(stepSel, feedSel);
-  root.appendChild(jogHead);
+  // ── The pad: the jog cross, the machine's actions in its corners ──
+  //   Home   Y+    Unlock
+  //   X−     Stop  X+
+  //   Hold   Y−    Run
   const jogPad = el('div', 'cnc-jog');
   root.appendChild(jogPad);
 
-  const gcodeRow = el('div', 'cnc-mdi');
-  const gcodeInput = el('input', 'cnc-input');
-  gcodeInput.placeholder = 'gcode, e.g. G0 X10 F1000';
-  gcodeInput.enterKeyHint = 'send';
-  gcodeInput.autocapitalize = 'characters';
-  gcodeInput.autocomplete = 'off';
-  gcodeInput.spellcheck = false;
-  const gcodeSend = el('button', 'cnc-btn', 'Send');
-  gcodeSend.type = 'button';
-  gcodeRow.append(gcodeInput, gcodeSend);
-  root.appendChild(gcodeRow);
-  const replyEl = el('div', 'cnc-reply');
-  root.appendChild(replyEl);
+  const jogRow = el('div', 'cnc-jog-head');
+  const stepSel = el('select', 'cnc-select');
+  for (const [value, label] of STEPS) stepSel.appendChild(Object.assign(document.createElement('option'), { value, textContent: label }));
+  const feedSel = el('select', 'cnc-select');
+  stepSel.title = 'Hold the button to jog, or move a fixed step per press';
+  feedSel.title = 'Jog speed';
+  jogRow.append(stepSel, feedSel);
+  root.appendChild(jogRow);
+  function fillFeeds() {
+    const chosen = feedSel.value;
+    feedSel.replaceChildren(Object.assign(document.createElement('option'), { value: '', textContent: `Jog ${jogFeed()} mm/min` }));
+    for (const f of FEEDS) feedSel.appendChild(Object.assign(document.createElement('option'), { value: f, textContent: `${f} mm/min` }));
+    feedSel.value = chosen;
+  }
+  fillFeeds();
+  const feedNow = () => feedSel.value || String(jogFeed());
+
+  const more = el('div', 'cnc-more');
+  const zeroBtn = button('Set zero', 'cnc-btn', 'Make the current position the work zero (no motion)');
+  const resetBtn = button('Reset', 'cnc-btn cnc-danger', 'Soft reset (ctrl-x): stops everything at once, the position may be lost');
+  more.append(zeroBtn, resetBtn);
+  root.appendChild(more);
+
+  // Without a terminal of the control's, the last answer shows here.
+  const replyEl = print ? null : el('div', 'cnc-reply');
+  if (replyEl) root.appendChild(replyEl);
 
   let stopped = false;
   let present = !hideWhenAbsent;
   let wco = null;
   let axisCount = 0;
   let jogging = null; // { axis, button, timer }
+  let state = '';
+  let where = '';  // the last position, as the terminal says it: "X 12.300 Y 0.000"
+  let lastError = '';
+  let alarmText = '';
+  let alarmAsked = false;
 
-  function showReply(line, reply) {
+  function showError() {
+    const alarm = state.startsWith('Alarm');
+    const text = lastError || (alarm ? (alarmText || 'Alarm: Home, or Unlock to move without homing.') : '');
+    errorEl.hidden = !text;
+    errorEl.textContent = text;
+  }
+
+  function report(line, reply) {
+    lastError = reply.ok ? '' : `${line.replace(/^cnc /, '')}: ${reply.error || 'no answer'}`;
+    showError();
+    if (print) { print(line, reply); return; }
     const body = (reply.lines || []).filter((l) => !parseStatusReport(l)).join('\n');
     replyEl.classList.toggle('cnc-error', !reply.ok);
     replyEl.textContent = '> ' + line.replace(/^cnc /, '') + (body ? '\n' + body : '') + (reply.ok ? '' : '\nerror: ' + (reply.error || 'no answer'));
@@ -155,32 +200,22 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
     if (!isLinked()) return null;
     try {
       const reply = await shell(line, { timeoutMs: 4000 });
-      showReply(line, reply);
+      report(line, reply);
       poll();
       return reply;
     } catch (err) {
-      showReply(line, { ok: false, error: err.message });
+      report(line, { ok: false, error: err.message });
       return null;
     }
   }
 
-  function sendGcode() {
-    const text = gcodeInput.value.trim();
-    if (!text) return;
-    send('cnc ' + text);
-    gcodeInput.select();
-  }
-  gcodeSend.addEventListener('click', sendGcode);
-  gcodeInput.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter') { event.preventDefault(); sendGcode(); }
-  });
-
   function stopJog() {
     if (!jogging) return;
-    const { axis, button } = jogging;
+    const { axis, button: b } = jogging;
     clearTimeout(jogging.timer);
-    button?.classList.remove('cnc-pressed');
+    b?.classList.remove('cnc-pressed');
     jogging = null;
+    note(`jog ${axis.toUpperCase()} released at ${where || '?'}`);
     if (isLinked()) shell(`cnc ${axis} jog stop`, { quiet: true, urgent: true, timeoutMs: 1500 }).catch(() => {});
   }
 
@@ -188,24 +223,34 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
   // pointer stays down — each one sent only after the last was answered,
   // so a slow link sends fewer, never a backlog. All three go ahead of
   // the state poll in the board's queue (`urgent`, see serialConsole).
-  async function startJog(axis, dir, button) {
+  async function startJog(axis, dir, b) {
     stopJog();
-    const job = { axis, button, timer: null };
+    const job = { axis, button: b, timer: null };
     jogging = job;
-    button?.classList.add('cnc-pressed');
-    const reply = await shell(jogLine(axis, dir, { feed: feedSel.value }), { quiet: true, urgent: true, timeoutMs: 1500 }).catch((err) => ({ ok: false, error: err.message }));
+    b?.classList.add('cnc-pressed');
+    const line = jogLine(axis, dir, { feed: feedNow() });
+    note(`jog ${axis.toUpperCase()}${dir < 0 ? '-' : '+'} at ${feedNow()} mm/min from ${where || '?'}`);
+    const reply = await shell(line, { quiet: true, urgent: true, timeoutMs: 1500 }).catch((err) => ({ ok: false, error: err.message }));
     if (!reply.ok) {
-      showReply(jogLine(axis, dir, { feed: feedSel.value }), reply);
+      report(line, reply);
       if (jogging === job) {
         jogging = null;
-        button?.classList.remove('cnc-pressed');
+        b?.classList.remove('cnc-pressed');
       }
       return;
     }
+    let saidLateAt = 0;
     const pulse = async () => {
       if (jogging !== job) return;
       const at = Date.now();
-      await shell(`cnc ${axis} jog continue`, { quiet: true, urgent: true, timeoutMs: 1000 }).catch(() => {});
+      const answer = await shell(`cnc ${axis} jog continue`, { quiet: true, urgent: true, timeoutMs: 1000 }).catch((err) => ({ ok: false, error: err.message }));
+      const took = Date.now() - at;
+      // The CNC stops a jog that hears no pulse for 200 ms (JOG_PULSE_MS):
+      // a slow link shows as a jerky jog, said here once a second at most.
+      if ((took > 150 || !answer.ok) && Date.now() - saidLateAt > 1000) {
+        saidLateAt = Date.now();
+        note(`jog pulse ${answer.ok ? `took ${took} ms` : `failed: ${answer.error || 'no answer'}`} (the CNC stops a jog after 200 ms without one)`);
+      }
       if (jogging !== job) return;
       job.timer = setTimeout(pulse, Math.max(0, PULSE_MS - (Date.now() - at)));
     };
@@ -213,9 +258,7 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
   }
 
   function jogButton(axis, dir, area) {
-    const b = el('button', 'cnc-btn cnc-jog-btn', `${axis.toUpperCase()}${dir < 0 ? '−' : '+'}`);
-    b.type = 'button';
-    b.title = `${axis.toUpperCase()}${dir < 0 ? '-' : '+'}`;
+    const b = button(`${axis.toUpperCase()}${dir < 0 ? '−' : '+'}`, 'cnc-btn cnc-jog-btn', `Jog ${axis.toUpperCase()}${dir < 0 ? '-' : '+'}`);
     if (area) b.style.gridArea = area;
     // A long press on a phone would otherwise open the context menu.
     b.addEventListener('contextmenu', (event) => event.preventDefault());
@@ -226,27 +269,43 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
         b.setPointerCapture?.(event.pointerId);
         startJog(axis, dir, b);
       } else {
-        send(jogLine(axis, dir, { step: stepSel.value, feed: feedSel.value }));
+        send(jogLine(axis, dir, { step: stepSel.value, feed: feedNow() }));
       }
     });
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(type, stopJog);
     return b;
   }
 
-  // X and Y as a cross (Y+ away from you), Stop in its middle; Z and any
-  // further axis as an up/down pair beside it.
+  function actionButton(label, area, tone, title, run) {
+    const b = button(label, `cnc-btn cnc-pad-action ${tone}`.trim(), title);
+    b.style.gridArea = area;
+    b.addEventListener('click', run);
+    return b;
+  }
+
+  // Stop: the jog and the program end; a moving machine holds, comes to a
+  // standstill and is reset to Idle with its position kept (`unlock`). In
+  // alarm nothing moves, and Stop must not clear the alarm.
+  async function stopAll() {
+    stopJog();
+    if (onStop?.(state)) return;
+    send(state.startsWith('Alarm') ? 'cnc stop' : 'cnc unlock');
+  }
+
   function buildJog(count) {
     if (count === axisCount) return;
     axisCount = count;
     jogPad.replaceChildren();
     const cross = el('div', 'cnc-jog-cross');
+    cross.append(
+      actionButton('Home', 'home', '', 'Run the homing cycle ($H)', () => send('cnc home')),
+      actionButton('Unlock', 'unlock', '', 'Clear an alarm without homing ($X)', () => send('cnc unlock')),
+      actionButton('Hold', 'hold', 'cnc-warn', 'Feed hold: pause the program, or cancel a jog', () => { stopJog(); if (!onHold?.(state)) send('cnc stop'); }),
+      actionButton('Run', 'run', 'cnc-primary', 'Run the program, or resume after Hold (cycle start)', () => { if (!onRun?.(state)) send('cnc start'); }),
+      actionButton('Stop', 'stop', 'cnc-stop', 'Stop everything: end the jog and the program, back to Idle', stopAll),
+    );
     if (count >= 1) cross.append(jogButton('x', -1, 'xm'), jogButton('x', 1, 'xp'));
     if (count >= 2) cross.append(jogButton('y', 1, 'yp'), jogButton('y', -1, 'ym'));
-    const halt = el('button', 'cnc-btn cnc-jog-stop cnc-warn', 'Stop');
-    halt.type = 'button';
-    halt.title = 'Cancel the jog (and hold a running program)';
-    halt.addEventListener('click', () => { stopJog(); send('cnc stop'); });
-    cross.appendChild(halt);
     jogPad.appendChild(cross);
     for (const name of AXES.slice(2, count)) {
       const axis = name.toLowerCase();
@@ -255,13 +314,31 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
       jogPad.appendChild(column);
     }
   }
+  buildJog(2);  // the pad is there before the first report; a third axis adds its column
 
-  function render(report) {
-    badge.textContent = report.state;
-    badge.dataset.state = report.state.split(':')[0];
-    if (report.wco) wco = report.wco;
-    const mpos = report.mpos || (report.wpos && wco ? report.wpos.map((v, i) => v + (wco[i] || 0)) : null);
-    const wpos = report.wpos || (mpos && wco ? mpos.map((v, i) => v - (wco[i] || 0)) : null);
+  zeroBtn.addEventListener('click', () => send('cnc zero'));
+  resetBtn.addEventListener('click', () => { stopJog(); send('cnc reset'); });
+
+  // Entering alarm: ask the board's log why, once per alarm.
+  async function askWhy() {
+    alarmAsked = true;
+    const reply = await shell('log', { quiet: true, timeoutMs: 3000 }).catch(() => null);
+    alarmText = alarmReason(reply?.lines) || '';
+    if (alarmText) {
+      alarmText = `Alarm: ${alarmText}`;
+      note(alarmText);
+    }
+    showError();
+  }
+
+  function render(rep) {
+    const was = state;
+    state = rep.state;
+    badge.textContent = rep.state;
+    badge.dataset.state = rep.state.split(':')[0];
+    if (rep.wco) wco = rep.wco;
+    const mpos = rep.mpos || (rep.wpos && wco ? rep.wpos.map((v, i) => v + (wco[i] || 0)) : null);
+    const wpos = rep.wpos || (mpos && wco ? mpos.map((v, i) => v - (wco[i] || 0)) : null);
     const pos = wpos || mpos;
     if (pos) {
       buildJog(Math.min(pos.length, AXES.length));
@@ -275,15 +352,31 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
       pos.forEach((v, i) => { dro.children[i].lastChild.textContent = v.toFixed(3); });
       dro.title = wpos && mpos ? 'work position' : 'machine position';
     }
-    feedEl.textContent = report.feed ? `F${report.feed}` : '';
-    const alarm = report.state.startsWith('Alarm');
-    hintEl.hidden = !(alarm || report.pins);
-    hintEl.textContent = [alarm ? 'Alarm: Home, or Unlock to move without homing.' : '', report.pins ? `Inputs on: ${report.pins}` : ''].filter(Boolean).join('  ');
+    feedEl.textContent = [rep.feed ? `F${rep.feed}` : '', rep.pins ? `limit ${rep.pins}` : ''].filter(Boolean).join('  ');
+    if (pos) where = pos.map((v, i) => `${AXES[i]} ${v.toFixed(3)}`).join(' ');
+    const stateWord = (s) => s.split(':')[0];
+    if (was && stateWord(was) !== stateWord(state)) note(`${stateWord(was)} → ${stateWord(state)} at ${where}${rep.pins ? `, limit ${rep.pins}` : ''}`);
+    const alarm = state.startsWith('Alarm');
+    if (alarm && !was.startsWith('Alarm')) { alarmText = ''; alarmAsked = false; }
+    if (alarm && !alarmAsked) askWhy();
+    if (!alarm) alarmText = '';
+    showError();
+    onState?.(rep);
   }
 
   function showOffline(text) {
     badge.textContent = text;
     badge.dataset.state = '';
+  }
+
+  // One poll without a report is a reply that came late or got mixed with
+  // other traffic: the last state stands. Three in a row is a machine that
+  // does not answer.
+  const MISSES_SHOWN = 3;
+  let misses = 0;
+  function missed(text) {
+    misses += 1;
+    if (misses >= MISSES_SHOWN || !state) showOffline(text);
   }
 
   let polling = false;
@@ -302,17 +395,19 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
       const reply = await shell('cnc ?', { quiet: true, timeoutMs: 1500 });
       const read = readStatusReply(reply);
       if (read.kind === 'report') {
+        misses = 0;
         if (!present) { present = true; target.style.display = ''; }
+        if (pushing && MOVING_RE.test(read.report.state) && Date.now() - pushedAt > PUSH_STALE_MS) pushing = false;
         render(read.report);
       } else if (read.kind === 'absent') {
         present = false;
         if (hideWhenAbsent) target.style.display = 'none';
         else showOffline('no CNC in this firmware');
       } else {
-        showOffline('no answer');
+        missed('no answer');
       }
     } catch {
-      showOffline('no answer');
+      missed('no answer');
     } finally {
       polling = false;
     }
@@ -321,9 +416,23 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
   function loop() {
     if (stopped) return;
     poll().finally(() => {
-      if (!stopped) pollTimer = setTimeout(loop, POLL_MS);
+      if (!stopped) pollTimer = setTimeout(loop, pushing ? HEARTBEAT_MS : POLL_MS);
     });
   }
+
+  // What the CNC pushes (see subscribeReports above): drawn as it comes.
+  let pushing = false;
+  let pushedAt = 0;
+  const stopReports = subscribeReports?.((line) => {
+    if (stopped) return;
+    const rep = parseStatusReport(line);
+    if (!rep) return;
+    pushing = true;
+    pushedAt = Date.now();
+    misses = 0;
+    if (!present) { present = true; target.style.display = ''; }
+    render(rep);
+  });
 
   const onHide = () => stopJog();
   window.addEventListener('pagehide', onHide);
@@ -333,11 +442,15 @@ export function mountCncPanel(target, { shell, isLinked = () => true, isBusy = (
     if (stopped) return;
     stopped = true;
     clearTimeout(pollTimer);
+    stopReports?.();
     stopJog();
     window.removeEventListener('pagehide', onHide);
     window.removeEventListener('blur', onHide);
   }
 
   loop();
+  stop.send = send;
+  stop.refreshFeeds = fillFeeds;
+  stop.state = () => state;
   return stop;
 }

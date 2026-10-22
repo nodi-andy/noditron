@@ -94,6 +94,31 @@ export function subscribeTrace(blockId, listener) {
   };
 }
 
+// A CNC's status report pushed to this board because a panel here watches
+// that CNC over the bus (firmware 20261018m on: `node <cnc> cnc ...` makes
+// the asker a watcher, see conucon's cncWatch): `<from>@push><report>`, at
+// every change of grbl's state and four times a second while it moves.
+// Taken out of the stream like io-change, so no command reply ever holds
+// one, and handed to every subscribePushes listener with the CNC's name or
+// id, whichever board it came through.
+export const PUSH_RE = /^([\w?*-]+)@push>(.*)$/;
+const pushListeners = new Set(); // ({ from, line, via }) => void
+
+export function subscribePushes(listener) {
+  pushListeners.add(listener);
+  return () => pushListeners.delete(listener);
+}
+
+function notifyPush(from, line, via) {
+  for (const listener of pushListeners) {
+    try {
+      listener({ from, line, via });
+    } catch {
+      // A listener's own error is not the link's problem.
+    }
+  }
+}
+
 // HIGH/LOW (a Timer's two edges) read as booleans, numbers as numbers,
 // anything else as the text it is — the same kinds a wire carries in the
 // simulation.
@@ -127,7 +152,12 @@ function takeAsyncLines(state, bytes) {
       consumed = true;
     } else {
       const text = new TextDecoder().decode(bytes.slice(lineStart, i)).replace(/\r$/, '');
-      try {
+      const push = text.match(PUSH_RE);
+      if (push) {
+        notifyPush(push[1], push[2], state.blockId);
+        consumed = true;
+      }
+      if (!consumed) try {
         const message = JSON.parse(text);
         if (message.type === 'io-change' && Array.isArray(message.pins)) {
           for (const listener of ioListeners.get(state.blockId) || []) listener(message.pins);
@@ -280,6 +310,12 @@ function dispatchLines(state, chunk) {
     // still the board's own announcement: unsolicited, and never quiet,
     // or the socket traffic would vanish from the box whenever a poll
     // happened to be in flight.
+    // A pushed report is the CNC panel's (subscribePushes), four a second
+    // while the machine moves: never a line for the shell's terminal.
+    if (PUSH_RE.test(line)) {
+      notifyLineListeners(state.blockId, { line, unsolicited: true, quiet: true });
+      continue;
+    }
     const announcement = ANNOUNCEMENT_RE.test(line);
     if (!announcement && isLateQuietOk(state.blockId, line)) {
       notifyLineListeners(state.blockId, { line, unsolicited: false, quiet: true });
@@ -776,10 +812,10 @@ async function sendDesignOverHttp(session, design) {
 // starts or the board says why it cannot.
 async function readDesignCommand(blockId, { timeoutMs = 4000, line = 'design' } = {}) {
   const session = getSession(blockId);
-  if (session?.kind === 'wifi') {
-    if (line !== 'design') throw new Error('a node behind the bus is read through a board on USB');
-    return readDesignOverHttp(session);
-  }
+  // The board's own circuit over WiFi is its design.json; a node behind it
+  // (`design <node>`) is read like over USB — the board's WebSocket shell
+  // answers with the same [DESIGN] BEGIN ... END lines.
+  if (session?.kind === 'wifi' && line === 'design') return readDesignOverHttp(session);
   await ensurePlain(blockId);
   const state = openConsole(blockId);
   state.queue = new Uint8Array(0); // see identify()'s own doc on why
@@ -1808,7 +1844,7 @@ async function readReply(state, pattern, failure, timeoutMs) {
 async function sendDesignCommand(blockId, design, { timeoutMs = 5000, target = null } = {}) {
   const session = getSession(blockId);
   if (session?.kind === 'wifi') {
-    if (target) throw new Error('a node behind the bus is saved through a board on USB');
+    if (target) return sendDesignInParts(blockId, target, design);
     return sendDesignOverHttp(session, design);
   }
   await ensurePlain(blockId);
@@ -1827,6 +1863,34 @@ async function sendDesignCommand(blockId, design, { timeoutMs = 5000, target = n
     if (!/Timed out waiting for the device/.test(err.message)) throw err;
     throw new Error(`The board did not confirm the ${bytes.length}-byte design. Reset the board, reconnect and save again.`);
   }
+}
+
+// A node behind a board on WiFi: the raw byte phase of `save-design <node>
+// <n>` is a serial thing, so the circuit goes the way that board would
+// send it on over CAN itself — `save-design part <i> <n> <size> <base64>`
+// lines (conucon's saveDesignPart), each run on the node through the
+// board's shell (`node <target> ...`) and answered before the next. The
+// node writes the last part and reloads its circuit. Runs inside the
+// bridge's command queue, so it calls shellCommand, not shell().
+export const DESIGN_PART_BYTES = 120;
+export function designParts(design) {
+  const bytes = new TextEncoder().encode(JSON.stringify(design));
+  const parts = [];
+  const count = Math.ceil(bytes.length / DESIGN_PART_BYTES);
+  for (let i = 0; i < count; i += 1) {
+    let binary = '';
+    for (const b of bytes.subarray(i * DESIGN_PART_BYTES, (i + 1) * DESIGN_PART_BYTES)) binary += String.fromCharCode(b);
+    parts.push(`save-design part ${i} ${count} ${bytes.length} ${btoa(binary)}`);
+  }
+  return { parts, size: bytes.length };
+}
+async function sendDesignInParts(blockId, target, design) {
+  const { parts, size } = designParts(design);
+  for (const [i, part] of parts.entries()) {
+    const reply = await shellCommand(blockId, `node ${target} ${part}`, { timeoutMs: 6000, quiet: true });
+    if (!reply.ok) throw new Error(`${target} did not take part ${i + 1}/${parts.length} of its circuit: ${reply.error || 'no reply'}`);
+  }
+  return `[DESIGN] Saved ${size} bytes OK`;
 }
 
 // Every command shares one byte stream. In particular, polling must never
